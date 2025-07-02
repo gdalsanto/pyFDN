@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyFDN"
+version = "0.1.0"
+description = "Python library for Feedback Delay Networks"
+readme = "README.rst"
+authors = [
+  {name = "Kalyan Pandey", email = "pandey.kalyan416@gmail.com"}
+]
+maintainers = [
+  {name = "Kalyan Pandey", email = "pandey.kalyan416@gmail.com"}
+]
+classifiers = [
+
+]
+license = {text = "MIT license"}
+dependencies = [
+  
+]
+
+[project.optional-dependencies]
+dev = [
+    "coverage",  # testing
+    "mypy",  # linting
+    "pytest",  # testing
+    "ruff"  # linting
+]
+
+[project.urls]
+
+bugs = "https://github.com/pandeyKalyan/pyFDN/issues"
+changelog = "https://github.com/pandeyKalyan/pyFDN/blob/master/changelog.md"
+homepage = "https://github.com/pandeyKalyan/pyFDN"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+"*" = ["*.*"]
+
+
+
+
+# Mypy
+# ----
+
+[tool.mypy]
+files = "."
+
+# Use strict defaults
+strict = true
+warn_unreachable = true
+warn_no_return = true
+
+[[tool.mypy.overrides]]
+# Don't require test functions to include types
+module = "tests.*"
+allow_untyped_defs = true
+disable_error_code = "attr-defined"
+
