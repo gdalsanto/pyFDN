@@ -14,8 +14,16 @@ maintainers = [
   {name = "Kalyan Pandey", email = "pandey.kalyan416@gmail.com"}
 ]
 classifiers = [
-
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
 ]
+requires-python = ">=3.8"
 license = {text = "MIT license"}
 dependencies = [
   "numpy",
@@ -35,7 +43,6 @@ dev = [
 ]
 
 [project.urls]
-
 bugs = "https://github.com/pandeyKalyan/pyFDN/issues"
 changelog = "https://github.com/pandeyKalyan/pyFDN/blob/master/changelog.md"
 homepage = "https://github.com/pandeyKalyan/pyFDN"
@@ -45,9 +52,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.package-data]
 "*" = ["*.*"]
-
-
-
 
 # Mypy
 # ----
