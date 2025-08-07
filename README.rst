@@ -6,20 +6,21 @@ pyFDN
 .. image:: https://img.shields.io/pypi/v/pyFDN.svg
         :target: https://pypi.python.org/pypi/pyFDN
 
-.. image:: https://github.com/pandeyKalyan/pyFDN/workflows/CI/badge.svg
-        :target: https://github.com/pandeyKalyan/pyFDN/actions
+.. image:: https://github.com/artificial-audio/pyFDN/actions/workflows/ci.yml/badge.svg
+        :target: https://github.com/artificial-audio/pyFDN/actions/workflows/ci.yml
+        :alt: CI Status
 
 .. image:: https://readthedocs.org/projects/pyFDN/badge/?version=latest
         :target: https://pyFDN.readthedocs.io/en/latest/?version=latest
         :alt: Documentation Status
 
-
 .. image:: https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11-blue
         :target: https://www.python.org/downloads/
+        :alt: Python versions
 
 .. image:: https://img.shields.io/badge/license-MIT-blue.svg
         :target: https://opensource.org/licenses/MIT
-
+        :alt: License
 
 
 Python library for Feedback Delay Networks
