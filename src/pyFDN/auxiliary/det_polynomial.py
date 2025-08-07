@@ -1,5 +1,7 @@
 import numpy as np
 
+from pyFDN.auxiliary import poly_degree
+
 def det_polynomial(polynomial_matrix, var):
     """
     Compute the determinant of a polynomial matrix.

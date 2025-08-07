@@ -1,8 +1,8 @@
 import numpy as np
 
-from auxiliary.matrix_convolution import matrix_convolution
-from auxiliary import matrix_polyder
-from auxiliary import matrix_polyval
+from pyFDN.auxiliary.matrix_convolution import matrix_convolution
+from pyFDN.auxiliary.matrix_polyder import matrix_polyder
+from pyFDN.auxiliary.matrix_polyval import matrix_polyval
 
 class TFMatrix:
     """
