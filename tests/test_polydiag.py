@@ -1,7 +1,11 @@
+"""Tests for polynomial diagonal matrix creation."""
+
 import numpy as np
 from pyFDN.auxiliary.polydiag import polydiag
 
+
 def test_polydiag_basic():
+    """Test basic polynomial diagonal matrix creation."""
     p = np.array([[1, 2], [3, 4]])
     d = polydiag(p)
     assert d.shape == (2, 2, 2)

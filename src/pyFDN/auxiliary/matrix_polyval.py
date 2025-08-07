@@ -1,16 +1,21 @@
+"""Matrix polynomial evaluation."""
+
 import numpy as np
 
-def matrix_polyval(P, z):
+
+def matrix_polyval(poly_matrix, z):
     """
     Evaluate matrix polynomial at z.
-    P: shape (N, M, FIR)
-    z: scalar (can be complex)
+    
+    Args:
+        poly_matrix: shape (m, n, degree)
+        z: evaluation point
     Returns:
-        Y: shape (N, M)
+        result: shape (m, n)
     """
-    degree = P.shape[2]
-    exponents = np.arange(degree-1, -1, -1)
+    degree = poly_matrix.shape[2]
+    exponents = np.arange(degree)
     zz = z ** exponents
     zz = zz.reshape((1, 1, degree))
-    Y = np.sum(P * zz, axis=2)
-    return Y
+    result = np.sum(poly_matrix * zz, axis=2)
+    return result
