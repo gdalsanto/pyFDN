@@ -12,7 +12,7 @@ class TFMatrix:
     - numerator, denominator: numpy arrays of shape (n, m, len)
     """
 
-    def __init__(self, numerator, denominator=None, var='z^-1'):
+    def __init__(self, numerator, denominator=None, var="z^-1"):
         if isinstance(numerator, TFMatrix):  # Copy constructor
             self.numerator = numerator.numerator.copy()
             self.denominator = numerator.denominator.copy()
@@ -24,7 +24,7 @@ class TFMatrix:
                 self.var = var
             else:
                 self.denominator = np.ones_like(numerator[..., :1])
-                self.var = 'z^-1'
+                self.var = "z^-1"
         # Precompute flipped versions for 'z^-1' case
         self.flip_numerator = np.flip(self.numerator, axis=2)
         self.flip_denominator = np.flip(self.denominator, axis=2)
@@ -32,12 +32,12 @@ class TFMatrix:
     def derive(self):
         B = np.transpose(self.numerator, (2, 0, 1))
         A = np.transpose(self.denominator, (2, 0, 1))
-        if self.var == 'z^1':
+        if self.var == "z^1":
             num, den = matrix_polyder(B, A)
             num = np.transpose(num, (1, 2, 0))
             den = np.transpose(den, (1, 2, 0))
             return TFMatrix(num, den, self.var)
-        elif self.var == 'z^-1':
+        elif self.var == "z^-1":
             num, den = matrix_polyder(B, A, self.var)
             num = np.transpose(num, (1, 2, 0))
             den = np.transpose(den, (1, 2, 0))
@@ -46,11 +46,11 @@ class TFMatrix:
             raise ValueError("Unknown var type")
 
     def at(self, z):
-        if self.var == 'z^1':
+        if self.var == "z^1":
             num = matrix_polyval(self.numerator, z)
             den = matrix_polyval(self.denominator, z)
             return num / den
-        elif self.var == 'z^-1':
+        elif self.var == "z^-1":
             iz = 1.0 / z
             num = matrix_polyval(self.flip_numerator, iz)
             den = matrix_polyval(self.flip_denominator, iz)

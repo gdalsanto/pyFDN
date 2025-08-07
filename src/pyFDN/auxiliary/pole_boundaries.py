@@ -21,7 +21,7 @@ def pole_boundaries(delays, absorption, feedback_matrix, fs, nfft=2**12):
     # Compute frequency points
     w = np.linspace(0, np.pi, nfft)
     # FFT along the third axis
-    FeedbackMatrix = np.fft.fft(feedback_matrix, n=nfft*2, axis=2)
+    FeedbackMatrix = np.fft.fft(feedback_matrix, n=nfft * 2, axis=2)
     FeedbackMatrix = FeedbackMatrix[:, :, :nfft]
 
     Min = np.zeros(nfft)

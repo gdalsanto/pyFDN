@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def matrix_polyder(B, A, var='z^-1'):
+def matrix_polyder(B, A, var="z^-1"):
     """
     Wrapper function for polynomial derivative of filter matrices.
     B: shape (order, N, M)
@@ -15,17 +15,18 @@ def matrix_polyder(B, A, var='z^-1'):
     P = np.zeros((order, N, M), dtype=B.dtype)
     for it1 in range(N):
         for it2 in range(M):
-            if var == 'z^1':
+            if var == "z^1":
                 q, p = polyder(B[:, it1, it2], A[:, it1, it2])
-                Q[-len(q):, it1, it2] = q
-                P[-len(p):, it1, it2] = p
-            elif var == 'z^-1':
+                Q[-len(q) :, it1, it2] = q
+                P[-len(p) :, it1, it2] = p
+            elif var == "z^-1":
                 q, p = negpolyder(B[:, it1, it2], A[:, it1, it2])
-                Q[:len(q), it1, it2] = q
-                P[:len(p), it1, it2] = p
+                Q[: len(q), it1, it2] = q
+                P[: len(p), it1, it2] = p
             else:
                 raise ValueError("var must be 'z^1' or 'z^-1'")
     return Q, P
+
 
 def negpolyder(b, a):
     """
@@ -41,6 +42,7 @@ def negpolyder(b, a):
     num = num[::-1]
     den = den[::-1]
     return num, den
+
 
 def polyder(b, a):
     """

@@ -21,20 +21,22 @@ class ZTF:
         self.check_shape(self.m)
 
         # Create transfer function matrix
-        self.matrix = TFMatrix(b, a, var='z^-1')
+        self.matrix = TFMatrix(b, a, var="z^-1")
         self.matrix_der = self.matrix.derive()
         self.number_of_delay_units = self.get_delays(b)
 
     def check_shape(self, m):
         if self.is_diagonal and m != 1:
-            raise ValueError("For a diagonal filter matrix, provide a vector of filters.")
+            raise ValueError(
+                "For a diagonal filter matrix, provide a vector of filters."
+            )
 
     def get_delays(self, numerator):
         if self.is_diagonal:
             numerator_full = polydiag(np.transpose(numerator, (0, 2, 1)))
         else:
             numerator_full = numerator
-        return poly_degree(det_polynomial(numerator_full), var='z^-1')
+        return poly_degree(det_polynomial(numerator_full), var="z^-1")
 
     def at_(self, z):
         return self.matrix.at(z)
@@ -44,10 +46,12 @@ class ZTF:
 
     def inverse(self):
         # Swap numerator and denominator
-        return ZTF(self.matrix.denominator, self.matrix.numerator, is_diagonal=self.is_diagonal)
+        return ZTF(
+            self.matrix.denominator, self.matrix.numerator, is_diagonal=self.is_diagonal
+        )
 
     def dfilt_type(self):
-        return 'df2'
+        return "df2"
 
     def dfilt_parameter(self, n, m):
         b = np.transpose(self.matrix.numerator[n, m, :], (2, 0, 1))

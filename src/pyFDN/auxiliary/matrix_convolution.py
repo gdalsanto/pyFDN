@@ -30,6 +30,6 @@ def matrix_convolution(A, B):
             for it in range(n):
                 # Convolve the polynomials for (row, it) and (it, col)
                 conv_result = np.convolve(A_perm[:, row, it], B_perm[:, it, col])
-                C[row, col, :len(conv_result)] += conv_result
+                C[row, col, : len(conv_result)] += conv_result
 
     return C

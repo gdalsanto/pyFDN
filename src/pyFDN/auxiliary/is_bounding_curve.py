@@ -16,12 +16,12 @@ def is_bounding_curve(x_points, y_points, x_curve, y_curve, bound_type):
         is_bounded: boolean array, whether each data point is bounded
     """
     # Spline interpolation with extrapolation
-    interp = interp1d(x_curve, y_curve, kind='cubic', fill_value='extrapolate')
+    interp = interp1d(x_curve, y_curve, kind="cubic", fill_value="extrapolate")
     y_curve_interp = interp(x_points)
 
-    if bound_type == 'upper':
+    if bound_type == "upper":
         is_bounded = y_curve_interp >= y_points
-    elif bound_type == 'lower':
+    elif bound_type == "lower":
         is_bounded = y_curve_interp <= y_points
     else:
         raise ValueError("bound_type must be 'upper' or 'lower'")
