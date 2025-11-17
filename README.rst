@@ -33,10 +33,7 @@ Python library for Feedback Delay Networks
 Overview
 --------
 
-``pyFDN`` provides building blocks for designing, simulating, and analysing
-Feedback Delay Networks (FDNs). The package focuses on reusable, tested helper
-functions that simplify typical FDN workflows such as creating orthogonal
-feedback matrices, designing loop filters, and inspecting pole locations.
+``pyFDN`` provides building blocks for designing, simulating, and analysing Feedback Delay Networks (FDNs). The package focuses on reusable, tested helper functions that simplify typical FDN workflows such as creating orthogonal feedback matrices, designing loop filters, and inspecting pole locations. Using ``flamo`` as a dependency, ``pyFDN`` allows modular design of advanced FDN structure with DSP operations in time and frequency domain.
 
 
 Highlights
@@ -61,72 +58,57 @@ editable mode together with the optional tooling::
     python -m venv .venv
     source .venv/bin/activate
     pip install -e .
-    pip install -r requirements_dev.txt
-
-Some modules rely on SciPy (e.g. ``random_orthogonal`` and ``pole_boundaries``);
-install ``scipy`` if you plan to use those features.
 
 
 Quick start
 -----------
 
-The snippet below sketches the main steps involved in assembling a simple
-four-delay FDN and inspecting its stability bounds::
+.. The snippet below sketches the main steps involved in assembling a simple
+.. four-delay FDN and inspecting its stability bounds::
 
-    from types import SimpleNamespace
-    import numpy as np
-    from pyFDN.generate.random_orthogonal import random_orthogonal
-    from pyFDN.auxiliary.one_pole_absorption import one_pole_absorption
-    from pyFDN.auxiliary.pole_boundaries import pole_boundaries
+..     from types import SimpleNamespace
+..     import numpy as np
+..     from pyFDN.generate.random_orthogonal import random_orthogonal
+..     from pyFDN.auxiliary.one_pole_absorption import one_pole_absorption
+..     from pyFDN.auxiliary.pole_boundaries import pole_boundaries
 
-    fs = 48_000
-    delays = np.array([331, 347, 359, 373], dtype=int)
+..     fs = 48_000
+..     delays = np.array([331, 347, 359, 373], dtype=int)
 
-    # Energy-preserving feedback matrix (shape: N x N x 1)
-    feedback = random_orthogonal(len(delays))[..., np.newaxis]
+..     # Energy-preserving feedback matrix (shape: N x N x 1)
+..     feedback = random_orthogonal(len(delays))[..., np.newaxis]
 
-    # Match-loop decay targets (seconds) at DC and Nyquist
-    rt60 = np.full(len(delays), 0.6)
-    sos = one_pole_absorption(rt60, 1.4 * rt60, delays, fs)  # SOS format: (6, N)
-    # Convert SOS to b, a format for pole_boundaries: b shape (N, 1, 1), a shape (N, 1, 2)
-    b = sos[0:1, :].T[:, np.newaxis, :]  # b0, shape (N, 1, 1)
-    a = np.stack([sos[3, :], sos[4, :]], axis=1)[:, np.newaxis, :]  # [a0, a1], shape (N, 1, 2)
-    absorption = SimpleNamespace(b=b, a=a)
+..     # Match-loop decay targets (seconds) at DC and Nyquist
+..     rt60 = np.full(len(delays), 0.6)
+..     sos = one_pole_absorption(rt60, 1.4 * rt60, delays, fs)  # SOS format: (6, N)
+..     # Convert SOS to b, a format for pole_boundaries: b shape (N, 1, 1), a shape (N, 1, 2)
+..     b = sos[0:1, :].T[:, np.newaxis, :]  # b0, shape (N, 1, 1)
+..     a = np.stack([sos[3, :], sos[4, :]], axis=1)[:, np.newaxis, :]  # [a0, a1], shape (N, 1, 2)
+..     absorption = SimpleNamespace(b=b, a=a)
 
-    lower, upper, freqs = pole_boundaries(delays, absorption, feedback, fs)
-    print(f"Stability window @ {freqs[0]:.1f} Hz: {lower[0]:.3f} – {upper[0]:.3f}")
+..     lower, upper, freqs = pole_boundaries(delays, absorption, feedback, fs)
+..     print(f"Stability window @ {freqs[0]:.1f} Hz: {lower[0]:.3f} – {upper[0]:.3f}")
 
-For matrix-polynomial manipulation without SciPy, the :mod:`pyFDN.auxiliary`
-package exposes convenience functions such as ``matrix_convolution``,
-``matrix_polyval``, and ``TFMatrix``.
-
-
-Repository index
-----------------
-
-``src/pyFDN/auxiliary``
-    Matrix polynomial routines (``matrix_convolution``, ``matrix_polyval``,
-    ``matrix_polyder``), loop-analysis helpers (``pole_boundaries``,
-    ``is_bounding_curve``), and absorption filter design utilities.
-``src/pyFDN/generate``
-    Random structure generators including ``random_orthogonal``.
-``src/pyFDN/examples``
-    Jupyter notebooks that demonstrate absorption design workflows.
-``tests``
-    Pytest-based regression suite covering the numerical helpers.
-``docs``
-    Sphinx project used to publish https://pyFDN.readthedocs.io/.
+.. For matrix-polynomial manipulation without SciPy, the :mod:`pyFDN.auxiliary`
+.. package exposes convenience functions such as ``matrix_convolution``,
+.. ``matrix_polyval``, and ``TFMatrix``.
 
 
-Development
------------
+.. Repository index
+.. ----------------
 
-Run the test suite after making changes::
-
-    pytest
-
-For linting and packaging helpers see ``Makefile`` (``make lint``/``make docs``)
-and ``tox.ini`` for multi-environment testing.
+.. ``src/pyFDN/auxiliary``
+..     Matrix polynomial routines (``matrix_convolution``, ``matrix_polyval``,
+..     ``matrix_polyder``), loop-analysis helpers (``pole_boundaries``,
+..     ``is_bounding_curve``), and absorption filter design utilities.
+.. ``src/pyFDN/generate``
+..     Random structure generators including ``random_orthogonal``.
+.. ``src/pyFDN/examples``
+..     Jupyter notebooks that demonstrate absorption design workflows.
+.. ``tests``
+..     Pytest-based regression suite covering the numerical helpers.
+.. ``docs``
+..     Sphinx project used to publish https://pyFDN.readthedocs.io/.
 
 Credits
 -------
