@@ -9,7 +9,7 @@ with various example systems.
 import torch
 import matplotlib.pyplot as plt
 from pyFDN.recursive import (
-    DelayRead, DelayWrite, ParallelBiquads,
+    DelayRead, DelayWrite, Biquads,
     FeedbackMix, InputTap, OutputTap, RecursionCore
 )
 
@@ -113,12 +113,13 @@ def example_3_fdn_absorption_inside():
     ], dtype=torch.float32) * 0.5
     
     # Lowpass absorption filters (one-pole, a=0.85)
-    absorption_coeffs = torch.tensor([[[0.15, 0.0, 0.0, -0.85, 0.0]]]).repeat(num_lines, 1, 1)
+    # Format: [a0, a1, a2, b0, b1, b2] where a0=1.0, a1=-0.85, b0=0.15
+    absorption_coeffs = torch.tensor([[[1.0, -0.85, 0.0, 0.15, 0.0, 0.0]]]).repeat(num_lines, 1, 1)
     
     stages = [
         DelayRead(delay_length=delay_length, num_lines=num_lines),
         FeedbackMix(feedback_matrix=A),
-        ParallelBiquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
+        Biquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
         InputTap(input_matrix=torch.ones(num_lines, 1)),
         DelayWrite(),
         OutputTap(output_matrix=torch.ones(1, num_lines) / num_lines),
@@ -153,14 +154,15 @@ def example_4_fdn_absorption_outside():
     A = torch.eye(num_lines) * 0.9
     
     # Lowpass absorption filters (one-pole, a=0.85)
-    absorption_coeffs = torch.tensor([[[0.15, 0.0, 0.0, -0.85, 0.0]]]).repeat(num_lines, 1, 1)
+    # Format: [a0, a1, a2, b0, b1, b2] where a0=1.0, a1=-0.85, b0=0.15
+    absorption_coeffs = torch.tensor([[[1.0, -0.85, 0.0, 0.15, 0.0, 0.0]]]).repeat(num_lines, 1, 1)
     
     stages = [
         DelayRead(delay_length=delay_length, num_lines=num_lines),
         FeedbackMix(feedback_matrix=A),
         InputTap(input_matrix=torch.ones(num_lines, 1)),
         DelayWrite(),
-        ParallelBiquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
+        Biquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
         OutputTap(output_matrix=torch.ones(1, num_lines) / num_lines),
     ]
     
