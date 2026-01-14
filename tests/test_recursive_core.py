@@ -24,10 +24,11 @@ class DummyStage(Stage):
             ctx["lines"] = ctx["lines"] + self.add_value
         else:
             # Create lines if not present
+            # Format: [B, N, T] (batch, channels, time) to match all DSP stages
             batch_size = ctx["x"].shape[0]
             num_lines = 4
             ctx["lines"] = torch.full(
-                (batch_size, block_size, num_lines),
+                (batch_size, num_lines, block_size),
                 self.add_value,
                 device=ctx["x"].device
             )
