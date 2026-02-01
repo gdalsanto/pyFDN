@@ -2,9 +2,11 @@
 
 import numpy as np
 import pytest
+from scipy.signal import sos2tf
 
 from pyFDN.auxiliary.filters import TFMatrix
 from pyFDN.auxiliary.filters import ZScalar
+from pyFDN.auxiliary.filters import ZSOS
 from pyFDN.auxiliary.filters import ZTF
 from pyFDN.dsp.filter_matrix import FilterMatrix
 
@@ -74,6 +76,41 @@ def test_from_data_requires_supported_type():
 def test_from_data_rejects_mismatched_diagonal_shape():
     with pytest.raises(ValueError):
         FilterMatrix.from_data(np.ones((2, 3)), is_diagonal=True)
+
+
+def _simple_sos():
+    """Single SOS section (n, m, nsos, 6); same convention as test_auxiliary_filters."""
+    sos = np.zeros((1, 1, 1, 6), dtype=float)
+    sos[0, 0, 0, :3] = [1.0, 0.0, 0.0]
+    sos[0, 0, 0, 3:] = [1.0, -0.2, 0.0]
+    return sos
+
+
+def test_iir_from_zsos_filters_input():
+    sos = _simple_sos()
+    zsos = ZSOS(sos, is_diagonal=True)
+    fm = FilterMatrix.from_data(zsos)
+    impulse = np.zeros((16, 1))
+    impulse[0, 0] = 1.0
+    response = fm.filter(impulse)
+    assert response.shape == impulse.shape
+    assert np.isclose(response[0, 0], 1.0)
+
+
+def test_iir_from_zsos_matches_ztf():
+    """FilterMatrix.from_data(ZSOS(...)) matches FilterMatrix.from_data(ZTF(...)) for same filter."""
+    sos = _simple_sos()
+    sos_1d = sos[0, 0, :, :]  # shape (1, 6)
+    b, a = sos2tf(sos_1d)
+    numerator = b.reshape(1, 1, -1)
+    denominator = a.reshape(1, 1, -1)
+    ztf = ZTF(numerator, denominator, is_diagonal=True)
+    fm_ztf = FilterMatrix.from_data(ztf)
+    fm_zsos = FilterMatrix.from_data(ZSOS(sos), is_diagonal=True)
+    block = np.random.default_rng(42).standard_normal((64, 1))
+    out_ztf = fm_ztf.filter(block)
+    out_zsos = fm_zsos.filter(block)
+    assert np.allclose(out_zsos, out_ztf, rtol=1e-9, atol=1e-12)
 
 
 # ============================================================================

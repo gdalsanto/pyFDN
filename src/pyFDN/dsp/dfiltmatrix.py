@@ -1,18 +1,26 @@
+"""Deprecated: use :class:`pyFDN.dsp.filter_matrix.FilterMatrix` instead."""
+import warnings
 import numpy as np
-
 from pyFDN.auxiliary.filters import ZFilter, ZScalar
+
 
 class DFiltMatrix:
     """
     Wrapper for a matrix of filter objects (FIR, IIR, Scalar).
 
-    Each entry can be:
-    - ZScalar: numeric matrix
-    - ZFIR: FIR filter
-    - ZFilter: generic filter
+    .. deprecated::
+        Use :class:`pyFDN.dsp.filter_matrix.FilterMatrix` with
+        :meth:`FilterMatrix.from_data` instead. This class is broken with the
+        current ZFilter API and will be removed in a future version.
     """
 
     def __init__(self, zF):
+        warnings.warn(
+            "DFiltMatrix is deprecated; use FilterMatrix.from_data() from "
+            "pyFDN.dsp.filter_matrix instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         # If numeric matrix, wrap as ZScalar
         if isinstance(zF, np.ndarray) and zF.ndim == 2:
             zF = ZScalar(zF)
@@ -20,11 +28,11 @@ class DFiltMatrix:
         # Get dimensions
         self.n = getattr(zF, 'n', 1)
         self.m = getattr(zF, 'm', 1)
-        self.is_diagonal = getattr(zF, 'isDiagonal', False)
+        self.is_diagonal = getattr(zF, 'is_diagonal', getattr(zF, 'isDiagonal', False))
 
         # Initialize filters
         if isinstance(zF, ZScalar):
-            self.filters = zF.mat  # numeric matrix
+            self.filters = zF._matrix  # numeric matrix (ZScalar has _matrix)
         elif isinstance(zF, ZFilter):
             # Assume zF.filters is a 2D list of ZFilter objects
             self.filters = np.empty((self.n, self.m), dtype=object)

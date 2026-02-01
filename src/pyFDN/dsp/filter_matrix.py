@@ -3,8 +3,9 @@ import numpy as np
 from typing import Optional
 from dataclasses import dataclass
 from numpy.typing import ArrayLike
-from pyFDN.auxiliary.filters import ZTF
+from pyFDN.auxiliary.filters import ZSOS
 from pyFDN.auxiliary.filters import ZScalar
+from pyFDN.auxiliary.filters import ZTF
 
 class IIRFilterState:
     """Streaming Direct Form I filter section."""
@@ -52,9 +53,60 @@ class IIRFilterState:
         return y
 
 
+class SOSFilterState:
+    """Cascade of second-order sections (biquads); each section is Direct Form I."""
+
+    def __init__(self, sos: np.ndarray) -> None:
+        sos_arr = np.asarray(sos, dtype=float)
+        if sos_arr.ndim != 2 or sos_arr.shape[1] != 6:
+            raise ValueError("SOS must have shape (nsos, 6) with [b0, b1, b2, a0, a1, a2] per row")
+        nsos = sos_arr.shape[0]
+        if nsos == 0:
+            raise ValueError("SOS must have at least one section")
+        if np.iscomplexobj(sos_arr):
+            if np.allclose(sos_arr.imag, 0.0, atol=1e-12):
+                sos_arr = sos_arr.real.astype(float)
+            else:
+                raise ValueError("SOS contains complex coefficients which are unsupported")
+        self._sections: list[IIRFilterState] = []
+        for i in range(nsos):
+            row = sos_arr[i, :]
+            b = row[:3]
+            a = row[3:6]
+            if np.isclose(a[0], 0.0):
+                raise ValueError("Leading denominator coefficient a0 must be non-zero in each section")
+            if not np.isclose(a[0], 1.0):
+                b = b / a[0]
+                a = a / a[0]
+            self._sections.append(IIRFilterState(b, a))
+
+    def process(self, block: ArrayLike) -> np.ndarray:
+        y = np.asarray(block, dtype=float).reshape(-1)
+        for section in self._sections:
+            y = section.process(y)
+        return y
+
+
+def _iir_result(
+    cls: type,
+    n_rows: int,
+    n_cols: int,
+    diag: bool,
+    filters: list,
+) -> "FilterMatrix":
+    return cls(
+        kind="iir",
+        is_diagonal=diag,
+        output_channels=n_rows,
+        input_channels=n_rows if diag else n_cols,
+        dtype=float,
+        filters=filters,
+    )
+
+
 @dataclass
 class FilterMatrix:
-    """Matrix of filters mirroring MATLAB ``dfiltMatrix`` semantics."""
+    """Matrix of filters (static gains or IIR/SOS per cell)."""
 
     kind: str
     is_diagonal: bool
@@ -62,12 +114,12 @@ class FilterMatrix:
     input_channels: int
     dtype: np.dtype
     matrix: Optional[np.ndarray] = None
-    filters: Optional[list[list[IIRFilterState]]] = None
+    filters: Optional[list[list[IIRFilterState | SOSFilterState]]] = None
 
     @classmethod
     def from_data(
         cls,
-        data: ArrayLike | ZTF | "FilterMatrix",
+        data: ArrayLike | ZTF | ZSOS | "FilterMatrix",
         *,
         is_diagonal: Optional[bool] = None,
     ) -> "FilterMatrix":
@@ -92,20 +144,23 @@ class FilterMatrix:
             if diag and n_cols != 1:
                 raise ValueError("Diagonal ZTF must have second dimension equal to 1")
             col_iter = 1 if diag else n_cols
-            filters: list[list[IIRFilterState]] = []
-            for row in range(n_rows):
-                row_filters: list[IIRFilterState] = []
-                for col in range(col_iter):
-                    row_filters.append(IIRFilterState(num[row, col, :], den[row, col, :]))
-                filters.append(row_filters)
-            return cls(
-                kind="iir",
-                is_diagonal=diag,
-                output_channels=n_rows,
-                input_channels=n_rows if diag else n_cols,
-                dtype=float,
-                filters=filters,
-            )
+            filters = [
+                [IIRFilterState(num[row, col, :], den[row, col, :]) for col in range(col_iter)]
+                for row in range(n_rows)
+            ]
+            return _iir_result(cls, n_rows, n_cols, diag, filters)
+
+        if isinstance(data, ZSOS):
+            diag = data.is_diagonal if is_diagonal is None else is_diagonal
+            n_rows, n_cols = data.n, data.m
+            if diag and n_cols != 1:
+                raise ValueError("Diagonal ZSOS must have second dimension equal to 1")
+            col_iter = 1 if diag else n_cols
+            filters_z = [
+                [SOSFilterState(data.sos[row, col, :, :]) for col in range(col_iter)]
+                for row in range(n_rows)
+            ]
+            return _iir_result(cls, n_rows, n_cols, diag, filters_z)
 
         if isinstance(data, ZScalar):
             diag = data.is_diagonal if is_diagonal is None else is_diagonal
@@ -162,20 +217,11 @@ class FilterMatrix:
         if arr.ndim == 3:
             n_rows, n_cols, _ = arr.shape
             col_iter = 1 if diag else n_cols
-            filters = []
-            for row in range(n_rows):
-                row_filters = []
-                for col in range(col_iter):
-                    row_filters.append(IIRFilterState(arr[row, col, :], [1.0]))
-                filters.append(row_filters)
-            return cls(
-                kind="iir",
-                is_diagonal=diag,
-                output_channels=n_rows,
-                input_channels=n_rows if diag else n_cols,
-                dtype=float,
-                filters=filters,
-            )
+            filters = [
+                [IIRFilterState(arr[row, col, :], [1.0]) for col in range(col_iter)]
+                for row in range(n_rows)
+            ]
+            return _iir_result(cls, n_rows, n_cols, diag, filters)
 
         raise ValueError("Unsupported filter data dimensionality")
 

@@ -18,10 +18,10 @@ def dss2impz(ir_len, delays, A, B, C, D, input_type='splitInput', extra_matrix=N
         Delay state-space matrices
     input_type : str
         'splitInput' or 'mergeInput'
-    extra_matrix : DFiltMatrix or None
-        Optional time-varying matrix
-    absorption_filters : DFiltMatrix or None
-        Optional absorption filters
+    extra_matrix : FilterMatrix or None
+        Optional time-varying matrix (use FilterMatrix.from_data from pyFDN.dsp.filter_matrix)
+    absorption_filters : FilterMatrix or None
+        Optional absorption filters (use FilterMatrix.from_data from pyFDN.dsp.filter_matrix)
 
     Returns
     -------

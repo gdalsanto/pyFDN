@@ -1,9 +1,15 @@
 """z-Domain Filter structure classes and utilities."""
 from __future__ import annotations
+import warnings
 from abc import ABC, abstractmethod
 from typing import Tuple, Optional
 import numpy as np
 from numpy.typing import ArrayLike
+
+_DFILT_DEPRECATION = (
+    "dfilt_type and dfilt_parameter are deprecated (MATLAB compatibility). "
+    "They will be removed in a future version."
+)
 
 from pyFDN.auxiliary.math import (
     matrix_convolution,
@@ -204,12 +210,12 @@ class ZFilter(ABC):
     
     @abstractmethod
     def dfilt_type(self):
-        """Get the corresponding dfilt filter type."""
+        """Get the corresponding dfilt filter type. Deprecated."""
         pass
-    
+
     @abstractmethod
     def dfilt_parameter(self, n: int, m: int):
-        """Get parameters in a format suitable for dfilt."""
+        """Get parameters in a format suitable for dfilt. Deprecated."""
         pass
 
 
@@ -256,9 +262,11 @@ class ZScalar(ZFilter):
         return ZScalar(np.linalg.inv(self._matrix), is_diagonal=False)
 
     def dfilt_type(self) -> str:
+        warnings.warn(_DFILT_DEPRECATION, DeprecationWarning, stacklevel=2)
         return "none"
 
     def dfilt_parameter(self, n: int, m: int):
+        warnings.warn(_DFILT_DEPRECATION, DeprecationWarning, stacklevel=2)
         return self._matrix[n, m]
 
 
@@ -338,9 +346,11 @@ class ZTF(ZFilter):
         return ZTF(self.denominator, self.numerator, is_diagonal=self.is_diagonal)
 
     def dfilt_type(self) -> str:
+        warnings.warn(_DFILT_DEPRECATION, DeprecationWarning, stacklevel=2)
         return "df2tf"
 
     def dfilt_parameter(self, n: int, m: int) -> dict[str, np.ndarray]:
+        warnings.warn(_DFILT_DEPRECATION, DeprecationWarning, stacklevel=2)
         return {"b": self.numerator[n, m, :], "a": self.denominator[n, m, :]}
 
     def _as_scalar(self, z: complex | np.ndarray) -> complex:
@@ -369,7 +379,7 @@ class ZTF(ZFilter):
 
 
 class ZFIR(ZFilter):
-    """FIR z-domain filter backed by ``TFMatrix``."""
+    """FIR z-domain filter implemented as ZTF with denominator 1."""
 
     def __init__(self, b: ArrayLike, **kwargs) -> None:
         super().__init__()
@@ -394,9 +404,10 @@ class ZFIR(ZFilter):
         self.parse_arguments(parse_args)
         self.check_shape(self.m)
 
-        denominator = np.ones((self.n, self.m, 1), dtype=np.complex128)
-        self._matrix = TFMatrix(b_arr, denominator)
-        self._matrix_der = self._matrix.derive()
+        num_coeffs = b_arr.shape[2]
+        denominator = np.zeros((self.n, self.m, num_coeffs), dtype=np.complex128)
+        denominator[..., 0] = 1.0
+        self._ztf = ZTF(b_arr, denominator, is_diagonal=self.is_diagonal)
         self.number_of_delay_units = int(self._calculate_delays(b_arr))
 
     def _calculate_delays(self, numerator: np.ndarray) -> int:
@@ -408,23 +419,25 @@ class ZFIR(ZFilter):
         return poly_degree(delays, 'z^-1')
 
     def _at(self, z: complex | np.ndarray) -> np.ndarray:
-        return self._matrix.at(z)
+        return self._ztf._at(z)
 
     def _der(self, z: complex | np.ndarray) -> np.ndarray:
-        return self._matrix_der.at(z)
+        return self._ztf._der(z)
 
     def inverse(self) -> ZTF:
         return ZTF(
-            self._matrix.denominator,
-            self._matrix.numerator,
+            self._ztf.denominator,
+            self._ztf.numerator,
             is_diagonal=self.is_diagonal,
         )
 
     def dfilt_type(self) -> str:
+        warnings.warn(_DFILT_DEPRECATION, DeprecationWarning, stacklevel=2)
         return "dffir"
 
     def dfilt_parameter(self, n: int, m: int):
-        return self._matrix.numerator[n, m, :]
+        warnings.warn(_DFILT_DEPRECATION, DeprecationWarning, stacklevel=2)
+        return self._ztf.numerator[n, m, :]
 
 
 class ZSOS(ZFilter):
@@ -507,13 +520,13 @@ class ZSOS(ZFilter):
         return ZSOS(isos, isDiagonal=self.is_diagonal)
     
     def dfilt_type(self) -> str:
-        """Get the corresponding dfilt filter type."""
-        return 'df2sos'
-    
+        warnings.warn(_DFILT_DEPRECATION, DeprecationWarning, stacklevel=2)
+        return "df2sos"
+
     def dfilt_parameter(self, n: int, m: int) -> dict:
-        """Get parameters in dfilt format."""
+        warnings.warn(_DFILT_DEPRECATION, DeprecationWarning, stacklevel=2)
         sos = np.transpose(self.sos[n, m, :, :], (0, 1))
-        return {'sos': sos}
+        return {"sos": sos}
 
 
 

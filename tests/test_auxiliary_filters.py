@@ -40,10 +40,13 @@ def test_zsos_inverse_swaps_sections():
 
 
 def test_zsos_dfilt_metadata():
+    """dfilt_type/dfilt_parameter are deprecated; test still checks behavior."""
     sos = _simple_sos()
     filt = ZSOS(sos)
-    assert filt.dfilt_type() == "df2sos"
-    params = filt.dfilt_parameter(0, 0)
+    with pytest.warns(DeprecationWarning):
+        assert filt.dfilt_type() == "df2sos"
+    with pytest.warns(DeprecationWarning):
+        params = filt.dfilt_parameter(0, 0)
     assert "sos" in params
     assert params["sos"].shape == (1, 6)
 
