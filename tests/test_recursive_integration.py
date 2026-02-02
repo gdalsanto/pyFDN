@@ -23,13 +23,13 @@ class TestSimpleSystems:
             DelayWrite(),
             OutputTap(num_lines=num_lines, num_outputs=num_lines),
         ]
-        core = RecursionCore(stages)
+        core = RecursionCore(stages, block_size=8)
         
         # Impulse input
         input_signal = torch.zeros(64, num_lines)
         input_signal[0, :] = 1.0
         
-        output = core.process(input_signal, block_size=8)  # block_size < delay_length
+        output = core.process(input_signal)  # block_size < delay_length
         
         # With InputTap, output[0] includes direct input + zero delay = 1
         # output[delay_length] includes input + delayed input = 0 + 1 = 1
@@ -53,10 +53,10 @@ class TestSimpleSystems:
                 num_outputs=1,
             ),
         ]
-        core = RecursionCore(stages)
+        core = RecursionCore(stages, block_size=8)
         
         input_signal = torch.randn(32, 1)
-        output = core.process(input_signal, block_size=8)
+        output = core.process(input_signal)
         
         # Output includes contribution from lines (which include delayed + current input)
         # Just verify system runs and produces finite output
@@ -80,13 +80,13 @@ class TestFeedbackComb:
             DelayWrite(),
             OutputTap(num_lines=1, num_outputs=1),
         ]
-        core = RecursionCore(stages)
+        core = RecursionCore(stages, block_size=8)
         
         # Impulse input
         input_signal = torch.zeros(100, 1)
         input_signal[0, 0] = 1.0
         
-        output = core.process(input_signal, block_size=8)  # block_size < delay_length
+        output = core.process(input_signal)  # block_size < delay_length
         
         # Expected impulse response: impulses at 0, delay, 2*delay, 3*delay, ...
         # with amplitudes 1, g, g^2, g^3, ...
@@ -115,14 +115,14 @@ class TestFeedbackComb:
         input_signal = torch.randn(64, 1)
         
         # Process with different block sizes (all < delay_length)
-        core_4 = RecursionCore(stages_template())
-        output_4 = core_4.process(input_signal.clone(), block_size=4)
+        core_4 = RecursionCore(stages_template(), block_size=4)
+        output_4 = core_4.process(input_signal.clone())
         
-        core_8 = RecursionCore(stages_template())
-        output_8 = core_8.process(input_signal.clone(), block_size=8)
+        core_8 = RecursionCore(stages_template(), block_size=8)
+        output_8 = core_8.process(input_signal.clone())
         
-        core_16 = RecursionCore(stages_template())
-        output_16 = core_16.process(input_signal.clone(), block_size=16)
+        core_16 = RecursionCore(stages_template(), block_size=16)
+        output_16 = core_16.process(input_signal.clone())
         
         # All should give same result
         assert torch.allclose(output_4, output_8, atol=1e-5)
@@ -157,10 +157,10 @@ class TestFDNSystems:
                 num_outputs=1
             ),
         ]
-        core = RecursionCore(stages)
+        core = RecursionCore(stages, block_size=32)
         
         input_signal = torch.randn(128, 1)
-        output = core.process(input_signal, block_size=32)
+        output = core.process(input_signal)
         
         assert output.shape == (128, 1)
         # FDN should not blow up (unitary matrix preserves energy)
@@ -191,13 +191,13 @@ class TestFDNSystems:
             DelayWrite(),
             OutputTap(output_matrix=torch.ones(1, num_lines) / num_lines),
         ]
-        core = RecursionCore(stages)
+        core = RecursionCore(stages, block_size=8)
         
         # Impulse response
         input_signal = torch.zeros(200, 1)
         input_signal[0, 0] = 1.0
         
-        output = core.process(input_signal, block_size=8)  # block_size < delay_length
+        output = core.process(input_signal)  # block_size < delay_length
         
         # Should decay over time due to absorption
         # Check that overall energy decreases from early to very late
@@ -225,12 +225,12 @@ class TestFDNSystems:
             Biquads(num_lines=num_lines, biquad_coeffs=absorption_coeffs),
             OutputTap(output_matrix=torch.ones(1, num_lines) / num_lines),
         ]
-        core = RecursionCore(stages)
+        core = RecursionCore(stages, block_size=32)
         
         input_signal = torch.zeros(200, 1)
         input_signal[0, 0] = 1.0
         
-        output = core.process(input_signal, block_size=32)
+        output = core.process(input_signal)
         
         # Should still have some decay (absorption affects output only)
         assert torch.all(torch.isfinite(output))
@@ -271,11 +271,11 @@ class TestStageOrdering:
         
         input_signal = torch.randn(64, 1)
         
-        core_inside = RecursionCore(stages_inside)
-        output_inside = core_inside.process(input_signal.clone(), block_size=16)
+        core_inside = RecursionCore(stages_inside, block_size=16)
+        output_inside = core_inside.process(input_signal.clone())
         
-        core_outside = RecursionCore(stages_outside)
-        output_outside = core_outside.process(input_signal.clone(), block_size=16)
+        core_outside = RecursionCore(stages_outside, block_size=16)
+        output_outside = core_outside.process(input_signal.clone())
         
         # Outputs should be different
         assert not torch.allclose(output_inside, output_outside, atol=0.01)
@@ -299,9 +299,9 @@ class TestBatchProcessing:
         ]
         
         # Process batch: [B, N, T]
-        core_batch = RecursionCore(stages)
+        core_batch = RecursionCore(stages, block_size=16)
         input_batch = torch.randn(batch_size, 1, 64)  # [B, N_in, T]
-        output_batch = core_batch.process(input_batch, block_size=16)
+        output_batch = core_batch.process(input_batch)
         
         # Process individually
         for i in range(batch_size):
@@ -311,8 +311,8 @@ class TestBatchProcessing:
                 InputTap(input_matrix=torch.ones(num_lines, 1)),
                 DelayWrite(),
                 OutputTap(output_matrix=torch.ones(1, num_lines) / num_lines),
-            ])
-            output_single = core_single.process(input_batch[i:i+1], block_size=16)  # [1, N, T]
+            ], block_size=16)
+            output_single = core_single.process(input_batch[i:i+1])  # [1, N, T]
             
             # Should match: [B, N_out, T]
             assert torch.allclose(output_batch[i:i+1], output_single, atol=1e-6)

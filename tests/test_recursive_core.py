@@ -6,7 +6,7 @@ from pyFDN.recursive import Stage, RecursionCore, DelayRead, DelayWrite, OutputT
 
 
 class DummyStage(Stage):
-    """Simple stage for testing that adds a constant to ctx['lines']."""
+    """Simple stage for testing that adds a constant to the lines tensor."""
     
     def __init__(self, add_value: float = 1.0, has_state: bool = False):
         state_keys = {"dummy_state"} if has_state else set()
@@ -19,22 +19,26 @@ class DummyStage(Stage):
             return {"dummy_state": torch.zeros(batch_size, device=device)}
         return {}
     
-    def step_block(self, ctx, state_t, next_state, block_size):
-        if "lines" in ctx:
-            ctx["lines"] = ctx["lines"] + self.add_value
+    def step_block(self, lines, state_t, next_state, block_size, x_block=None):
+        if lines is not None:
+            new_lines = lines + self.add_value
         else:
             # Create lines if not present
             # Format: [B, N, T] (batch, channels, time) to match all DSP stages
-            batch_size = ctx["x"].shape[0]
+            if x_block is None:
+                raise RuntimeError("DummyStage requires `x_block` when lines is None")
+            batch_size = x_block.shape[0]
             num_lines = 4
-            ctx["lines"] = torch.full(
+            new_lines = torch.full(
                 (batch_size, num_lines, block_size),
                 self.add_value,
-                device=ctx["x"].device
+                device=x_block.device,
             )
         
         if self.has_state:
             next_state["dummy_state"] = state_t["dummy_state"] + 1
+
+        return new_lines, None
 
 
 class TestStageBase:
@@ -65,9 +69,10 @@ class TestRecursionCore:
             DummyStage(),
             DummyStage(),
         ]
-        core = RecursionCore(stages)
+        core = RecursionCore(stages, block_size=16)
         assert len(core.stages) == 2
         assert core.device == torch.device("cpu")
+        assert core.block_size == 16
     
     def test_state_initialization(self):
         """Test global state initialization."""
@@ -75,7 +80,7 @@ class TestRecursionCore:
             DelayRead(delay_length=16, num_lines=4),
             DelayWrite(),
         ]
-        core = RecursionCore(stages)
+        core = RecursionCore(stages, block_size=16)
         state = core.init_state(batch_size=2)
         
         assert "delay_buffers" in state
@@ -90,27 +95,20 @@ class TestRecursionCore:
             DelayWrite(),
             OutputTap(num_lines=2, num_outputs=1),
         ]
-        core = RecursionCore(stages)
+        core = RecursionCore(stages, block_size=32)
         
         # 2D input [T, N_in] -> converted to [N_in, T] internally, output back to [T, N_out]
         input_2d = torch.randn(100, 1)
-        output = core.process(input_2d, block_size=32)
+        output = core.process(input_2d)
         assert output.shape == (100, 1)  # Transposed back for backward compatibility
         
         # 3D input [B, N_in, T]
         input_3d = torch.randn(3, 1, 100)
-        output = core.process(input_3d, block_size=32)
+        output = core.process(input_3d)
         assert output.shape == (3, 1, 100)  # [B, N_out, T]
     
     def test_block_partitioning(self):
         """Test signal partitioning into blocks."""
-        stages = [
-            DelayRead(delay_length=8, num_lines=2),
-            DelayWrite(),
-            OutputTap(num_lines=2, num_outputs=1),
-        ]
-        core = RecursionCore(stages)
-        
         # Test with various input lengths and block sizes
         test_cases = [
             (100, 32),  # Doesn't divide evenly
@@ -119,8 +117,14 @@ class TestRecursionCore:
         ]
         
         for T, bs in test_cases:
+            stages = [
+                DelayRead(delay_length=8, num_lines=2),
+                DelayWrite(),
+                OutputTap(num_lines=2, num_outputs=1),
+            ]
+            core = RecursionCore(stages, block_size=bs)
             input_signal = torch.randn(T, 1)
-            output = core.process(input_signal, block_size=bs)
+            output = core.process(input_signal)
             assert output.shape == (T, 1), f"Failed for T={T}, block_size={bs}"
     
     def test_state_preservation_across_blocks(self):
@@ -131,10 +135,10 @@ class TestRecursionCore:
             DelayWrite(),
             OutputTap(num_lines=2, num_outputs=1),
         ]
-        core = RecursionCore(stages)
+        core = RecursionCore(stages, block_size=16)
         
         input_signal = torch.randn(64, 1)
-        core.process(input_signal, block_size=16)
+        core.process(input_signal)
         # Test passes if no errors - state management is working
     
     def test_missing_output_error(self):
@@ -144,11 +148,11 @@ class TestRecursionCore:
             DelayWrite(),
             # No OutputTap - should error
         ]
-        core = RecursionCore(stages)
+        core = RecursionCore(stages, block_size=16)
         
         input_signal = torch.randn(32, 1)
         with pytest.raises(RuntimeError, match="No output produced"):
-            core.process(input_signal, block_size=16)
+            core.process(input_signal)
     
     def test_device_consistency(self):
         """Test that tensors stay on correct device."""
@@ -161,9 +165,9 @@ class TestRecursionCore:
             DelayWrite(),
             OutputTap(num_lines=2, num_outputs=1),
         ]
-        core = RecursionCore(stages, device=device)
+        core = RecursionCore(stages, block_size=16, device=device)
         
         input_signal = torch.randn(32, 1)  # CPU tensor
-        output = core.process(input_signal, block_size=16)
+        output = core.process(input_signal)
         
         assert output.device == device

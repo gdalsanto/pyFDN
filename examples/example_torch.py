@@ -9,10 +9,9 @@ with various example systems.
 import torch
 import matplotlib.pyplot as plt
 from pyFDN.recursive import (
-    Delay, DelayRead, DelayWrite, Biquads,
+    DelayRead, DelayWrite, Biquads,
     FeedbackMix, InputTap, OutputTap, RecursionCore
 )
-from pyFDN.recursive.delay_lines import Delay
 
 
 def create_impulse(length: int, num_channels: int = 1) -> torch.Tensor:
@@ -52,15 +51,10 @@ def example_1_pure_delay():
     num_lines = 2
     
     stages = [
-        # 1) Inject current external input into lines (feeds input into buffer)
         DelayRead(delay_lengths=torch.tensor(delay_lengths, dtype=torch.long), num_lines=num_lines),
         InputTap(num_lines=num_lines, num_inputs=1),
-        # 2) Store current lines into the delay buffer for future blocks and read delayed samples from buffer for output
         OutputTap(output_matrix=torch.eye(2, 2)),
         DelayWrite(),
-
-        # 4) Convert delayed line signals to output
-
     ]
     
     core = RecursionCore(stages, block_size=30)
