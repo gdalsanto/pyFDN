@@ -67,35 +67,29 @@ editable mode together with the optional tooling::
 Quick start
 -----------
 
-.. The snippet below sketches the main steps involved in assembling a simple
-.. four-delay FDN and inspecting its stability bounds::
+All main functions are accessible directly from the top-level ``pyFDN`` namespace::
 
-..     from types import SimpleNamespace
-..     import numpy as np
-..     from pyFDN.generate.random_orthogonal import random_orthogonal
-..     from pyFDN.auxiliary.one_pole_absorption import one_pole_absorption
-..     from pyFDN.auxiliary.pole_boundaries import pole_boundaries
+    import numpy as np
+    import pyFDN
 
-..     fs = 48_000
-..     delays = np.array([331, 347, 359, 373], dtype=int)
+    fs = 48_000
+    delays = np.array([331, 347, 359, 373], dtype=int)
 
-..     # Energy-preserving feedback matrix (shape: N x N x 1)
-..     feedback = random_orthogonal(len(delays))[..., np.newaxis]
+    # energy-preserving feedback matrix
+    feedback = pyFDN.random_orthogonal(len(delays))
 
-..     # Match-loop decay targets (seconds) at DC and Nyquist
-..     rt60 = np.full(len(delays), 0.6)
-..     sos = one_pole_absorption(rt60, 1.4 * rt60, delays, fs)  # SOS format: (6, N)
-..     # Convert SOS to b, a format for pole_boundaries: b shape (N, 1, 1), a shape (N, 1, 2)
-..     b = sos[0:1, :].T[:, np.newaxis, :]  # b0, shape (N, 1, 1)
-..     a = np.stack([sos[3, :], sos[4, :]], axis=1)[:, np.newaxis, :]  # [a0, a1], shape (N, 1, 2)
-..     absorption = SimpleNamespace(b=b, a=a)
+    # one-pole absorption filters targeting rt60 of 1.2s at dc and 0.9s at nyquist
+    absorption = pyFDN.one_pole_absorption(1.2, 0.9, delays, fs)
 
-..     lower, upper, freqs = pole_boundaries(delays, absorption, feedback, fs)
-..     print(f"Stability window @ {freqs[0]:.1f} Hz: {lower[0]:.3f} – {upper[0]:.3f}")
+    # convert delay state-space to standard state-space
+    ss_matrix, b, c, d = pyFDN.dss2ss(delays, feedback)
 
-.. For matrix-polynomial manipulation without SciPy, the :mod:`pyFDN.auxiliary`
-.. package exposes convenience functions such as ``matrix_convolution``,
-.. ``matrix_polyval``, and ``TFMatrix``.
+Alternatively, import specific functions directly::
+
+    from pyFDN import random_orthogonal, one_pole_absorption, mag2db
+
+    feedback = random_orthogonal(4)
+    absorption = one_pole_absorption(1.2, 0.9, [100, 150, 200, 250], 48_000)
 
 
 .. Repository index
