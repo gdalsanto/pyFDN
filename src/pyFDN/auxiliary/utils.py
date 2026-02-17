@@ -48,6 +48,38 @@ def db2mag(db: ArrayLike) -> np.ndarray:
     return np.power(10.0, db_arr / 20.0)
 
 
+def mulaw_encode(x: ArrayLike, mu: float = 255.0) -> np.ndarray:
+    """Mu-law companding (encode): linear amplitude to companded.
+
+    Args:
+        x: Input signal, typically in [-1, 1]. Will be clipped to that range.
+        mu: Compression parameter (default 255, as in G.711).
+
+    Returns:
+        Companded signal in [-1, 1].
+    """
+    x = np.clip(np.asarray(x, dtype=float), -1.0, 1.0)
+    sgn = np.sign(x)
+    x_abs = np.abs(x)
+    return sgn * np.log1p(mu * x_abs) / np.log1p(mu)
+
+
+def mulaw_decode(y: ArrayLike, mu: float = 255.0) -> np.ndarray:
+    """Mu-law companding (decode): companded to linear amplitude.
+
+    Args:
+        y: Companded signal in [-1, 1].
+        mu: Compression parameter (default 255, as in G.711).
+
+    Returns:
+        Linear-amplitude signal in [-1, 1].
+    """
+    y = np.asarray(y, dtype=float)
+    sgn = np.sign(y)
+    y_abs = np.clip(np.abs(y), 0.0, 1.0)
+    return sgn * ((1.0 + mu) ** y_abs - 1.0) / mu
+
+
 def hertz2unit(hz: ArrayLike, fs: float) -> np.ndarray:
     """Convert frequency (Hz) to normalized frequency (0–1)."""
     return np.asarray(hz) / fs * 2
@@ -138,4 +170,5 @@ def pole_boundaries(delays, absorption, feedback_matrix, fs, nfft=2**12):
     f = w / np.pi * fs / 2
 
     return MinCurve, MaxCurve, f
+
 

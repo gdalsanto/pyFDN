@@ -49,6 +49,8 @@ __all__ = [
     "is_bounding_curve",
     "last_nonzero_indices",
     "mag2db",
+    "mulaw_decode",
+    "mulaw_encode",
     "pole_boundaries",
     # state-space translators
     "dss2impz",
@@ -93,6 +95,8 @@ from .auxiliary.utils import (
     is_bounding_curve,
     last_nonzero_indices,
     mag2db,
+    mulaw_decode,
+    mulaw_encode,
     pole_boundaries,
 )
 
