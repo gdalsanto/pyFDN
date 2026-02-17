@@ -80,6 +80,25 @@ def mulaw_decode(y: ArrayLike, mu: float = 255.0) -> np.ndarray:
     return sgn * ((1.0 + mu) ** y_abs - 1.0) / mu
 
 
+def peak_normalize(x: ArrayLike, target_peak: float = 1.0) -> np.ndarray:
+    """Scale array so the maximum absolute value equals target_peak.
+
+    If the array is all zeros, it is returned unchanged.
+
+    Args:
+        x: Input signal (any shape).
+        target_peak: Desired peak magnitude (default 1.0).
+
+    Returns:
+        Scaled array, same shape as input.
+    """
+    x = np.asarray(x, dtype=float)
+    peak = np.max(np.abs(x))
+    if peak > 0:
+        return x * (target_peak / peak)
+    return x
+
+
 def hertz2unit(hz: ArrayLike, fs: float) -> np.ndarray:
     """Convert frequency (Hz) to normalized frequency (0–1)."""
     return np.asarray(hz) / fs * 2

@@ -51,6 +51,7 @@ __all__ = [
     "mag2db",
     "mulaw_decode",
     "mulaw_encode",
+    "peak_normalize",
     "pole_boundaries",
     # state-space translators
     "dss2impz",
@@ -97,6 +98,7 @@ from .auxiliary.utils import (
     mag2db,
     mulaw_decode,
     mulaw_encode,
+    peak_normalize,
     pole_boundaries,
 )
 
