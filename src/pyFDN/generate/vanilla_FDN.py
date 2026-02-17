@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -27,7 +27,6 @@ def vanilla_FDN(
     num_output: int = 1,
     delay_min: int = 400,
     delay_max: int = 1200,
-    seed: Optional[int] = None,
 ):
     """Build a vanilla FDN (delays + feedback matrix + one-pole absorption) in FLAMO.
 
@@ -57,18 +56,13 @@ def vanilla_FDN(
         Minimum delay length in samples (default 400).
     delay_max : int, optional
         Maximum delay length in samples, exclusive (default 1200).
-    seed : int or None, optional
-        Random seed for delay lengths and feedback matrix (default None).
-
+    
     Returns
     -------
     model
         FLAMO Shell instance (core = direct + FDN, with FFT/iFFT layers).
     """
 
-    if seed is not None:
-        np.random.seed(seed)
-        
     delays_arr = np.random.randint(delay_min, delay_max, size=n).astype(np.float64)
     delays_torch = torch.tensor(delays_arr, dtype=torch.float32, device=device)
     delay_module = dsp.parallelDelay(
