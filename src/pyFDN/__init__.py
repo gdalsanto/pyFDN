@@ -17,6 +17,7 @@ __all__ = [
     # acoustics
     "absorption_filters",
     "absorption_to_t60",
+    "echo_density",
     "one_pole_absorption",
     "rt60_to_slope",
     "slope_to_rt60",
@@ -66,6 +67,7 @@ __all__ = [
 from .auxiliary.acoustics import (
     absorption_filters,
     absorption_to_t60,
+    echo_density,
     one_pole_absorption,
     rt60_to_slope,
     slope_to_rt60,

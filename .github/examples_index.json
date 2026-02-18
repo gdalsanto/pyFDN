@@ -17,7 +17,7 @@
     { "matlab": "example_decorrelation.m",                     "python": "example_decorrelation.py",                     "status": "todo", "description": "" },
     { "matlab": "example_delayEquivalent.m",                   "python": "example_delay_equivalent.py",                  "status": "todo", "description": "" },
     { "matlab": "example_delayMatrix.m",                       "python": "example_delay_matrix.py",                      "status": "todo", "description": "" },
-    { "matlab": "example_delayMatrixDensity.m",                "python": "example_delay_matrix_density.py",              "status": "todo", "description": "" },
+    { "matlab": "example_delayMatrixDensity.m",                "python": "example_delay_matrix_density.ipynb",              "status": "done", "description": "Compare vanilla FDN, delay+matrix+delay feedback, and swapped paths; plot IRs and echo density (Abel & Huang 2006)." },
     { "matlab": "example_dss2pr_direct.m",                     "python": "example_dss2pr_direct.py",                     "status": "todo", "description": "" },
     { "matlab": "example_dss2pr.m",                            "python": "example_dss2pr.py",                            "status": "todo", "description": "" },
     { "matlab": "example_dss2ss.m",                            "python": "example_dss2ss.py",                            "status": "todo", "description": "" },
