@@ -7,6 +7,18 @@ from numpy.linalg import svd
 from scipy.interpolate import interp1d
 from scipy.signal import freqz, group_delay
 
+
+def skew(X: ArrayLike) -> np.ndarray:
+    """Return skew-symmetric matrix from upper triangle (Matlab skew convention).
+
+    Y = triu(X, 1) - triu(X, 1).T so that Y is skew-symmetric. Equivalent to
+    skew.m: Y = X - X' with X = triu(X, 1).
+    """
+    X = np.asarray(X, dtype=np.float64)
+    upper = np.triu(X, 1)
+    return upper - upper.T
+
+
 def ensure_3d(matrix: ArrayLike) -> np.ndarray:
     """Ensure the matrix has a trailing polynomial dimension."""
 

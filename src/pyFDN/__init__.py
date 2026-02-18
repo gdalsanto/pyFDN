@@ -44,6 +44,7 @@ __all__ = [
     "polyder_rational",
     "polydiag",
     # general utilities
+    "skew",
     "db2mag",
     "ensure_3d",
     "hertz2unit",
@@ -91,6 +92,7 @@ from .auxiliary.math import (
 
 #general utilities
 from .auxiliary.utils import (
+    skew,
     db2mag,
     ensure_3d,
     hertz2unit,
