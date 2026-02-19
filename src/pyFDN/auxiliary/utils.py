@@ -45,19 +45,34 @@ def last_nonzero_indices(mat: np.ndarray) -> np.ndarray:
     return last
 
 
-def mag_to_db(magnitude: ArrayLike) -> np.ndarray:
-    """Convert magnitudes to decibels with numerical guard."""
+def lin_to_db(linear: ArrayLike) -> np.ndarray:
+    """Convert linear magnitude to decibels with numerical guard."""
 
-    mag = np.asarray(magnitude, dtype=float)
+    mag = np.asarray(linear, dtype=float)
     tiny = np.finfo(float).tiny
     return 20.0 * np.log10(np.maximum(np.abs(mag), tiny))
 
 
-def db_to_mag(db: ArrayLike) -> np.ndarray:
+def db_to_lin(db: ArrayLike) -> np.ndarray:
     """Convert decibel values to linear magnitude."""
 
     db_arr = np.asarray(db, dtype=float)
     return np.power(10.0, db_arr / 20.0)
+
+
+def sq_to_db(squared: ArrayLike) -> np.ndarray:
+    """Convert squared magnitude (power) to decibels with numerical guard."""
+
+    p = np.asarray(squared, dtype=float)
+    tiny = np.finfo(float).tiny
+    return 10.0 * np.log10(np.maximum(np.abs(p), tiny))
+
+
+def db_to_sq(db: ArrayLike) -> np.ndarray:
+    """Convert decibel values to squared magnitude (power)."""
+
+    db_arr = np.asarray(db, dtype=float)
+    return np.power(10.0, db_arr / 10.0)
 
 
 def mulaw_encode(x: ArrayLike, mu: float = 255.0) -> np.ndarray:

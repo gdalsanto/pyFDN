@@ -16,10 +16,12 @@ __all__ = [
     "ZTF",
     # acoustics
     "absorption_filters",
-    "absorption_to_t60",
+    "absorption_to_rt",
+    "edc",
     "one_pole_absorption",
-    "rt60_to_slope",
-    "slope_to_rt60",
+    "rt_to_gain_per_sample",
+    "rt_to_slope",
+    "slope_to_rt",
     # delay utilities
     "matrix_delay_approximation",
     "mgrpdelay",
@@ -32,24 +34,28 @@ __all__ = [
     "random_orthogonal",
     "shift_matrix",
     "shift_matrix_distribute",
+    "tiny_rotation_matrix",
     "vanilla_FDN",
     # polynomial and matrix maths
     "det_polynomial",
     "matrix_convolution",
     "matrix_polyder",
     "matrix_polyval",
+    "matrix_sqrt",
     "negpolyder",
     "outer_sum_approximation",
     "poly_degree",
     "polyder_rational",
     "polydiag",
     # general utilities
-    "db_to_mag",
+    "db_to_lin",
+    "db_to_sq",
     "ensure_3d",
     "hertz_to_unit",
     "is_bounding_curve",
     "last_nonzero_indices",
-    "mag_to_db",
+    "lin_to_db",
+    "sq_to_db",
     "mulaw_decode",
     "mulaw_encode",
     "peak_normalize",
@@ -65,10 +71,12 @@ __all__ = [
 #acoustics and absorption
 from .auxiliary.acoustics import (
     absorption_filters,
-    absorption_to_t60,
+    absorption_to_rt,
+    edc,
     one_pole_absorption,
-    rt60_to_slope,
-    slope_to_rt60,
+    rt_to_gain_per_sample,
+    rt_to_slope,
+    slope_to_rt,
 )
 
 #delay utilities
@@ -83,6 +91,7 @@ from .auxiliary.math import (
     matrix_convolution,
     matrix_polyder,
     matrix_polyval,
+    matrix_sqrt,
     negpolyder,
     outer_sum_approximation,
     poly_degree,
@@ -92,16 +101,18 @@ from .auxiliary.math import (
 
 #general utilities
 from .auxiliary.utils import (
-    db_to_mag,
+    db_to_lin,
+    db_to_sq,
     ensure_3d,
     hertz_to_unit,
     is_bounding_curve,
     last_nonzero_indices,
-    mag_to_db,
+    lin_to_db,
     mulaw_decode,
     mulaw_encode,
     peak_normalize,
     pole_boundaries,
+    sq_to_db,
     skew,
 )
 
@@ -116,6 +127,7 @@ from .generate.construct_cascaded_paraunitary_matrix import (
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from .generate.is_almost_zero import is_almost_zero
 from .generate.vanilla_FDN import vanilla_FDN
+from .auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
 
 #state-space translators
 from .translate.dss_to_ss import dss_to_ss

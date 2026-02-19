@@ -13,6 +13,7 @@ import torch
 
 from flamo.processor import dsp, system
 
+from pyFDN.auxiliary.acoustics import rt_to_gain_per_sample
 from pyFDN.auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
 
 
@@ -132,10 +133,10 @@ def create_coupled_rooms_fdn():
     mixing_matrix.assign_value(feedback_matrix)
 
     # T60 values from MATLAB (at 1kHz)
-    shortT60 = torch.tensor(
+    short_rt = torch.tensor(
         [0.5, 0.5, 0.55, 0.575, 0.525, 0.375, 0.275, 0.2, 0.175, 0.175]
     )
-    longT60 = torch.tensor([4.0, 4.0, 4.4, 4.6, 4.2, 3.0, 2.2, 1.6, 1.4, 1.4])
+    long_rt = torch.tensor([4.0, 4.0, 4.4, 4.6, 4.2, 3.0, 2.2, 1.6, 1.4, 1.4])
 
     attenuation = dsp.parallelGain(
         size=(N,),
@@ -145,18 +146,15 @@ def create_coupled_rooms_fdn():
         device=device,
     )
 
-    def t60_to_gain_per_sample(t60, fs):
-        return 10 ** (-3 / (t60 * fs))
-
-    short_t60_1khz = shortT60[4].item()
-    long_t60_1khz = longT60[4].item()
+    short_rt_1khz = short_rt[4].item()
+    long_rt_1khz = long_rt[4].item()
 
     attenuation_values = torch.zeros(N)
-    g_short = t60_to_gain_per_sample(short_t60_1khz, fs)
+    g_short = rt_to_gain_per_sample(short_rt_1khz, fs)
     for i in range(N_per_room):
         attenuation_values[i] = g_short ** delay_lengths[i]
 
-    g_long = t60_to_gain_per_sample(long_t60_1khz, fs)
+    g_long = rt_to_gain_per_sample(long_rt_1khz, fs)
     for i in range(N_per_room, N):
         attenuation_values[i] = g_long ** delay_lengths[i]
 
