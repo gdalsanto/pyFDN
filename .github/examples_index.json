@@ -26,7 +26,7 @@
     { "matlab": "example_fdnMatrixGallery.m",                  "python": "example_fdn_matrix_gallery.py",                "status": "todo", "description": "" },
     { "matlab": "example_generalCharPoly.m",                   "python": "example_general_char_poly.py",                 "status": "todo", "description": "" },
     { "matlab": "example_graphicEq.m",                         "python": "example_graphic_eq.py",                        "status": "todo", "description": "" },
-    { "matlab": "example_interpolateMatrix.m",                 "python": "example_interpolate_matrix.py",                "status": "todo", "description": "" },
+    { "matlab": "example_interpolateMatrix.m",                 "python": "example_interpolate_matrix.ipynb",              "status": "done", "description": "Geodesic interpolation between two orthogonal matrices; plot three FDN IRs via dss2impz." },
     { "matlab": "example_inversePolynomialMatrix.m",           "python": "example_inverse_polynomial_matrix.py",         "status": "todo", "description": "" },
     { "matlab": "example_isDiagonallyEquivalentToOrthogonal.m","python": "example_is_diagonally_equivalent_to_orthogonal.py", "status": "todo", "description": "" },
     { "matlab": "example_nearestSignAgnosticOrthogonal.m",     "python": "example_nearest_sign_agnostic_orthogonal.py",  "status": "todo", "description": "" },
