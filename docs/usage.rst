@@ -8,7 +8,7 @@ All main functions are accessible directly from ``pyFDN``::
 
     feedback = pyFDN.random_orthogonal(4)
     absorption = pyFDN.one_pole_absorption(1.2, 0.9, [100, 150, 200, 250], 48_000)
-    gain_db = pyFDN.mag_to_db([0.5, 1.0, 2.0])
+    gain_db = pyFDN.lin_to_db([0.5, 1.0, 2.0])
 
 Or import specific functions::
 
