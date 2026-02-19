@@ -18,10 +18,8 @@ import torch
 # Add the src directory to Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
-from pyFDN.examples.example_coupled_rooms import (
-    create_coupled_rooms_fdn,
-    tiny_rotation_matrix,
-)
+from pyFDN.auxiliary.coupled_rooms import create_coupled_rooms_fdn
+from pyFDN.auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
 
 
 def test_tiny_rotation_matrix():
