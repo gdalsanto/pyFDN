@@ -32,6 +32,7 @@ __all__ = [
     "random_orthogonal",
     "shift_matrix",
     "shift_matrix_distribute",
+    "vanilla_FDN",
     # polynomial and matrix maths
     "det_polynomial",
     "matrix_convolution",
@@ -49,7 +50,11 @@ __all__ = [
     "is_bounding_curve",
     "last_nonzero_indices",
     "mag_to_db",
+    "mulaw_decode",
+    "mulaw_encode",
+    "peak_normalize",
     "pole_boundaries",
+    "skew",
     # state-space translators
     "dss_to_impz",
     "dss_to_ss",
@@ -93,7 +98,11 @@ from .auxiliary.utils import (
     is_bounding_curve,
     last_nonzero_indices,
     mag_to_db,
+    mulaw_decode,
+    mulaw_encode,
+    peak_normalize,
     pole_boundaries,
+    skew,
 )
 
 #matrix generators
@@ -106,6 +115,7 @@ from .generate.construct_cascaded_paraunitary_matrix import (
 )
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from .generate.is_almost_zero import is_almost_zero
+from .generate.vanilla_FDN import vanilla_FDN
 
 #state-space translators
 from .translate.dss_to_ss import dss_to_ss
