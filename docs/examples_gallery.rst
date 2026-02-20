@@ -102,3 +102,18 @@ Advanced Topics
    All notebooks are located in the ``examples/`` directory of the repository.
    You can also browse them directly on
    `GitHub <https://github.com/artificial-audio/pyFDN/tree/main/examples>`_.
+
+.. toctree::
+   :hidden:
+
+   examples/example_vanilla_FDN
+   examples/example_process_fdn
+   examples/example_absorption_filters
+   examples/example_one_pole_absorption
+   examples/example_zFilter
+   examples/example_colorless_FDN
+   examples/example_coupled_rooms
+   examples/example_delay_matrix_density
+   examples/example_interpolate_matrix
+   examples/example_dss2ss
+

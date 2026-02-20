@@ -6,13 +6,10 @@ pyFDN
 
 Python library for Feedback Delay Networks
 
-.. raw:: html
-
-   <p style="font-size: 1.15em; color: #555; max-width: 600px;">
-   Building blocks for designing, simulating, and analysing Feedback Delay
-   Networks — from orthogonal feedback matrices and loop filters to
-   state‑space analysis and audio processing.
-   </p>
+``pyFDN`` provides building blocks for designing, simulating, and analysing
+Feedback Delay Networks (FDNs). The package focuses on reusable, tested helper
+functions that simplify typical FDN workflows such as creating orthogonal
+feedback matrices, designing loop filters, and inspecting pole locations.
 
 ----
 
@@ -23,7 +20,7 @@ Python library for Feedback Delay Networks
       :link: readme
       :link-type: doc
 
-      Installation, overview, and a quick‑start code example.
+      Installation, overview, and a quick-start code example.
 
    .. grid-item-card:: Examples Gallery
       :link: examples_gallery

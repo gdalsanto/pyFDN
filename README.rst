@@ -2,17 +2,10 @@
 pyFDN
 =====
 
-
-.. image:: https://img.shields.io/pypi/v/pyFDN.svg
-        :target: https://pypi.python.org/pypi/pyFDN
-
-.. image:: https://github.com/artificial-audio/pyFDN/actions/workflows/ci.yml/badge.svg
-        :target: https://github.com/artificial-audio/pyFDN/actions/workflows/ci.yml
-        :alt: CI Status
-
-.. image:: https://readthedocs.org/projects/pyFDN/badge/?version=latest
-        :target: https://pyFDN.readthedocs.io/en/latest/?version=latest
-        :alt: Documentation Status
+.. image:: docs/logo/pyfdn_logo_wave.png
+   :alt: pyFDN
+   :align: center
+   :width: 300px
 
 .. image:: https://img.shields.io/badge/python-3.10%20%7C%203.11-blue
         :target: https://www.python.org/downloads/
@@ -25,13 +18,6 @@ pyFDN
 .. image:: https://img.shields.io/badge/coverage-68%25-brightgreen
     :target: https://github.com/artificial-audio/pyFDN/actions/workflows/ci.yml
     :alt: Test coverage
-
-
-Python library for Feedback Delay Networks
-
-
-* Free software: MIT license
-* Documentation: https://pyFDN.readthedocs.io.
 
 
 Overview
@@ -108,7 +94,7 @@ Alternatively, import specific functions directly::
 ``tests``
     Pytest-based regression suite covering the numerical helpers.
 ``docs``
-    Sphinx project used to publish https://pyFDN.readthedocs.io/.
+    Sphinx project used to publish the `documentation <https://pyFDN.readthedocs.io>`_.
 
 
 Development

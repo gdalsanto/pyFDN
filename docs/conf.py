@@ -17,8 +17,8 @@ if not os.path.exists(_examples_dst):
 
 # -- Project information ------------------------------------------------------
 project = "pyFDN"
-copyright = "2025, Sebastian J. Schlecht, Facundo Franchino, Jeremy Bai"
-author = "Sebastian J. Schlecht, Facundo Franchino, Jeremy Bai"
+copyright = "2026, Artificial Audio Lab"
+author = "Artificial Audio Lab"
 version = pyFDN.__version__
 release = pyFDN.__version__
 
@@ -77,7 +77,8 @@ language = "en"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 
 # Pygments
-pygments_style = "default"
+pygments_style = "friendly"
+pygments_dark_style = "monokai"
 highlight_language = "python3"
 
 # -- Options for HTML output --------------------------------------------------
@@ -85,6 +86,8 @@ html_theme = "pydata_sphinx_theme"
 html_title = "pyFDN"
 html_static_path = ["_static"]
 html_css_files = ["css/custom.css"]
+html_logo = "logo/pyfdn_logo_wave.png"
+html_favicon = "logo/pyfdn_logo_wave.png"
 
 html_theme_options = {
     "navbar_start": ["navbar-logo"],

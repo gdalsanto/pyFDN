@@ -1,6 +1,6 @@
-================
+=================
 General Utilities
-================
+=================
 
 .. automodule:: pyFDN.auxiliary.utils
    :members:
