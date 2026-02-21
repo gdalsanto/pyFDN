@@ -166,6 +166,56 @@ def is_allpass(
     return is_a, den, num
 
 
+def nested_allpass(g: ArrayLike) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Create Gardner's nested allpass FDN (SISO).
+
+    Iteratively nests a feedforward/back allpass around the previous FDN.
+    From Gardner, W. G. (1992). A real-time multichannel room simulator.
+    J. Acoust. Soc. Am. 92, 1–23. See "Allpass Feedback Delay Networks", Schlecht.
+
+    Parameters
+    ----------
+    g : array-like, shape (N,)
+        Feedforward/back gains for each nesting stage.
+
+    Returns
+    -------
+    A : ndarray (N, N)
+        Feedback matrix.
+    B : ndarray (N, 1)
+        Input gain (column vector).
+    C : ndarray (1, N)
+        Output gain (row vector).
+    D : ndarray (1, 1)
+        Direct gain (scalar).
+    """
+    g = np.asarray(g, dtype=float).ravel()
+    N = len(g)
+    if N == 0:
+        raise ValueError("g must have at least one element")
+    # Initial: single allpass stage
+    matrix = np.array([[g[0]]])
+    input_gain = np.array([[1 - g[0] ** 2]])
+    output_gain = np.array([[1.0]])
+    direct = np.array([[-g[0]]])
+    for it in range(1, N):
+        ga = g[it]
+        # [matrix, input_gain; output_gain*ga, direct*ga]
+        n_matrix = np.block([
+            [matrix, input_gain],
+            [output_gain * ga, direct * ga],
+        ])
+        n_input_gain = np.vstack([np.zeros_like(input_gain), np.array([[1 - ga**2]])])
+        n_output_gain = np.hstack([output_gain, direct])
+        n_direct = np.array([[-ga]])
+        matrix = n_matrix
+        input_gain = n_input_gain
+        output_gain = n_output_gain
+        direct = n_direct
+    return matrix, input_gain, output_gain, direct
+
+
 def is_paraunitary(
     ir: ArrayLike,
     tol: float = 1e-9,

@@ -75,6 +75,12 @@ __all__ = [
     "plot_spectrogram",
     # SDN (scattering delay network)
     "SDN",
+    # allpass FDN
+    "poletti_allpass",
+    "nested_allpass",
+    "is_uniallpass",
+    "is_allpass",
+    "is_paraunitary",
 ]
 
 #acoustics and absorption
@@ -136,6 +142,13 @@ from .auxiliary.plot import (
     plot_impulse_response_matrix,
     plot_system_matrix,
     plot_spectrogram,
+)
+from .auxiliary.allpass import (
+    poletti_allpass,
+    nested_allpass,
+    is_uniallpass,
+    is_allpass,
+    is_paraunitary,
 )
 
 
