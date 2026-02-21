@@ -166,6 +166,65 @@ def is_allpass(
     return is_a, den, num
 
 
+def series_allpass(g: ArrayLike) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Create Schroeder's series allpass FDN (SISO).
+
+    Iterative series connection of feedforward/back allpass filters (same as
+    seriesAllpass.m). Each stage appends one delay line via seriesFDNinAllpass.
+    From Schroeder & Logan (1961). "Colorless" artificial reverberation.
+    IRE Trans. Audio AU-9, 209–214. See "Allpass Feedback Delay Networks", Schlecht.
+
+    Parameters
+    ----------
+    g : array-like, shape (N,)
+        Per-section gains (e.g. in (0, 1)).
+
+    Returns
+    -------
+    A : ndarray (N, N)
+        Feedback matrix.
+    B : ndarray (N, 1)
+        Input gain (column vector).
+    C : ndarray (1, N)
+        Output gain (row vector).
+    D : ndarray (1, 1)
+        Direct gain (scalar).
+    """
+
+    def series_fdn_in_allpass(
+        allpass_gain: float,
+        matrix: np.ndarray,
+        input_gain: np.ndarray,
+        output_gain: np.ndarray,
+        direct: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Series connection of an FDN with a feedforward/back allpass (seriesFDNinAllpass.m)."""
+        g2 = 1 - allpass_gain**2
+        s_matrix = np.block([
+            [matrix, np.zeros((matrix.shape[0], 1))],
+            [output_gain * g2, np.array([[allpass_gain]])],
+        ])
+        s_input_gain = np.vstack([input_gain, direct * g2])
+        s_output_gain = np.hstack([-allpass_gain * output_gain, np.array([[1.0]])])
+        s_direct = -allpass_gain * direct
+        return s_matrix, s_input_gain, s_output_gain, s_direct
+
+    g = np.asarray(g, dtype=float).ravel()
+    N = len(g)
+    if N == 0:
+        raise ValueError("g must have at least one element")
+    matrix = np.array([[g[0]]])
+    input_gain = np.array([[1 - g[0] ** 2]])
+    output_gain = np.array([[1.0]])
+    direct = np.array([[-g[0]]])
+    for it in range(1, N):
+        matrix, input_gain, output_gain, direct = series_fdn_in_allpass(
+            g[it], matrix, input_gain, output_gain, direct
+        )
+    return matrix, input_gain, output_gain, direct
+
+
 def nested_allpass(g: ArrayLike) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Create Gardner's nested allpass FDN (SISO).

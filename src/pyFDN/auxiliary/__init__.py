@@ -3,6 +3,7 @@ from .utils import skew
 from .flamo import gain_module, delay_module, sos_filter_module
 from .allpass import (
     poletti_allpass,
+    series_allpass,
     nested_allpass,
     is_uniallpass,
     is_allpass,
@@ -15,6 +16,7 @@ __all__ = [
     "delay_module",
     "sos_filter_module",
     "poletti_allpass",
+    "series_allpass",
     "nested_allpass",
     "is_uniallpass",
     "is_allpass",

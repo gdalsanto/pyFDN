@@ -77,6 +77,7 @@ __all__ = [
     "SDN",
     # allpass FDN
     "poletti_allpass",
+    "series_allpass",
     "nested_allpass",
     "is_uniallpass",
     "is_allpass",
@@ -145,6 +146,7 @@ from .auxiliary.plot import (
 )
 from .auxiliary.allpass import (
     poletti_allpass,
+    series_allpass,
     nested_allpass,
     is_uniallpass,
     is_allpass,
