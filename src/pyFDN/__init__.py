@@ -79,6 +79,9 @@ __all__ = [
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
+    "complete_allpass_fdn",
+    "complete_orthogonal",
+    "homogeneous_allpass_fdn",
     "poletti_allpass",
     "series_allpass",
     "nested_allpass",
@@ -156,6 +159,9 @@ from .auxiliary.allpass import (
     is_allpass,
     is_paraunitary,
 )
+from .generate.allpass_FDN.complete_orthogonal import complete_orthogonal
+from .generate.allpass_FDN.complete_allpass_fdn import complete_allpass_fdn
+from .generate.allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fdn
 
 
 #matrix generators
