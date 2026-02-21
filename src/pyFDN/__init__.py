@@ -39,6 +39,7 @@ __all__ = [
     "vanilla_FDN",
     # polynomial and matrix maths
     "det_polynomial",
+    "general_char_poly",
     "interpolate_orthogonal",
     "is_orthogonal",
     "matrix_convolution",
@@ -67,6 +68,8 @@ __all__ = [
     # state-space translators
     "dss_to_impz",
     "dss_to_ss",
+    "dss_to_tf",
+    "mtf_to_impz",
     # fdn processing
     "process_fdn",
     # plotting
@@ -108,6 +111,7 @@ from .auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
 #polynomial and matrix maths
 from .auxiliary.math import (
     det_polynomial,
+    general_char_poly,
     interpolate_orthogonal,
     is_orthogonal,
     matrix_convolution,
@@ -170,6 +174,8 @@ from .generate.SDN import SDN
 #state-space translators
 from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_impz import dss_to_impz
+from .translate.dss_to_tf import dss_to_tf
+from .translate.mtf_to_impz import mtf_to_impz
 
 #fdn processing
 from .process import process_fdn

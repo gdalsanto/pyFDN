@@ -1,6 +1,7 @@
 """Matrix polynomial and math operations."""
 from __future__ import annotations
 import math
+from itertools import combinations
 from typing import Tuple
 import numpy as np
 from numpy.typing import ArrayLike
@@ -213,6 +214,64 @@ def det_polynomial(polynomial_matrix: np.ndarray, var: str) -> np.ndarray:
         determinant = determinant[-degree-1:] if degree >= 0 else determinant
     
     return determinant
+
+
+def general_char_poly(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
+    """
+    Generalized characteristic polynomial (GCP) for delay state-space.
+
+    Implements the formula from Schlecht & Habets (2015), Time-varying feedback
+    matrices in feedback delay networks. J. Acoust. Soc. Amer., 138(3), 1389-1398.
+    Matches the reference generalCharPoly.m.
+
+    Parameters
+    ----------
+    delays : array-like
+        Vector of delays in samples (length ND); used with z^{-1} convention.
+    A : ndarray
+        Feedback matrix. If 2D (scalar matrix), GCP is built via submatrix
+        determinants. If 3D of shape (N, N, L), polynomial matrix in z^{-1}.
+
+    Returns
+    -------
+    p : ndarray
+        Generalized characteristic polynomial coefficients in z^{-1} ordering
+        (index 0 = z^0, index k = z^{-k}).
+    """
+    delays = np.asarray(delays, dtype=int).ravel()
+    A = np.asarray(A, dtype=float)
+    ND = len(delays)
+    N = A.shape[1]
+
+    if A.ndim == 2:
+        # Scalar matrix: p_len = sum(d) + 1, iterate over submatrix determinants
+        p_len = int(delays.sum()) + 1
+        p = np.zeros(p_len)
+        p[0] = 1.0
+        for nn in range(1, N + 1):
+            for ind in combinations(range(ND), nn):
+                ind = np.array(ind)
+                p_ind = int(delays[ind].sum())
+                p[p_ind] += ((-1) ** nn) * np.linalg.det(A[np.ix_(ind, ind)])
+        return p
+
+    # Polyphase: A is (N, N, L); m = degree of det(A)
+    det_A = det_polynomial(A, "z^-1")
+    m = poly_degree(det_A, "z^-1")
+    p_len = int(delays.sum()) + 1 + m
+    p = np.zeros(p_len)
+    p[0] = 1.0
+    for nn in range(1, N + 1):
+        for ind in combinations(range(ND), nn):
+            ind = np.array(ind)
+            p_ind = int(delays[ind].sum())
+            sub = A[np.ix_(ind, ind, list(range(A.shape[2])))]
+            dd = det_polynomial(sub, "z^-1")
+            for j, c in enumerate(dd):
+                idx = p_ind - j
+                if 0 <= idx < p_len:
+                    p[idx] += ((-1) ** nn) * c
+    return p
 
 
 def matrix_polyval(P: ArrayLike, z: complex) -> np.ndarray:

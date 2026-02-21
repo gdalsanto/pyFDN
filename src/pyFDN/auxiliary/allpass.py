@@ -9,7 +9,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 from scipy.linalg import solve_discrete_lyapunov
 
-from pyFDN.auxiliary.math import det_polynomial
+from pyFDN.auxiliary.math import general_char_poly
 from pyFDN.generate.is_almost_zero import is_almost_zero
 
 
@@ -90,27 +90,6 @@ def is_uniallpass(
     return is_a, P
 
 
-def _general_char_poly(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
-    """
-    Characteristic polynomial det(I - A * diag(z^{-m_i})) for delay state-space.
-
-    Returns 1-D coefficient array (z^{-1} ordering: index 0 = z^0, 1 = z^{-1}, ...).
-    """
-    delays = np.asarray(delays, dtype=int).ravel()
-    A = np.asarray(A, dtype=float)
-    N = A.shape[0]
-    max_d = int(np.max(delays))
-    length = max_d + 1
-    poly_mat = np.zeros((N, N, length))
-    for i in range(N):
-        for j in range(N):
-            m_j = int(delays[j])
-            if i == j:
-                poly_mat[i, j, 0] = 1.0
-            poly_mat[i, j, m_j] = -A[i, j]
-    return det_polynomial(poly_mat, "z^-1")
-
-
 def is_allpass(
     A: ArrayLike,
     B: ArrayLike,
@@ -150,8 +129,8 @@ def is_allpass(
     delays = np.asarray(delays, dtype=int).ravel()
     D_inv = np.linalg.inv(D)
     A_eff = A - B @ D_inv @ C
-    den = _general_char_poly(delays, A)
-    num = _general_char_poly(delays, A_eff) * np.linalg.det(D)
+    den = general_char_poly(delays, A)
+    num = general_char_poly(delays, A_eff) * np.linalg.det(D)
     # Allpass: numerator equals reversed(denominator) up to sign
     den_rev = np.flip(den)
     max_len = max(len(den_rev), len(num))

@@ -118,7 +118,7 @@ def plot_impulse_response_matrix(
     t : array-like, optional
         x-values (e.g. time). If None, uses 0 .. size(ir,2)-1.
     ir : array-like
-        Shape (n_out, n_in, n_samples). Each subplot is ir[out, in, :].
+        Shape (n_samples, n_out, n_in). Each subplot is ir[:, out, in].
     xlabel, ylabel, title : str, optional
         Shared axis labels and title.
     xlim, ylim : tuple, optional
@@ -138,10 +138,10 @@ def plot_impulse_response_matrix(
     """
     ir = np.asarray(ir)
     if ir.ndim != 3:
-        raise ValueError("ir must be 3-D (n_out, n_in, n_samples)")
-    n_out, n_in, n_fir = ir.shape
+        raise ValueError("ir must be 3-D (n_samples,n_out, n_in)")
+    n_samples, n_out, n_in = ir.shape
     if t is None:
-        t = np.arange(n_fir)
+        t = np.arange(n_samples)
     t = np.asarray(t).ravel()
 
     if fig is None:
@@ -156,7 +156,7 @@ def plot_impulse_response_matrix(
     for i_out in range(n_out):
         for i_in in range(n_in):
             ax = plot_axes[i_out, i_in]
-            (h,) = ax.plot(t, ir[i_out, i_in, :], **plot_kwargs)
+            (h,) = ax.plot(t, ir[:, i_out, i_in], **plot_kwargs)
             plot_handles[i_out, i_in] = h
             ax.grid(True)
     # Hide inner tick labels
