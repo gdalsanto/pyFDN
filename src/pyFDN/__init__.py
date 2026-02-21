@@ -84,11 +84,9 @@ __all__ = [
     "apply_diagonal_similarity",
     "block_matrix",
     "check_completion",
-    "complete_allpass_fdn",
     "complete_fdn",
     "complete_full_mimo_halmos",
     "complete_general_mimo_svd",
-    "complete_orthogonal",
     "diagonal_similarity_from_abs2_lyapunov",
     "diag_inv_sqrt",
     "diag_sqrt",
@@ -179,8 +177,6 @@ from .auxiliary.allpass import (
 )
 
 from .generate.allpass_FDN import allpass_completion
-from .generate.allpass_FDN.complete_orthogonal import complete_orthogonal
-from .generate.allpass_FDN.complete_allpass_fdn import complete_allpass_fdn
 from .generate.allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fdn
 from .generate.allpass_FDN.rand_admissible_homogeneous_allpass import rand_admissible_homogeneous_allpass
 from .generate.allpass_FDN.allpass_completion import (
@@ -229,13 +225,6 @@ from .dsp.filter_matrix import FilterMatrix
 from .dsp.feedback_delay import FeedbackDelay
 from .dsp.dfiltmatrix import DFiltMatrix
 
-# allpass FDN (import last so they are not shadowed; expose allpass submodule and its names)
-# from . import auxiliary
-# allpass = auxiliary.allpass
-# # Re-export from allpass so IDE "Go to definition" resolves to auxiliary/allpass.py
-# is_uniallpass = allpass.is_uniallpass
-# is_allpass = allpass.is_allpass
-# is_paraunitary = allpass.is_paraunitary
-# poletti_allpass = allpass.poletti_allpass
-# series_allpass = allpass.series_allpass
-# nested_allpass = allpass.nested_allpass
+# Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
+from . import auxiliary
+allpass = auxiliary.allpass
