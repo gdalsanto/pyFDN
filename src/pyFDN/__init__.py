@@ -72,6 +72,8 @@ __all__ = [
     # plotting
     "plot_impulse_response_matrix",
     "plot_system_matrix",
+    # SDN (scattering delay network)
+    "SDN",
 ]
 
 #acoustics and absorption
@@ -150,6 +152,9 @@ from .auxiliary.plot import (
     plot_impulse_response_matrix,
     plot_system_matrix,
 )
+
+# SDN (scattering delay network)
+from .auxiliary.sdn import SDN
 
 #dsp components
 from .dsp.filter_matrix import FilterMatrix
