@@ -124,6 +124,12 @@ class SDN:
             Sampling frequency in Hz.
         c : float, optional
             Speed of sound in m/s (default 343).
+        wall_filters : list of 6 lists of 5 SOS arrays, optional
+            Per-wall, per-port filters. Each filter must be an SOS array of shape
+            (n_sections, 6) as returned by ``scipy.signal`` design functions such as
+            ``butter(..., output='sos')`` or ``cheby1(..., output='sos')``.
+            Must have exactly 6 walls, each with exactly 5 port filters. If None
+            (default), identity (pass-through) filters are used for all walls and ports.
         """
         self.room_size = tuple(room_size)
         self.source_pos = tuple(source_pos)
@@ -261,23 +267,30 @@ class SDN:
             node_to_delay_indices[j].sort()
 
         # Wall filters in delay order, SOS format (n_sections, 6, 30) for FLAMO
-        from scipy.signal import tf2sos
-
-        def _to_sos(f):
-            """Convert single filter to SOS: f is (b, a) or array (n_sec, 6)."""
-            arr = np.asarray(f, dtype=np.float64)
-            if arr.ndim == 2 and arr.shape[1] == 6:
-                return arr
-            b, a = f[0], f[1]
-            b = np.asarray(b, dtype=np.float64).ravel()
-            a = np.asarray(a, dtype=np.float64).ravel()
-            return tf2sos(b, a)
-
-        sos_list = []
-        for k in range(len(routing)):
-            j_dep, _ = routing[k]
-            port = node_to_delay_indices[j_dep].index(k)
-            sos_list.append(_to_sos(self.wall_filters[j_dep][port]))
+        identity_sos = np.array([[1.0, 0.0, 0.0, 1.0, 0.0, 0.0]], dtype=np.float64)
+        if self.wall_filters is None:
+            sos_list = [identity_sos for _ in routing]
+        else:
+            if len(self.wall_filters) != self.N_WALLS:
+                raise ValueError(
+                    f"wall_filters must have {self.N_WALLS} walls, got {len(self.wall_filters)}"
+                )
+            for w_idx, wall_ports in enumerate(self.wall_filters):
+                if len(wall_ports) != 5:
+                    raise ValueError(
+                        f"wall_filters[{w_idx}] must have 5 ports, got {len(wall_ports)}"
+                    )
+            sos_list = []
+            for k in range(len(routing)):
+                j_dep, _ = routing[k]
+                port = node_to_delay_indices[j_dep].index(k)
+                sos = np.asarray(self.wall_filters[j_dep][port], dtype=np.float64)
+                if sos.ndim != 2 or sos.shape[1] != 6:
+                    raise ValueError(
+                        f"wall_filters[{j_dep}][{port}] must be an SOS array of shape "
+                        f"(n_sections, 6), got shape {sos.shape}"
+                    )
+                sos_list.append(sos)
         max_sections = max(s.shape[0] for s in sos_list)
         wall_filters_sos = np.zeros((max_sections, 6, len(routing)), dtype=np.float64)
         for ch in range(len(routing)):
