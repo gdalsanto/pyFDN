@@ -127,3 +127,6 @@ Thumbs.db
 # Profiling outputs
 profile_default/
 *.prof
+
+# Matlab
+*.m
