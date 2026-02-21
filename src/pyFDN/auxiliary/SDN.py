@@ -124,6 +124,11 @@ class SDN:
             Sampling frequency in Hz.
         c : float, optional
             Speed of sound in m/s (default 343).
+        wall_filters : list of 6 lists of 5 filters, optional
+            Per-wall, per-port filters. Each filter is either a (b, a) tuple or an
+            SOS array of shape (n_sections, 6). Must have exactly 6 walls, each with
+            exactly 5 port filters. If None (default), identity (pass-through) filters
+            are used for all walls and ports.
         """
         self.room_size = tuple(room_size)
         self.source_pos = tuple(source_pos)
@@ -271,11 +276,24 @@ class SDN:
             a = np.asarray(a, dtype=np.float64).ravel()
             return tf2sos(b, a)
 
-        sos_list = []
-        for k in range(len(routing)):
-            j_dep, _ = routing[k]
-            port = node_to_delay_indices[j_dep].index(k)
-            sos_list.append(_to_sos(self.wall_filters[j_dep][port]))
+        identity_sos = np.array([[1.0, 0.0, 0.0, 1.0, 0.0, 0.0]], dtype=np.float64)
+        if self.wall_filters is None:
+            sos_list = [identity_sos for _ in routing]
+        else:
+            if len(self.wall_filters) != self.N_WALLS:
+                raise ValueError(
+                    f"wall_filters must have {self.N_WALLS} walls, got {len(self.wall_filters)}"
+                )
+            for w_idx, wall_ports in enumerate(self.wall_filters):
+                if len(wall_ports) != 5:
+                    raise ValueError(
+                        f"wall_filters[{w_idx}] must have 5 ports, got {len(wall_ports)}"
+                    )
+            sos_list = []
+            for k in range(len(routing)):
+                j_dep, _ = routing[k]
+                port = node_to_delay_indices[j_dep].index(k)
+                sos_list.append(_to_sos(self.wall_filters[j_dep][port]))
         max_sections = max(s.shape[0] for s in sos_list)
         wall_filters_sos = np.zeros((max_sections, 6, len(routing)), dtype=np.float64)
         for ch in range(len(routing)):
