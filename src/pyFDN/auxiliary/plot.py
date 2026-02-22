@@ -118,7 +118,7 @@ def plot_impulse_response_matrix(
     t : array-like, optional
         x-values (e.g. time). If None, uses 0 .. size(ir,2)-1.
     ir : array-like
-        Shape (n_out, n_in, n_samples). Each subplot is ir[out, in, :].
+        Shape (n_samples, n_out, n_in). Each subplot is ir[:, out, in].
     xlabel, ylabel, title : str, optional
         Shared axis labels and title.
     xlim, ylim : tuple, optional
@@ -138,10 +138,10 @@ def plot_impulse_response_matrix(
     """
     ir = np.asarray(ir)
     if ir.ndim != 3:
-        raise ValueError("ir must be 3-D (n_out, n_in, n_samples)")
-    n_out, n_in, n_fir = ir.shape
+        raise ValueError("ir must be 3-D (n_samples,n_out, n_in)")
+    n_samples, n_out, n_in = ir.shape
     if t is None:
-        t = np.arange(n_fir)
+        t = np.arange(n_samples)
     t = np.asarray(t).ravel()
 
     if fig is None:
@@ -156,7 +156,7 @@ def plot_impulse_response_matrix(
     for i_out in range(n_out):
         for i_in in range(n_in):
             ax = plot_axes[i_out, i_in]
-            (h,) = ax.plot(t, ir[i_out, i_in, :], **plot_kwargs)
+            (h,) = ax.plot(t, ir[:, i_out, i_in], **plot_kwargs)
             plot_handles[i_out, i_in] = h
             ax.grid(True)
     # Hide inner tick labels
@@ -178,3 +178,108 @@ def plot_impulse_response_matrix(
             ax.set_ylim(ylim)
     fig.tight_layout()
     return fig, plot_axes, plot_handles
+
+
+def plot_spectrogram(
+    ir: ArrayLike,
+    fs: float,
+    *,
+    nperseg: int = 1024,
+    noverlap: int | None = None,
+    window: str | tuple = "blackman",
+    xlim: tuple[float | None, float | None] = (None, None),
+    ylim: tuple[float | None, float | None] = (None, None),
+    clim: tuple[float | None, float | None] = (None, None),
+    title: str | None = "Spectrogram",
+    xlabel: str = "Time [s]",
+    ylabel: str = "Frequency [Hz]",
+    height: int = 500,
+    colorscale: str = "Viridis",
+):
+    """Plot spectrogram of a 1-D signal as a Plotly heatmap.
+
+    Uses the same default parameters as the Poletti example: Blackman window,
+    1024-point segments, 75% overlap, log y-axis, dB magnitude.
+
+    Parameters
+    ----------
+    ir : array-like, 1-D
+        Time-domain signal (e.g. one channel of an impulse response).
+    fs : float
+        Sample rate in Hz (for axis labels and frequency scale).
+    nperseg : int
+        Length of each segment for the STFT. Default 1024.
+    noverlap : int, optional
+        Number of overlapping samples. Default nperseg // 4 * 3 (75% overlap).
+    window : str or tuple
+        Window name or (name, param). Default "blackman".
+    xlim : tuple (xmin, xmax)
+        Time axis limits in seconds. Use None for auto.
+    ylim : tuple (ymin, ymax)
+        Frequency axis limits in Hz. Use None for auto (ymax defaults to fs/2).
+    clim : tuple (zmin, zmax)
+        Color (magnitude) limits in dB. Use None for auto. Default (None, None).
+    title : str, optional
+        Figure title.
+    xlabel, ylabel : str
+        Axis labels.
+    height : int
+        Figure height in pixels.
+    colorscale : str
+        Plotly colorscale name. Default "Viridis".
+
+    Returns
+    -------
+    fig : plotly.graph_objects.Figure
+    """
+    from scipy.signal import spectrogram
+    import plotly.graph_objects as go
+
+    ir = np.asarray(ir, dtype=float).ravel()
+    if noverlap is None:
+        noverlap = nperseg // 4 * 3
+    f, t, Sxx = spectrogram(ir, fs=fs, nperseg=nperseg, noverlap=noverlap, window=window)
+    Sxx_db = 10 * np.log10(Sxx + np.finfo(float).tiny)
+
+    ymin, ymax = ylim
+    if ymin is None:
+        ymin = 100.0
+    if ymax is None:
+        ymax = fs / 2.0
+    # For log y-axis, avoid f=0 and trim to [ymin, ymax] so range is applied correctly
+    ymin = max(ymin, 1.0)  # log scale requires positive values
+    mask = (f >= ymin) & (f <= ymax)
+    f_plot = f[mask]
+    Sxx_plot = Sxx_db[mask, :]
+
+    xmin, xmax = xlim
+    if xmin is None:
+        xmin = float(t[0])
+    if xmax is None:
+        xmax = float(t[-1])
+    xlim = (xmin, xmax)
+
+    zmin, zmax = clim
+    heatmap_kw = dict(
+        x=t,
+        y=f_plot,
+        z=Sxx_plot,
+        colorscale=colorscale,
+        colorbar=dict(title="dB"),
+    )
+    if zmin is not None:
+        heatmap_kw["zmin"] = zmin
+    if zmax is not None:
+        heatmap_kw["zmax"] = zmax
+
+    fig = go.Figure(data=go.Heatmap(**heatmap_kw))
+    fig.update_layout(
+        title=title,
+        xaxis_title=xlabel,
+        yaxis_title=ylabel,
+        xaxis=dict(range=[xmin, xmax]),
+        yaxis=dict(type="log", range=[np.log10(ymin), np.log10(ymax)]),
+        height=height,
+        template="plotly_white",
+    )
+    return fig
