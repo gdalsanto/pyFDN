@@ -66,6 +66,7 @@ __all__ = [
     "pole_boundaries",
     "skew",
     # state-space translators
+    "dss_to_flamo",
     "dss_to_impz",
     "dss_to_ss",
     "dss_to_tf",
@@ -211,6 +212,7 @@ from .generate.vanilla_FDN import vanilla_FDN
 from .generate.SDN import SDN
 
 #state-space translators
+from .translate.dss_to_flamo import dss_to_flamo
 from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_impz import dss_to_impz
 from .translate.dss_to_tf import dss_to_tf
