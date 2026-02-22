@@ -84,6 +84,12 @@ def flamo_model_to_nodes(
         "module": model,
         "children": [],
     }
+    in_ch = getattr(model, "input_channels", None)
+    out_ch = getattr(model, "output_channels", None)
+    if in_ch is not None:
+        node["input_channels"] = in_ch
+    if out_ch is not None:
+        node["output_channels"] = out_ch
     tname = _get_typename(model)
 
     if _is_shell(model):
@@ -281,35 +287,43 @@ def draw_flamo_graph(
             attrs["style"] = style
         dg.node(nid, **attrs)
 
+    def edge_label_with_ch(label: str, ch: int | None) -> str:
+        if ch is not None:
+            return f"{label} [{ch}]" if label else f"[{ch}]"
+        return label
+
     def build_graph(
         dg: graphviz.Digraph,
         node: dict[str, Any],
         parent_id: str | None,
         edge_label: str = "",
-    ) -> tuple[str, str]:
-        """Return (first_id, last_id) of the added subgraph for this node."""
+        parent_out_ch: int | None = None,
+    ) -> tuple[str, str, int | None]:
+        """Return (first_id, last_id, output_channels) of the added subgraph."""
         ntype = node.get("type", "Leaf")
         nname = node.get("name", "?")
+        out_ch = node.get("output_channels")
 
         if ntype == "Shell":
-            # Box: input_layer → core → output_layer (Shell layers = model I/O)
             cid = next_id()
             with dg.subgraph(name=f"cluster_{cid}") as sub:
                 sub.attr(label=f"Shell: {nname}", style="rounded", margin="5", fontsize="8")
                 first_id = last_id = None
                 prev = None
+                prev_ch = None
                 il_node = node.get("input_layer")
                 if il_node is not None:
-                    first_id, prev = build_graph(sub, il_node, None, edge_label="")
+                    first_id, prev, prev_ch = build_graph(sub, il_node, None, "", None)
                 for ch in node.get("children") or []:
-                    ch_first, ch_last = build_graph(sub, ch, prev, edge_label="")
+                    ch_first, ch_last, ch_out = build_graph(sub, ch, prev, "", prev_ch)
                     if first_id is None:
                         first_id = ch_first
                     prev = ch_last
+                    prev_ch = ch_out
                     last_id = ch_last
                 ol_node = node.get("output_layer")
                 if ol_node is not None:
-                    _, last_id = build_graph(sub, ol_node, prev, edge_label="")
+                    _, last_id, prev_ch = build_graph(sub, ol_node, prev, "", prev_ch)
                 if first_id is None:
                     first_id = next_id()
                     add_node(sub, first_id, "", shape="point")
@@ -317,73 +331,73 @@ def draw_flamo_graph(
                 if last_id is None:
                     last_id = first_id
             if parent_id is not None:
-                dg.edge(parent_id, first_id, label=edge_label, fontsize="7")
-            return first_id, last_id
+                dg.edge(parent_id, first_id, label=edge_label_with_ch(edge_label, parent_out_ch), fontsize="7")
+            return first_id, last_id, out_ch
 
         if ntype == "Series":
-            # Box: chain only (no in/out nodes)
             cid = next_id()
             with dg.subgraph(name=f"cluster_{cid}") as sub:
                 sub.attr(label=f"Series: {nname}", style="rounded", margin="5", fontsize="8")
                 first_id = last_id = None
                 prev = parent_id
+                prev_ch = parent_out_ch
                 for ch in node.get("children") or []:
-                    ch_first, ch_last = build_graph(sub, ch, prev, edge_label="")
+                    ch_first, ch_last, ch_out = build_graph(sub, ch, prev, "", prev_ch)
                     if first_id is None:
                         first_id = ch_first
                     prev = ch_last
+                    prev_ch = ch_out
                     last_id = ch_last
                 if first_id is None:
                     first_id = next_id()
                     add_node(sub, first_id, "", shape="point")
                     if parent_id is not None:
-                        dg.edge(parent_id, first_id, label=edge_label, fontsize="7")
+                        dg.edge(parent_id, first_id, label=edge_label_with_ch(edge_label, parent_out_ch), fontsize="7")
                 if last_id is None:
                     last_id = first_id
-            return first_id, last_id
+            return first_id, last_id, out_ch
 
         if ntype == "Parallel":
-            # Box: parent → brA, parent → brB; both → merge (no in/out labels)
             cid = next_id()
             with dg.subgraph(name=f"cluster_{cid}") as sub:
                 sub.attr(label=f"Parallel: {nname}", style="rounded", margin="5", fontsize="8")
                 merge_id = next_id()
                 add_node(sub, merge_id, "Σ", shape="circle")
                 for ch in node.get("children") or []:
-                    ch_first, ch_last = build_graph(sub, ch, parent_id, edge_label=ch.get("name", ""))
-                    sub.edge(ch_last, merge_id)
-            return merge_id, merge_id
+                    ch_first, ch_last, ch_out = build_graph(sub, ch, parent_id, ch.get("name", ""), parent_out_ch)
+                    sub.edge(ch_last, merge_id, label=edge_label_with_ch("", ch_out), fontsize="7")
+            return merge_id, merge_id, out_ch
 
         if ntype == "Recursion":
-            # Box: parent → fF; fF_last → fB → fF_first (feedback); no in/out nodes
             cid = next_id()
             with dg.subgraph(name=f"cluster_{cid}") as sub:
                 sub.attr(label=f"Recursion: {nname}", style="rounded,dashed", margin="5", fontsize="8")
                 fF_node = node.get("fF")
                 fB_node = node.get("fB")
                 fF_first = fF_last = None
+                fF_out_ch = None
                 if fF_node is not None:
-                    fF_first, fF_last = build_graph(sub, fF_node, parent_id, edge_label=edge_label)
+                    fF_first, fF_last, fF_out_ch = build_graph(sub, fF_node, parent_id, edge_label, parent_out_ch)
                 if fB_node is not None:
-                    _, fB_last = build_graph(sub, fB_node, fF_last or parent_id, edge_label="fB")
+                    _, fB_last, _ = build_graph(sub, fB_node, fF_last or parent_id, "fB", fF_out_ch)
                     if fF_first is not None:
-                        sub.edge(fB_last, fF_first, label="feedback", style="dashed", color="gray", fontsize="7")
+                        sub.edge(fB_last, fF_first, label=edge_label_with_ch("feedback", fF_out_ch), style="dashed", color="gray", fontsize="7")
                 first_id = fF_first if fF_first is not None else next_id()
                 last_id = fF_last if fF_last is not None else first_id
                 if fF_first is None and parent_id is not None:
                     add_node(sub, first_id, "", shape="point")
-                    dg.edge(parent_id, first_id, label=edge_label, fontsize="7")
-            return first_id, last_id
+                    dg.edge(parent_id, first_id, label=edge_label_with_ch(edge_label, parent_out_ch), fontsize="7")
+            return first_id, last_id, out_ch
 
-        # Leaf: single node; label with actual module type (Gain, Delay, FFT, etc.)
+        # Leaf
         nid = next_id()
         mod = node.get("module")
         mod_type = type(mod).__name__ if mod is not None else "?"
         label = f"{nname}\n({mod_type})"
         add_node(dg, nid, label, shape="box")
         if parent_id is not None:
-            dg.edge(parent_id, nid, label=edge_label, fontsize="7")
-        return nid, nid
+            dg.edge(parent_id, nid, label=edge_label_with_ch(edge_label, parent_out_ch), fontsize="7")
+        return nid, nid, out_ch
 
-    build_graph(digraph, root, None)
+    build_graph(digraph, root, None, "", None)
     return digraph
