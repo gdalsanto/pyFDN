@@ -9,6 +9,7 @@ from .allpass import (
     is_allpass,
     is_paraunitary,
 )
+from .flamo_graph import flamo_model_to_nodes, flamo_nodes_flat, draw_flamo_graph
 
 __all__ = [
     "skew",
@@ -21,4 +22,7 @@ __all__ = [
     "is_uniallpass",
     "is_allpass",
     "is_paraunitary",
+    "flamo_model_to_nodes",
+    "flamo_nodes_flat",
+    "draw_flamo_graph",
 ]

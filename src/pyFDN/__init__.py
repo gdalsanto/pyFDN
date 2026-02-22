@@ -77,6 +77,10 @@ __all__ = [
     "plot_impulse_response_matrix",
     "plot_system_matrix",
     "plot_spectrogram",
+    # FLAMO graph
+    "flamo_model_to_nodes",
+    "flamo_nodes_flat",
+    "draw_flamo_graph",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -166,6 +170,11 @@ from .auxiliary.plot import (
     plot_impulse_response_matrix,
     plot_system_matrix,
     plot_spectrogram,
+)
+from .auxiliary.flamo_graph import (
+    flamo_model_to_nodes,
+    flamo_nodes_flat,
+    draw_flamo_graph,
 )
 
 from .auxiliary.allpass import (
