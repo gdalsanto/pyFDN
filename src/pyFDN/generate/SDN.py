@@ -152,8 +152,6 @@ class SDN:
         result : dict
             - delay_lengths : np.ndarray shape (6,6), float, seconds
                 delay_lengths[i,j] = delay from node i to node j. Diagonal is NaN; only i != j valid.
-            - wall_to_wall_gains : np.ndarray shape (6,6)
-                (c/Fs)/distance for each wall-to-wall path (for FDN gain matrix).
             - delay_lengths_flat : np.ndarray shape (30,), seconds
                 Wall-to-wall delays in order (0,1),(0,2),...,(5,4).
             - routing : list of (from_node, to_node)
@@ -204,15 +202,6 @@ class SDN:
                     continue
                 d = max(_dist(nodes[i], nodes[j]), _d_min_one_sample)
                 delay_lengths[i, j] = round(self.Fs * d / self.c)
-
-        # Attenuation per wall-to-wall: (c/Fs)/distance (as in PropLine)
-        wall_to_wall_gains = np.zeros((self.N_WALLS, self.N_WALLS), dtype=float)
-        for i in range(self.N_WALLS):
-            for j in range(self.N_WALLS):
-                if i == j:
-                    continue
-                d = max(_dist(nodes[i], nodes[j]), _eps)
-                wall_to_wall_gains[i, j] = (self.c / self.Fs) / d
 
         # Order of delay lines: (0,1),(0,2),...,(0,5),(1,0),(1,2),...,(5,4)
         routing = [(i, j) for i in range(self.N_WALLS) for j in range(self.N_WALLS) if i != j]
@@ -302,7 +291,6 @@ class SDN:
         self._result = {
             "delay_lengths": delay_lengths_s,
             "delay_lengths_flat": delay_lengths_flat,
-            "wall_to_wall_gains": wall_to_wall_gains,
             "routing": routing,
             "permutation_matrix": permutation_matrix,
             "scattering_matrices": scattering_matrices,
