@@ -10,6 +10,7 @@ from .allpass import (
     is_paraunitary,
 )
 from .flamo_graph import flamo_model_to_nodes, flamo_nodes_flat, draw_flamo_graph
+from .flamo_probe import FlamoGraphZFilter, flamo_graph_to_zfilter, probe_flamo_z
 
 __all__ = [
     "skew",
@@ -25,4 +26,7 @@ __all__ = [
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
     "draw_flamo_graph",
+    "probe_flamo_z",
+    "FlamoGraphZFilter",
+    "flamo_graph_to_zfilter",
 ]

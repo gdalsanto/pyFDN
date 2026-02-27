@@ -81,6 +81,9 @@ __all__ = [
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
     "draw_flamo_graph",
+    "probe_flamo_z",
+    "FlamoGraphZFilter",
+    "flamo_graph_to_zfilter",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -175,6 +178,11 @@ from .auxiliary.flamo_graph import (
     flamo_model_to_nodes,
     flamo_nodes_flat,
     draw_flamo_graph,
+)
+from .auxiliary.flamo_probe import (
+    probe_flamo_z,
+    FlamoGraphZFilter,
+    flamo_graph_to_zfilter,
 )
 
 from .auxiliary.allpass import (
