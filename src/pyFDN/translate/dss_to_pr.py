@@ -528,6 +528,20 @@ def dss_to_pr(
         unknown = ", ".join(sorted(kwargs.keys()))
         raise TypeError(f"Unexpected keyword arguments: {unknown}")
 
+    # FLAMO-graph probing in this legacy entrypoint is kept for compatibility.
+    # Prefer dss_to_pr_flamo / dss_to_pr_flamo_direct for new code.
+    graph_like = any(
+        not isinstance(v, (np.ndarray, list, tuple, ZFilter)) and v is not None
+        for v in (A, B, C, absorption_filters, inverse_matrix)
+    )
+    if graph_like or str(probe_backend).lower() != "manual":
+        warnings.warn(
+            "dss_to_pr FLAMO probing paths are compatibility mode. "
+            "Use dss_to_pr_flamo (or dss_to_pr_flamo_direct) for the maintained FLAMO architecture.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
     delays_arr = np.asarray(delays, dtype=int).ravel()
     if delays_arr.ndim != 1 or delays_arr.size == 0:
         raise ValueError("delays must be a non-empty 1-D array")

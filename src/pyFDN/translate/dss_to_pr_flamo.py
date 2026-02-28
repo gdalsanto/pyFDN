@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.auxiliary.flamo_autograd_probe import probe_flamo_z_autograd
+from pyFDN.auxiliary.flamo_runtime_probe import probe_flamo_runtime
 from pyFDN.auxiliary.math import det_polynomial, poly_degree
 
 
@@ -89,7 +89,7 @@ class _FlamoGraphProbe:
     def __init__(self, model: Any):
         self.model = model
         h0 = np.asarray(
-            probe_flamo_z_autograd(model, 1.0 + 0j, derivative=False), dtype=np.complex128
+            probe_flamo_runtime(model, 1.0 + 0j, derivative=False), dtype=np.complex128
         )
         if h0.ndim != 2:
             raise ValueError(f"Graph probe at scalar z must be 2-D, got {h0.shape}")
@@ -97,11 +97,11 @@ class _FlamoGraphProbe:
 
     def at(self, z: complex) -> np.ndarray:
         return np.asarray(
-            probe_flamo_z_autograd(self.model, z, derivative=False), dtype=np.complex128
+            probe_flamo_runtime(self.model, z, derivative=False), dtype=np.complex128
         )
 
     def der(self, z: complex) -> np.ndarray:
-        _, dh = probe_flamo_z_autograd(self.model, z, derivative=True)
+        _, dh = probe_flamo_runtime(self.model, z, derivative=True)
         return np.asarray(dh, dtype=np.complex128)
 
 

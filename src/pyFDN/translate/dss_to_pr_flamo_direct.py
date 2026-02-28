@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.auxiliary.flamo_autograd_probe import probe_flamo_z_autograd
+from pyFDN.auxiliary.flamo_runtime_probe import probe_flamo_runtime
 from pyFDN.auxiliary.math import general_char_poly
 from pyFDN.translate.dss_to_ss import dss_to_ss
 
@@ -46,16 +46,22 @@ class _FlamoGraphProbe:
 
     def __init__(self, model: Any):
         self.model = model
-        h0 = np.asarray(probe_flamo_z_autograd(model, 1.0 + 0j, derivative=False), dtype=np.complex128)
+        h0 = np.asarray(
+            probe_flamo_runtime(model, 1.0 + 0j, derivative=False),
+            dtype=np.complex128,
+        )
         if h0.ndim != 2:
             raise ValueError(f"Graph probe at scalar z must return 2-D matrix, got {h0.shape}")
         self.output_channels, self.input_channels = h0.shape
 
     def at(self, z: complex) -> np.ndarray:
-        return np.asarray(probe_flamo_z_autograd(self.model, z, derivative=False), dtype=np.complex128)
+        return np.asarray(
+            probe_flamo_runtime(self.model, z, derivative=False),
+            dtype=np.complex128,
+        )
 
     def der(self, z: complex) -> np.ndarray:
-        _, dh = probe_flamo_z_autograd(self.model, z, derivative=True)
+        _, dh = probe_flamo_runtime(self.model, z, derivative=True)
         return np.asarray(dh, dtype=np.complex128)
 
 
