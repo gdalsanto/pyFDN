@@ -8,6 +8,7 @@ This example intentionally uses the FLAMO-first split:
 from __future__ import annotations
 
 import numpy as np
+import torch
 
 import pyFDN
 
@@ -23,7 +24,8 @@ def main() -> None:
     c = np.eye(1, n)
     d = np.zeros((1, 1))
 
-    # Preferred split: DSS -> FLAMO model, then FLAMO -> PR
+    # Preferred split: DSS -> FLAMO model, then FLAMO -> PR.
+    # Use float64 in FLAMO for tighter numerical agreement.
     model = pyFDN.dss_to_flamo(
         A=a_num,
         B=b,
@@ -33,19 +35,20 @@ def main() -> None:
         Fs=1.0,
         nfft=2**12,
         shell=False,
+        dtype=torch.float64,
     )
     core = model.get_core() if callable(getattr(model, "get_core", None)) else model
     recursion_module = list(core.branchA)[1]
-    decomposition = pyFDN.flamo_extract_pr_decomposition(
-        model,
-        delays,
-        recursion_module=recursion_module,
-    )
     residues, poles, direct, is_pair, _ = pyFDN.flamo_to_pr(
+        model=model,
         delays=delays,
-        decomposition=decomposition,
+        recursion_module=recursion_module,
         feedback_delay_units=0,
-        maximum_iterations=70,
+        quality_threshold=1e-10,
+        refinement_tol=1e-7,
+        maximum_iterations=40,
+        use_w_plane_step=True,
+        use_w_plane_for_small_z=True,
         verbose=False,
     )
 
