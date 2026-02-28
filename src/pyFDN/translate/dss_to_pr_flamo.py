@@ -123,6 +123,98 @@ class _InverseProbe:
         return -h_inv @ dh @ h_inv
 
 
+class _DelayInverseProbe:
+    """Diagonal delay inverse probe: diag(z^m)."""
+
+    def __init__(self, delays: ArrayLike):
+        self.delays = np.asarray(delays, dtype=np.float64).ravel()
+        n = int(self.delays.size)
+        self.input_channels = n
+        self.output_channels = n
+
+    def at(self, z: complex) -> np.ndarray:
+        return np.diag(np.power(z, self.delays)).astype(np.complex128)
+
+    def der(self, z: complex) -> np.ndarray:
+        return np.diag(self.delays * np.power(z, self.delays - 1.0)).astype(np.complex128)
+
+
+class _SeriesProbe:
+    """Series composition: H(z) = H_left(z) @ H_right(z)."""
+
+    def __init__(self, left: Any, right: Any):
+        self.left = left
+        self.right = right
+        left_in = int(getattr(left, "input_channels"))
+        right_out = int(getattr(right, "output_channels"))
+        if left_in != right_out:
+            raise ValueError(
+                "Series probe dimension mismatch: "
+                f"left input={left_in}, right output={right_out}"
+            )
+        self.input_channels = int(getattr(right, "input_channels"))
+        self.output_channels = int(getattr(left, "output_channels"))
+
+    def at(self, z: complex) -> np.ndarray:
+        h_l = np.asarray(self.left.at(z), dtype=np.complex128)
+        h_r = np.asarray(self.right.at(z), dtype=np.complex128)
+        return h_l @ h_r
+
+    def der(self, z: complex) -> np.ndarray:
+        h_l = np.asarray(self.left.at(z), dtype=np.complex128)
+        dh_l = np.asarray(self.left.der(z), dtype=np.complex128)
+        h_r = np.asarray(self.right.at(z), dtype=np.complex128)
+        dh_r = np.asarray(self.right.der(z), dtype=np.complex128)
+        return dh_l @ h_r + h_l @ dh_r
+
+
+class _DifferenceProbe:
+    """Difference composition: H(z) = A(z) - B(z)."""
+
+    def __init__(self, minuend: Any, subtrahend: Any):
+        self.minuend = minuend
+        self.subtrahend = subtrahend
+        a_out = int(getattr(minuend, "output_channels"))
+        a_in = int(getattr(minuend, "input_channels"))
+        b_out = int(getattr(subtrahend, "output_channels"))
+        b_in = int(getattr(subtrahend, "input_channels"))
+        if (a_out, a_in) != (b_out, b_in):
+            raise ValueError(
+                "Difference probe dimension mismatch: "
+                f"A=({a_out},{a_in}) B=({b_out},{b_in})"
+            )
+        self.output_channels = a_out
+        self.input_channels = a_in
+
+    def at(self, z: complex) -> np.ndarray:
+        a = np.asarray(self.minuend.at(z), dtype=np.complex128)
+        b = np.asarray(self.subtrahend.at(z), dtype=np.complex128)
+        return a - b
+
+    def der(self, z: complex) -> np.ndarray:
+        da = np.asarray(self.minuend.der(z), dtype=np.complex128)
+        db = np.asarray(self.subtrahend.der(z), dtype=np.complex128)
+        return da - db
+
+
+class _ReciprocalArgumentProbe:
+    """Argument transform probe: H(1/z)."""
+
+    def __init__(self, base_probe: Any):
+        self.base_probe = base_probe
+        self.input_channels = int(getattr(base_probe, "input_channels"))
+        self.output_channels = int(getattr(base_probe, "output_channels"))
+
+    def at(self, z: complex) -> np.ndarray:
+        inv_z = 1.0 / z
+        return np.asarray(self.base_probe.at(inv_z), dtype=np.complex128)
+
+    def der(self, z: complex) -> np.ndarray:
+        inv_z = 1.0 / z
+        d_base = np.asarray(self.base_probe.der(inv_z), dtype=np.complex128)
+        return -(d_base / (z**2))
+
+
 def _matrix_delay_units(poly_mat: np.ndarray) -> int:
     arr = np.asarray(poly_mat, dtype=np.complex128)
     if arr.ndim != 3:
@@ -192,7 +284,6 @@ def _adjugate(a: np.ndarray) -> np.ndarray:
 @dataclass
 class _FDNLoopFlamo:
     delays: np.ndarray
-    forward_probe: Any
     forward_inv_probe: Any
     feedback_probe: Any
     feedback_inv_probe: Any | None
@@ -202,41 +293,30 @@ class _FDNLoopFlamo:
     def __post_init__(self):
         self.delays = np.asarray(self.delays, dtype=np.float64).ravel()
         self.n = int(self.delays.size)
+        self.delay_inv_probe = _DelayInverseProbe(self.delays)
+        self.forward_probe = _SeriesProbe(self.delay_inv_probe, self.forward_inv_probe)
+        self.loop_probe = _DifferenceProbe(self.forward_probe, self.feedback_probe)
 
-    def _delay_inv_at(self, z: complex) -> np.ndarray:
-        return np.diag(np.power(z, self.delays)).astype(np.complex128)
-
-    def _delay_inv_der(self, z: complex) -> np.ndarray:
-        return np.diag(self.delays * np.power(z, self.delays - 1.0)).astype(np.complex128)
-
-    def forward_at(self, z: complex) -> np.ndarray:
-        return self._delay_inv_at(z) @ np.asarray(self.forward_inv_probe.at(z), dtype=np.complex128)
-
-    def forward_der(self, z: complex) -> np.ndarray:
-        d_delay = self._delay_inv_der(z)
-        delay = self._delay_inv_at(z)
-        f_inv = np.asarray(self.forward_inv_probe.at(z), dtype=np.complex128)
-        df_inv = np.asarray(self.forward_inv_probe.der(z), dtype=np.complex128)
-        return d_delay @ f_inv + delay @ df_inv
+        feedback_inv_base = (
+            self.feedback_inv_probe
+            if self.feedback_inv_probe is not None
+            else _InverseProbe(self.feedback_probe)
+        )
+        rev_forward = _SeriesProbe(
+            self.delay_inv_probe,
+            _ReciprocalArgumentProbe(_InverseProbe(self.forward_inv_probe)),
+        )
+        rev_feedback = _ReciprocalArgumentProbe(feedback_inv_base)
+        self.loop_rev_probe = _DifferenceProbe(rev_forward, rev_feedback)
 
     def at(self, z: complex) -> np.ndarray:
-        return self.forward_at(z) - np.asarray(self.feedback_probe.at(z), dtype=np.complex128)
+        return self.loop_probe.at(z)
 
     def der(self, z: complex) -> np.ndarray:
-        return self.forward_der(z) - np.asarray(self.feedback_probe.der(z), dtype=np.complex128)
-
-    def forward_at_inv(self, z: complex) -> np.ndarray:
-        left = self._delay_inv_at(1.0 / z)
-        f_inv = np.asarray(self.forward_inv_probe.at(z), dtype=np.complex128)
-        return left @ np.linalg.inv(f_inv)
-
-    def feedback_at_inv(self, z: complex) -> np.ndarray:
-        if self.feedback_inv_probe is not None:
-            return np.asarray(self.feedback_inv_probe.at(z), dtype=np.complex128)
-        return np.linalg.inv(np.asarray(self.feedback_probe.at(z), dtype=np.complex128))
+        return self.loop_probe.der(z)
 
     def at_rev(self, z: complex) -> np.ndarray:
-        return self.forward_at_inv(1.0 / z) - self.feedback_at_inv(1.0 / z)
+        return self.loop_rev_probe.at(z)
 
     def inverse_newton_step(self, z: complex) -> complex:
         p = self.at(z)
@@ -562,7 +642,6 @@ def dss_to_pr_flamo(
 
     loop = _FDNLoopFlamo(
         delays=delays_arr,
-        forward_probe=fwd_probe,
         forward_inv_probe=fwd_inv_probe,
         feedback_probe=fb_probe,
         feedback_inv_probe=fb_inv_probe,
