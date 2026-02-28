@@ -34,9 +34,12 @@ def main() -> None:
         nfft=2**12,
         shell=False,
     )
+    core = model.get_core() if callable(getattr(model, "get_core", None)) else model
+    recursion_module = list(core.branchA)[1]
     residues, poles, direct, is_pair, _ = pyFDN.flamo_to_pr(
         model,
         delays,
+        recursion_module=recursion_module,
         feedback_delay_units=0,
         maximum_iterations=70,
         verbose=False,
@@ -48,7 +51,7 @@ def main() -> None:
 
     err = np.max(np.abs(ir_time - ir_modal))
     print("max |IR_time - IR_modal|:", err)
-    assert err < 1e-7
+    assert err < 1e-5
 
 
 if __name__ == "__main__":

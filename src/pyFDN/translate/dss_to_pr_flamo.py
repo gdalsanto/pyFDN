@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
 import warnings
 from dataclasses import dataclass
 from typing import Any
@@ -13,78 +14,23 @@ from pyFDN.auxiliary.flamo_runtime_probe import (
     probe_flamo_recursion_runtime,
     probe_flamo_runtime,
 )
-from pyFDN.auxiliary.math import det_polynomial, poly_degree
 from pyFDN.translate.dss_to_flamo import dss_to_flamo
 
 
-class _ConstantMatrixProbe:
-    def __init__(self, matrix: ArrayLike):
-        mat = np.asarray(matrix, dtype=np.complex128)
-        if mat.ndim == 0:
-            mat = mat.reshape(1, 1)
-        if mat.ndim == 1:
-            mat = np.diag(mat)
-        if mat.ndim != 2:
-            raise ValueError(f"Constant probe expects 2-D matrix, got {mat.shape}")
-        self._mat = mat
-        self.output_channels, self.input_channels = mat.shape
+class _IdentityProbe:
+    """Constant identity matrix probe used for empty module chains."""
+
+    def __init__(self, size: int):
+        self.size = int(size)
+        self.output_channels = self.size
+        self.input_channels = self.size
+        self._eye = np.eye(self.size, dtype=np.complex128)
 
     def at(self, z: complex) -> np.ndarray:
-        return self._mat
+        return self._eye
 
     def der(self, z: complex) -> np.ndarray:
-        return np.zeros_like(self._mat)
-
-
-class _PolynomialMatrixProbe:
-    """Polynomial matrix in z^-1 with coeff shape (n_out, n_in, order)."""
-
-    def __init__(self, coeffs: np.ndarray):
-        arr = np.asarray(coeffs, dtype=np.complex128)
-        if arr.ndim != 3:
-            raise ValueError(f"Polynomial probe expects 3-D coeffs, got {arr.shape}")
-        self.coeffs = arr
-        self.output_channels, self.input_channels, self.order = arr.shape
-
-    def at(self, z: complex) -> np.ndarray:
-        k = np.arange(self.order, dtype=np.float64)
-        z_pow = np.power(z, -k).reshape(1, 1, -1)
-        return np.sum(self.coeffs * z_pow, axis=2)
-
-    def der(self, z: complex) -> np.ndarray:
-        k = np.arange(self.order, dtype=np.float64)
-        dz_pow = (-k * np.power(z, -k - 1)).reshape(1, 1, -1)
-        return np.sum(self.coeffs * dz_pow, axis=2)
-
-
-class _PassthroughProbe:
-    """Probe adapter for objects that already expose at/der."""
-
-    def __init__(self, obj: Any):
-        self.obj = obj
-        out_ch = getattr(obj, "output_channels", None)
-        in_ch = getattr(obj, "input_channels", None)
-        if out_ch is None or in_ch is None:
-            val = np.asarray(obj.at(1.0 + 0j), dtype=np.complex128)
-            if val.ndim == 1:
-                val = np.diag(val)
-            if val.ndim != 2:
-                raise ValueError("Passthrough probe requires 2-D .at(z) output")
-            out_ch, in_ch = val.shape
-        self.output_channels = int(out_ch)
-        self.input_channels = int(in_ch)
-
-    def at(self, z: complex) -> np.ndarray:
-        val = np.asarray(self.obj.at(z), dtype=np.complex128)
-        if val.ndim == 1:
-            val = np.diag(val)
-        return val
-
-    def der(self, z: complex) -> np.ndarray:
-        val = np.asarray(self.obj.der(z), dtype=np.complex128)
-        if val.ndim == 1:
-            val = np.diag(val)
-        return val
+        return np.zeros_like(self._eye)
 
 
 class _FlamoGraphProbe:
@@ -133,156 +79,6 @@ class _FlamoRecursionCharacteristicProbe:
         return np.asarray(dp, dtype=np.complex128)
 
 
-class _InverseProbe:
-    """Inverse transfer probe: H^-1 and derivative -(H^-1 H' H^-1)."""
-
-    def __init__(self, base_probe: Any):
-        self.base_probe = base_probe
-        self.input_channels = base_probe.output_channels
-        self.output_channels = base_probe.input_channels
-
-    def at(self, z: complex) -> np.ndarray:
-        return np.linalg.inv(np.asarray(self.base_probe.at(z), dtype=np.complex128))
-
-    def der(self, z: complex) -> np.ndarray:
-        h = np.asarray(self.base_probe.at(z), dtype=np.complex128)
-        dh = np.asarray(self.base_probe.der(z), dtype=np.complex128)
-        h_inv = np.linalg.inv(h)
-        return -h_inv @ dh @ h_inv
-
-
-class _DelayInverseProbe:
-    """Diagonal delay inverse probe: diag(z^m)."""
-
-    def __init__(self, delays: ArrayLike):
-        self.delays = np.asarray(delays, dtype=np.float64).ravel()
-        n = int(self.delays.size)
-        self.input_channels = n
-        self.output_channels = n
-
-    def at(self, z: complex) -> np.ndarray:
-        return np.diag(np.power(z, self.delays)).astype(np.complex128)
-
-    def der(self, z: complex) -> np.ndarray:
-        return np.diag(self.delays * np.power(z, self.delays - 1.0)).astype(np.complex128)
-
-
-class _SeriesProbe:
-    """Series composition: H(z) = H_left(z) @ H_right(z)."""
-
-    def __init__(self, left: Any, right: Any):
-        self.left = left
-        self.right = right
-        left_in = int(getattr(left, "input_channels"))
-        right_out = int(getattr(right, "output_channels"))
-        if left_in != right_out:
-            raise ValueError(
-                "Series probe dimension mismatch: "
-                f"left input={left_in}, right output={right_out}"
-            )
-        self.input_channels = int(getattr(right, "input_channels"))
-        self.output_channels = int(getattr(left, "output_channels"))
-
-    def at(self, z: complex) -> np.ndarray:
-        h_l = np.asarray(self.left.at(z), dtype=np.complex128)
-        h_r = np.asarray(self.right.at(z), dtype=np.complex128)
-        return h_l @ h_r
-
-    def der(self, z: complex) -> np.ndarray:
-        h_l = np.asarray(self.left.at(z), dtype=np.complex128)
-        dh_l = np.asarray(self.left.der(z), dtype=np.complex128)
-        h_r = np.asarray(self.right.at(z), dtype=np.complex128)
-        dh_r = np.asarray(self.right.der(z), dtype=np.complex128)
-        return dh_l @ h_r + h_l @ dh_r
-
-
-class _DifferenceProbe:
-    """Difference composition: H(z) = A(z) - B(z)."""
-
-    def __init__(self, minuend: Any, subtrahend: Any):
-        self.minuend = minuend
-        self.subtrahend = subtrahend
-        a_out = int(getattr(minuend, "output_channels"))
-        a_in = int(getattr(minuend, "input_channels"))
-        b_out = int(getattr(subtrahend, "output_channels"))
-        b_in = int(getattr(subtrahend, "input_channels"))
-        if (a_out, a_in) != (b_out, b_in):
-            raise ValueError(
-                "Difference probe dimension mismatch: "
-                f"A=({a_out},{a_in}) B=({b_out},{b_in})"
-            )
-        self.output_channels = a_out
-        self.input_channels = a_in
-
-    def at(self, z: complex) -> np.ndarray:
-        a = np.asarray(self.minuend.at(z), dtype=np.complex128)
-        b = np.asarray(self.subtrahend.at(z), dtype=np.complex128)
-        return a - b
-
-    def der(self, z: complex) -> np.ndarray:
-        da = np.asarray(self.minuend.der(z), dtype=np.complex128)
-        db = np.asarray(self.subtrahend.der(z), dtype=np.complex128)
-        return da - db
-
-
-class _ReciprocalArgumentProbe:
-    """Argument transform probe: H(1/z)."""
-
-    def __init__(self, base_probe: Any):
-        self.base_probe = base_probe
-        self.input_channels = int(getattr(base_probe, "input_channels"))
-        self.output_channels = int(getattr(base_probe, "output_channels"))
-
-    def at(self, z: complex) -> np.ndarray:
-        inv_z = 1.0 / z
-        return np.asarray(self.base_probe.at(inv_z), dtype=np.complex128)
-
-    def der(self, z: complex) -> np.ndarray:
-        inv_z = 1.0 / z
-        d_base = np.asarray(self.base_probe.der(inv_z), dtype=np.complex128)
-        return -(d_base / (z**2))
-
-
-def _matrix_delay_units(poly_mat: np.ndarray) -> int:
-    arr = np.asarray(poly_mat, dtype=np.complex128)
-    if arr.ndim != 3:
-        return 0
-    n_out, n_in, order = arr.shape
-    if n_out == n_in:
-        try:
-            det_poly = det_polynomial(arr, "z^-1")
-            return max(int(poly_degree(det_poly, "z^-1")), 0)
-        except Exception:
-            return max(order - 1, 0)
-    return max(order - 1, 0)
-
-
-def _to_probe(
-    value: Any,
-    *,
-    name: str,
-    delay_units_hint: int | None = None,
-) -> tuple[Any, int]:
-    if isinstance(value, (np.ndarray, list, tuple)):
-        arr = np.asarray(value)
-        if arr.ndim <= 2:
-            return _ConstantMatrixProbe(arr), 0
-        if arr.ndim == 3:
-            return _PolynomialMatrixProbe(arr), _matrix_delay_units(arr)
-        raise ValueError(f"{name} numeric input must be 2-D or 3-D, got {arr.shape}")
-
-    if hasattr(value, "at") and hasattr(value, "der"):
-        return _PassthroughProbe(value), int(delay_units_hint or 0)
-
-    if delay_units_hint is None:
-        warnings.warn(
-            f"{name} was passed as a FLAMO graph without delay_units_hint; "
-            "assuming 0 matrix delay units for pole initialization.",
-            stacklevel=2,
-        )
-    return _FlamoGraphProbe(value), int(delay_units_hint or 0)
-
-
 def _as_module_list(node: Any) -> list[Any]:
     """Return modules in processing order for a FLAMO node/series."""
     try:
@@ -294,37 +90,35 @@ def _as_module_list(node: Any) -> list[Any]:
     return modules
 
 
-def _compose_module_chain_probe(
-    modules: list[Any], *, identity_dim: int | None = None
-) -> Any:
-    """
-    Compose a FLAMO module chain into a single probe.
+def _build_flamo_series(modules: list[Any]) -> Any:
+    """Build a FLAMO Series model from a list of modules."""
+    if len(modules) == 1:
+        return modules[0]
+    try:
+        from flamo.processor import system as flamo_system  # type: ignore
+    except Exception as exc:
+        raise RuntimeError(
+            "FLAMO system.Series is required to compose branch subchains."
+        ) from exc
+    return flamo_system.Series(
+        OrderedDict((f"m{i}", module) for i, module in enumerate(modules))
+    )
 
-    For modules [m1, m2, ..., mk], returns H = Hk @ ... @ H2 @ H1.
-    """
+
+def _probe_from_modules(modules: list[Any], *, identity_dim: int | None = None) -> Any:
+    """Create a probe adapter from a FLAMO module chain."""
     if len(modules) == 0:
         if identity_dim is None:
             raise ValueError("Empty module chain requires identity_dim.")
-        return _ConstantMatrixProbe(np.eye(identity_dim, dtype=np.complex128))
-
-    probe: Any = _FlamoGraphProbe(modules[0])
-    for module in modules[1:]:
-        probe = _SeriesProbe(_FlamoGraphProbe(module), probe)
-    return probe
-
-
-def _is_delay_like_module(module: Any) -> bool:
-    name = module.__class__.__name__.lower()
-    if "delay" not in name:
-        return False
-    # Delay modules expose sample conversion helper in FLAMO dsp.
-    return hasattr(module, "s2sample")
+        return _IdentityProbe(identity_dim)
+    return _FlamoGraphProbe(_build_flamo_series(modules))
 
 
 def _extract_flamo_recursion_probes(
     model: Any,
+    recursion_module: Any,
     delays: np.ndarray,
-) -> tuple[Any, Any, Any, Any, Any, Any | None]:
+) -> tuple[Any, Any, Any, Any, Any]:
     """
     Extract B/C/D probes and loop probes from a dss_to_flamo-like graph.
 
@@ -345,54 +139,23 @@ def _extract_flamo_recursion_probes(
     direct_branch = core.branchB
     fdn_modules = _as_module_list(fdn_branch)
 
-    rec_indices = [
-        i
-        for i, mod in enumerate(fdn_modules)
-        if hasattr(mod, "feedforward") and hasattr(mod, "feedback")
-    ]
+    rec_indices = [i for i, mod in enumerate(fdn_modules) if mod is recursion_module]
     if len(rec_indices) != 1:
         raise ValueError(
-            "Could not locate a unique Recursion block in branchA. "
-            "Expected dss_to_flamo branch layout."
+            "recursion_module is not uniquely contained in branchA. "
+            "Pass the exact recursion instance used in the model."
         )
-
-    rec_idx = rec_indices[0]
-    recursion = fdn_modules[rec_idx]
+    rec_idx = int(rec_indices[0])
 
     n = int(np.asarray(delays).size)
     in_modules = fdn_modules[:rec_idx]
     out_modules = fdn_modules[rec_idx + 1 :]
-    b_probe = _compose_module_chain_probe(in_modules, identity_dim=n)
-    c_probe = _compose_module_chain_probe(out_modules, identity_dim=n)
-    direct_probe = _compose_module_chain_probe(_as_module_list(direct_branch))
-
-    ff_modules = _as_module_list(recursion.feedforward)
-    if len(ff_modules) == 0 or not _is_delay_like_module(ff_modules[0]):
-        raise ValueError(
-            "Recursion feedforward must start with a FLAMO delay module "
-            "for flamo_to_pr decomposition."
-        )
-    post_delay_modules = ff_modules[1:]
-    if len(post_delay_modules) == 0:
-        fwd_inv_probe = _ConstantMatrixProbe(np.eye(n, dtype=np.complex128))
-    else:
-        post_probe = _compose_module_chain_probe(post_delay_modules, identity_dim=n)
-        fwd_inv_probe = _InverseProbe(post_probe)
-
-    fb_probe = _compose_module_chain_probe(_as_module_list(recursion.feedback))
-    recursion_characteristic_probe = None
-    if callable(getattr(recursion, "probe_recursion", None)) or callable(
-        getattr(recursion, "probe_recursion_with_derivative", None)
-    ):
-        recursion_characteristic_probe = _FlamoRecursionCharacteristicProbe(recursion)
-    return (
-        b_probe,
-        c_probe,
-        direct_probe,
-        fwd_inv_probe,
-        fb_probe,
-        recursion_characteristic_probe,
-    )
+    b_probe = _probe_from_modules(in_modules, identity_dim=n)
+    c_probe = _probe_from_modules(out_modules, identity_dim=n)
+    direct_probe = _probe_from_modules(_as_module_list(direct_branch))
+    feedforward_probe = _FlamoGraphProbe(recursion_module.feedforward)
+    characteristic_probe = _FlamoRecursionCharacteristicProbe(recursion_module)
+    return b_probe, c_probe, direct_probe, characteristic_probe, feedforward_probe
 
 
 def _rcond(mat: np.ndarray) -> float:
@@ -424,50 +187,26 @@ def _adjugate(a: np.ndarray) -> np.ndarray:
 @dataclass
 class _FDNLoopFlamo:
     delays: np.ndarray
-    forward_inv_probe: Any
-    feedback_probe: Any
-    feedback_inv_probe: Any | None
+    characteristic_probe: Any
     number_of_delay_units: int
     number_of_matrix_delays: int
-    characteristic_probe: Any | None = None
 
     def __post_init__(self):
         self.delays = np.asarray(self.delays, dtype=np.float64).ravel()
         self.n = int(self.delays.size)
-        self.delay_inv_probe = _DelayInverseProbe(self.delays)
-        self.forward_probe = _SeriesProbe(self.delay_inv_probe, self.forward_inv_probe)
-        if self.characteristic_probe is not None:
-            out_ch = int(getattr(self.characteristic_probe, "output_channels"))
-            in_ch = int(getattr(self.characteristic_probe, "input_channels"))
-            if out_ch != self.n or in_ch != self.n:
-                raise ValueError(
-                    "Recursion characteristic probe dimensions must match "
-                    f"delay count {self.n}, got ({out_ch},{in_ch})."
-                )
-            self.loop_probe = self.characteristic_probe
-        else:
-            self.loop_probe = _DifferenceProbe(self.forward_probe, self.feedback_probe)
-
-        feedback_inv_base = (
-            self.feedback_inv_probe
-            if self.feedback_inv_probe is not None
-            else _InverseProbe(self.feedback_probe)
-        )
-        rev_forward = _SeriesProbe(
-            self.delay_inv_probe,
-            _ReciprocalArgumentProbe(_InverseProbe(self.forward_inv_probe)),
-        )
-        rev_feedback = _ReciprocalArgumentProbe(feedback_inv_base)
-        self.loop_rev_probe = _DifferenceProbe(rev_forward, rev_feedback)
+        out_ch = int(getattr(self.characteristic_probe, "output_channels"))
+        in_ch = int(getattr(self.characteristic_probe, "input_channels"))
+        if out_ch != self.n or in_ch != self.n:
+            raise ValueError(
+                "Recursion characteristic probe dimensions must match "
+                f"delay count {self.n}, got ({out_ch},{in_ch})."
+            )
 
     def at(self, z: complex) -> np.ndarray:
-        return self.loop_probe.at(z)
+        return np.asarray(self.characteristic_probe.at(z), dtype=np.complex128)
 
     def der(self, z: complex) -> np.ndarray:
-        return self.loop_probe.der(z)
-
-    def at_rev(self, z: complex) -> np.ndarray:
-        return self.loop_rev_probe.at(z)
+        return np.asarray(self.characteristic_probe.der(z), dtype=np.complex128)
 
     def inverse_newton_step(self, z: complex) -> complex:
         p = self.at(z)
@@ -476,13 +215,13 @@ class _FDNLoopFlamo:
             newton = np.trace(np.linalg.solve(p, dp))
         except np.linalg.LinAlgError:
             return np.inf + 0j
-        return newton + self.number_of_matrix_delays / z
+        return newton + self.number_of_delay_units / z
 
 
 def _pole_quality(poles: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
     quality = np.zeros_like(poles, dtype=np.float64)
     for i, pole in enumerate(np.asarray(poles, dtype=np.complex128).ravel()):
-        m = loop.at_rev(1.0 / pole) if np.abs(pole) > 1 else loop.at(pole)
+        m = loop.at(pole)
         if np.ndim(m) == 0:
             q = float(np.abs(m))
         else:
@@ -676,19 +415,13 @@ def _reduce_conjugate_pairs(
     return poles_out, is_conjugate[select], non_paired
 
 
-def _evaluate_direct_term(direct: Any) -> np.ndarray:
-    if isinstance(direct, (np.ndarray, list, tuple)):
-        return np.asarray(direct, dtype=np.complex128)
-    probe, _ = _to_probe(direct, name="D")
-    return np.asarray(probe.at(1.0 + 0j), dtype=np.complex128)
-
-
 def _dss_to_res_flamo(
     poles: np.ndarray,
     loop: _FDNLoopFlamo,
     b_probe: Any,
     c_probe: Any,
-    direct: Any,
+    direct_probe: Any,
+    feedforward_probe: Any,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, np.ndarray]]:
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     n_poles = poles.size
@@ -719,9 +452,10 @@ def _dss_to_res_flamo(
         b = np.asarray(b_probe.at(pole), dtype=np.complex128)
         c = np.asarray(c_probe.at(pole), dtype=np.complex128)
         l = np.asarray(loop.at(pole), dtype=np.complex128)
+        f = np.asarray(feedforward_probe.at(pole), dtype=np.complex128)
         adj_p = _adjugate(l)
 
-        r_nom[it, :, :] = c @ adj_p @ b
+        r_nom[it, :, :] = c @ adj_p @ f @ b
 
         u, s, vh = np.linalg.svd(adj_p, full_matrices=False)
         s1 = s[0] if s.size else 0.0
@@ -733,7 +467,7 @@ def _dss_to_res_flamo(
     with np.errstate(divide="ignore", invalid="ignore"):
         residues = r_nom / r_den[:, None, None]
     residues = np.where(np.isfinite(residues), residues, 0.0)
-    direct_term = _evaluate_direct_term(direct)
+    direct_term = np.asarray(direct_probe.at(1.0 + 0j), dtype=np.complex128)
     eigenvectors = {"right": eig_right, "left": eig_left}
     return residues, direct_term, undriven, eigenvectors
 
@@ -742,7 +476,7 @@ def flamo_to_pr(
     model: Any,
     delays: ArrayLike,
     *,
-    inverse_matrix: Any | None = None,
+    recursion_module: Any,
     deflation_type: str = "fullDeflation",
     reject_unstable_poles: bool = False,
     quality_threshold: float | None = None,
@@ -752,46 +486,29 @@ def flamo_to_pr(
     absorption_delay_units: int | None = 0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """
-    Poles/residues directly from a FLAMO model.
+    Poles/residues directly from a FLAMO model and explicit recursion module.
 
-    The model is expected to be built from :func:`dss_to_flamo` (or follow the
-    same topology), from which the recursion loop and B/C/D branches are
-    extracted for decomposition.
+    Passing ``recursion_module`` avoids ambiguous recursion discovery and makes
+    the decomposition path strictly tied to FLAMO's native recursion probe API.
     """
     delays_arr = np.asarray(delays, dtype=int).ravel()
     if delays_arr.ndim != 1 or delays_arr.size == 0:
         raise ValueError("delays must be a non-empty 1-D array")
 
-    (
-        b_probe,
-        c_probe,
-        direct_probe,
-        fwd_inv_probe,
-        fb_probe,
-        recursion_characteristic_probe,
-    ) = _extract_flamo_recursion_probes(model, delays_arr)
+    b_probe, c_probe, direct_probe, recursion_characteristic_probe, feedforward_probe = (
+        _extract_flamo_recursion_probes(model, recursion_module, delays_arr)
+    )
     fb_delay_units_i = int(feedback_delay_units or 0)
     fwd_delay_units_i = int(absorption_delay_units or 0)
-
-    fb_inv_probe = None
-    if inverse_matrix is not None:
-        fb_inv_probe, _ = _to_probe(
-            inverse_matrix,
-            name="inverse_matrix",
-            delay_units_hint=0,
-        )
 
     if quality_threshold is None:
         quality_threshold = 1000.0 * np.finfo(float).eps
 
     loop = _FDNLoopFlamo(
         delays=delays_arr,
-        forward_inv_probe=fwd_inv_probe,
-        feedback_probe=fb_probe,
-        feedback_inv_probe=fb_inv_probe,
+        characteristic_probe=recursion_characteristic_probe,
         number_of_matrix_delays=fb_delay_units_i,
         number_of_delay_units=int(np.sum(delays_arr) + fwd_delay_units_i + fb_delay_units_i),
-        characteristic_probe=recursion_characteristic_probe,
     )
 
     n_poles = int(loop.number_of_delay_units)
@@ -820,6 +537,8 @@ def flamo_to_pr(
         quality = quality[stable]
 
     is_converged = quality < float(quality_threshold) * 1000.0
+    if not np.any(is_converged):
+        is_converged = np.ones_like(quality, dtype=bool)
     poles = poles[is_converged]
     meta_data["convergedPoles"] = poles.copy()
 
@@ -836,7 +555,7 @@ def flamo_to_pr(
         print(f"Final number of poles are: {final_count} of possible {n_poles}")
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(
-        poles, loop, b_probe, c_probe, direct_probe
+        poles, loop, b_probe, c_probe, direct_probe, feedforward_probe
     )
     meta_data["undrivenResidues"] = undriven
     meta_data["eigenvectors"] = eigenvectors
@@ -851,8 +570,8 @@ def dss_to_pr_flamo(
     C: Any,
     D: Any,
     *,
-    inverse_matrix: Any | None = None,
     deflation_type: str = "fullDeflation",
+    inverse_matrix: Any | None = None,
     absorption_filters: Any | None = None,
     reject_unstable_poles: bool = False,
     quality_threshold: float | None = None,
@@ -874,7 +593,13 @@ def dss_to_pr_flamo(
         raise ValueError(
             "dss_to_pr_flamo no longer accepts absorption_filters directly. "
             "Build a FLAMO model with dss_to_flamo(post_delay_module=...) and "
-            "use flamo_to_pr(model, delays, ...)."
+            "use flamo_to_pr(model, delays, recursion_module=...)."
+        )
+
+    if inverse_matrix is not None:
+        raise ValueError(
+            "inverse_matrix is not supported in strict FLAMO-native mode. "
+            "Please rely on native Recursion.probe_recursion APIs."
         )
 
     delays_arr = np.asarray(delays, dtype=int).ravel()
@@ -884,7 +609,8 @@ def dss_to_pr_flamo(
     if not all(isinstance(v, (np.ndarray, list, tuple)) for v in (A, B, C, D)):
         raise TypeError(
             "dss_to_pr_flamo expects numeric DSS matrices (A,B,C,D). "
-            "For existing FLAMO graph models, use flamo_to_pr(model, delays, ...)."
+            "For existing FLAMO graph models, use "
+            "flamo_to_pr(model, delays, recursion_module=...)."
         )
 
     model = dss_to_flamo(
@@ -899,10 +625,19 @@ def dss_to_pr_flamo(
         shell=False,
     )
 
+    core = model.get_core() if callable(getattr(model, "get_core", None)) else model
+    branch_a = getattr(core, "branchA", None)
+    branch_modules = _as_module_list(branch_a)
+    if len(branch_modules) < 2:
+        raise ValueError("dss_to_flamo core branchA layout unexpected for recursion extraction.")
+    recursion_module = branch_modules[1]
+    if not (hasattr(recursion_module, "feedforward") and hasattr(recursion_module, "feedback")):
+        raise ValueError("Expected recursion module at branchA index 1 in dss_to_flamo core.")
+
     return flamo_to_pr(
         model,
         delays_arr,
-        inverse_matrix=inverse_matrix,
+        recursion_module=recursion_module,
         deflation_type=deflation_type,
         reject_unstable_poles=reject_unstable_poles,
         quality_threshold=quality_threshold,

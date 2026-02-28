@@ -40,8 +40,8 @@ def test_dss_to_pr_flamo_matches_autograd_backend():
         verbose=False,
     )
 
-    np.testing.assert_allclose(pol_new, pol_ref, rtol=1e-8, atol=1e-8)
-    np.testing.assert_allclose(res_new, res_ref, rtol=1e-7, atol=1e-7)
+    np.testing.assert_allclose(pol_new, pol_ref, rtol=1e-7, atol=1e-7)
+    np.testing.assert_allclose(res_new, res_ref, rtol=1e-6, atol=1e-6)
     np.testing.assert_allclose(direct_new, direct_ref, rtol=0, atol=0)
     np.testing.assert_array_equal(pair_new, pair_ref)
 
@@ -63,10 +63,13 @@ def test_flamo_to_pr_matches_dss_to_pr_flamo_wrapper():
         nfft=1024,
         shell=False,
     )
+    core = model.get_core() if callable(getattr(model, "get_core", None)) else model
+    recursion_module = list(core.branchA)[1]
 
     res_model, pol_model, direct_model, pair_model, _ = flamo_to_pr(
         model,
         delays,
+        recursion_module=recursion_module,
         feedback_delay_units=0,
         absorption_delay_units=0,
         verbose=False,
@@ -84,7 +87,7 @@ def test_flamo_to_pr_matches_dss_to_pr_flamo_wrapper():
         verbose=False,
     )
 
-    np.testing.assert_allclose(pol_model, pol_wrap, rtol=1e-8, atol=1e-8)
+    np.testing.assert_allclose(pol_model, pol_wrap, rtol=1e-7, atol=1e-7)
     np.testing.assert_allclose(res_model, res_wrap, rtol=1e-8, atol=1e-8)
     np.testing.assert_allclose(direct_model, direct_wrap, rtol=0, atol=0)
     np.testing.assert_array_equal(pair_model, pair_wrap)

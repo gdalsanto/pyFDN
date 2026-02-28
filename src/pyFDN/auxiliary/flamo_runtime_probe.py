@@ -77,85 +77,6 @@ def _to_torch_complex_points(z: complex | np.ndarray, *, model: Any) -> torch.Te
     return torch.as_tensor(z_arr, device=device, dtype=dtype)
 
 
-def _real_dtype_for_complex_dtype(dtype: torch.dtype) -> torch.dtype:
-    if dtype == torch.complex64:
-        return torch.float32
-    return torch.float64
-
-
-def _autograd_probe_callable(
-    model: Any,
-    method_name: str,
-    z: complex | np.ndarray,
-    *,
-    include_shell_io: bool = False,
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Compute (H, dH/dz) for a model-bound probe-like callable via autograd.
-    """
-    method = getattr(model, method_name, None)
-    if not callable(method):
-        raise RuntimeError(f"Model does not expose callable {method_name}().")
-
-    z_base = _to_torch_complex_scalar(z, model=model)
-    real_dtype = _real_dtype_for_complex_dtype(z_base.dtype)
-    x = z_base.real.detach().clone().to(real_dtype).requires_grad_(True)
-    y = z_base.imag.detach().clone().to(real_dtype).requires_grad_(True)
-    z_reconst = torch.complex(x, y)
-
-    h = _call_with_supported_kwargs(method, z_reconst, include_shell_io=include_shell_io)
-    if isinstance(h, tuple):
-        if len(h) == 0:
-            raise RuntimeError(f"{method_name} returned an empty tuple.")
-        h = h[0]
-    if not isinstance(h, torch.Tensor):
-        h = torch.as_tensor(h, dtype=torch.complex128, device=z_base.device)
-    h = torch.atleast_2d(h)
-
-    u = h.real
-    v = h.imag
-    n_out, n_in = h.shape
-    dh_dz = torch.zeros(n_out, n_in, dtype=torch.complex128, device=h.device)
-
-    for i in range(n_out):
-        for j in range(n_in):
-            if u[i, j].requires_grad or u[i, j].grad_fn is not None:
-                du_dx, du_dy = torch.autograd.grad(
-                    u[i, j],
-                    [x, y],
-                    retain_graph=True,
-                    allow_unused=True,
-                )
-            else:
-                du_dx = None
-                du_dy = None
-            if v[i, j].requires_grad or v[i, j].grad_fn is not None:
-                dv_dx, dv_dy = torch.autograd.grad(
-                    v[i, j],
-                    [x, y],
-                    retain_graph=True,
-                    allow_unused=True,
-                )
-            else:
-                dv_dx = None
-                dv_dy = None
-
-            if du_dx is None:
-                du_dx = torch.zeros_like(x)
-            if du_dy is None:
-                du_dy = torch.zeros_like(y)
-            if dv_dx is None:
-                dv_dx = torch.zeros_like(x)
-            if dv_dy is None:
-                dv_dy = torch.zeros_like(y)
-
-            real_part = 0.5 * (du_dx + dv_dy)
-            imag_part = 0.5 * (dv_dx - du_dy)
-            dh_dz[i, j] = torch.complex(real_part, imag_part)
-
-    return _to_numpy(h), _to_numpy(dh_dz)
-
-
 @lru_cache(maxsize=1)
 def _flamo_probe_module():
     try:
@@ -314,15 +235,10 @@ def probe_flamo_recursion_runtime(
                     raise RuntimeError("model.probe_recursion returned empty tuple")
                 return _to_numpy(out[0])
             return _to_numpy(out)
-        if _is_flamo_object(model):
-            return _autograd_probe_callable(
-                model,
-                "probe_recursion",
-                z,
-                include_shell_io=include_shell_io,
-            )
         raise RuntimeError(
-            "model.probe_recursion was found but did not return (P, dP) for derivative=True."
+            "model.probe_recursion was found but did not return (P, dP) for derivative=True. "
+            "Please use a FLAMO version exposing probe_recursion_with_derivative or "
+            "probe_recursion(derivative=True)->(P,dP)."
         )
 
     raise RuntimeError(
