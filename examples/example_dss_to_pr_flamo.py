@@ -1,8 +1,8 @@
 """
 Dedicated FLAMO/autograd DSS2PR example.
 
-This example intentionally uses only the FLAMO probing architecture:
-``dss_to_pr_flamo`` (autograd backend).
+This example intentionally uses the FLAMO-first split:
+``dss_to_flamo`` then ``flamo_to_pr``.
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from __future__ import annotations
 import numpy as np
 
 import pyFDN
-from pyFDN.auxiliary.flamo import gain_module
 
 
 def main() -> None:
@@ -24,16 +23,20 @@ def main() -> None:
     c = np.eye(1, n)
     d = np.zeros((1, 1))
 
-    # FLAMO graph for the feedback matrix A(z)
-    feedback_graph = gain_module(a_num, nfft=2**12, device="cpu")
-
-    # FLAMO-only modal decomposition path
-    residues, poles, direct, is_pair, _ = pyFDN.dss_to_pr_flamo(
+    # Preferred split: DSS -> FLAMO model, then FLAMO -> PR
+    model = pyFDN.dss_to_flamo(
+        A=a_num,
+        B=b,
+        C=c,
+        D=d,
+        m=delays,
+        Fs=1.0,
+        nfft=2**12,
+        shell=False,
+    )
+    residues, poles, direct, is_pair, _ = pyFDN.flamo_to_pr(
+        model,
         delays,
-        feedback_graph,  # graph input
-        b,
-        c,
-        d,
         feedback_delay_units=0,
         maximum_iterations=70,
         verbose=False,

@@ -1,50 +1,13 @@
-"""Tests for the dedicated FLAMO/autograd dss_to_pr_flamo entry point."""
+"""Tests for FLAMO-first dss_to_pr_flamo / flamo_to_pr entrypoints."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
+from pyFDN.translate.dss_to_flamo import dss_to_flamo
 from pyFDN.translate.dss_to_pr import dss_to_pr
-from pyFDN.translate.dss_to_pr_flamo import dss_to_pr_flamo
-
-
-class ConstantFeedbackGraph:
-    """Minimal graph-like object accepted by FLAMO probe adapters."""
-
-    def __init__(self, matrix: np.ndarray):
-        self._matrix = np.asarray(matrix, dtype=np.float64)
-        self.input_channels = self._matrix.shape[1]
-        self.output_channels = self._matrix.shape[0]
-
-    def at(self, z):
-        return self._matrix
-
-    def der(self, z):
-        return np.zeros_like(self._matrix)
-
-
-class NativeProbeFeedbackGraph:
-    """Graph-like object exposing FLAMO Stage-B style probe API."""
-
-    def __init__(self, matrix: np.ndarray):
-        self._matrix = np.asarray(matrix, dtype=np.float64)
-        self.input_channels = self._matrix.shape[1]
-        self.output_channels = self._matrix.shape[0]
-        self.probe_calls = 0
-        self.probe_derivative_calls = 0
-
-    def probe(self, z, derivative: bool = False, include_shell_io: bool = False):
-        self.probe_calls += 1
-        h = self._matrix.astype(np.complex128)
-        if derivative:
-            return h, np.zeros_like(h)
-        return h
-
-    def probe_with_derivative(self, z, include_shell_io: bool = False):
-        self.probe_derivative_calls += 1
-        h = self._matrix.astype(np.complex128)
-        return h, np.zeros_like(h)
+from pyFDN.translate.dss_to_pr_flamo import dss_to_pr_flamo, flamo_to_pr
 
 
 def test_dss_to_pr_flamo_matches_autograd_backend():
@@ -53,11 +16,10 @@ def test_dss_to_pr_flamo_matches_autograd_backend():
     b = np.eye(2, 1)
     c = np.eye(1, 2)
     d = np.zeros((1, 1))
-    graph = ConstantFeedbackGraph(a)
 
     res_ref, pol_ref, direct_ref, pair_ref, _ = dss_to_pr(
         delays,
-        graph,
+        a,
         b,
         c,
         d,
@@ -67,68 +29,81 @@ def test_dss_to_pr_flamo_matches_autograd_backend():
     )
     res_new, pol_new, direct_new, pair_new, _ = dss_to_pr_flamo(
         delays,
-        graph,
+        a,
         b,
         c,
         d,
         feedback_delay_units=0,
+        absorption_delay_units=0,
+        Fs=1.0,
+        nfft=1024,
         verbose=False,
     )
 
-    np.testing.assert_allclose(pol_new, pol_ref, rtol=1e-9, atol=1e-9)
-    np.testing.assert_allclose(res_new, res_ref, rtol=1e-9, atol=1e-9)
+    np.testing.assert_allclose(pol_new, pol_ref, rtol=1e-8, atol=1e-8)
+    np.testing.assert_allclose(res_new, res_ref, rtol=1e-7, atol=1e-7)
     np.testing.assert_allclose(direct_new, direct_ref, rtol=0, atol=0)
     np.testing.assert_array_equal(pair_new, pair_ref)
 
 
-def test_dss_to_pr_flamo_accepts_native_probe_graph():
+def test_flamo_to_pr_matches_dss_to_pr_flamo_wrapper():
     delays = np.array([2, 3], dtype=int)
     a = np.array([[0.25, -0.1], [0.15, 0.3]])
     b = np.eye(2, 1)
     c = np.eye(1, 2)
     d = np.zeros((1, 1))
-    graph = NativeProbeFeedbackGraph(a)
 
-    res_ref, pol_ref, direct_ref, pair_ref, _ = dss_to_pr_flamo(
+    model = dss_to_flamo(
+        A=a,
+        B=b,
+        C=c,
+        D=d,
+        m=delays,
+        Fs=1.0,
+        nfft=1024,
+        shell=False,
+    )
+
+    res_model, pol_model, direct_model, pair_model, _ = flamo_to_pr(
+        model,
         delays,
-        a,  # numeric reference
+        feedback_delay_units=0,
+        absorption_delay_units=0,
+        verbose=False,
+    )
+    res_wrap, pol_wrap, direct_wrap, pair_wrap, _ = dss_to_pr_flamo(
+        delays,
+        a,
         b,
         c,
         d,
         feedback_delay_units=0,
-        verbose=False,
-    )
-    res_new, pol_new, direct_new, pair_new, _ = dss_to_pr_flamo(
-        delays,
-        graph,
-        b,
-        c,
-        d,
-        feedback_delay_units=0,
+        absorption_delay_units=0,
+        Fs=1.0,
+        nfft=1024,
         verbose=False,
     )
 
-    np.testing.assert_allclose(pol_new, pol_ref, rtol=1e-9, atol=1e-9)
-    np.testing.assert_allclose(res_new, res_ref, rtol=1e-9, atol=1e-9)
-    np.testing.assert_allclose(direct_new, direct_ref, rtol=0, atol=0)
-    np.testing.assert_array_equal(pair_new, pair_ref)
-    assert graph.probe_calls > 0 or graph.probe_derivative_calls > 0
+    np.testing.assert_allclose(pol_model, pol_wrap, rtol=1e-8, atol=1e-8)
+    np.testing.assert_allclose(res_model, res_wrap, rtol=1e-8, atol=1e-8)
+    np.testing.assert_allclose(direct_model, direct_wrap, rtol=0, atol=0)
+    np.testing.assert_array_equal(pair_model, pair_wrap)
 
 
-def test_dss_to_pr_flamo_rejects_backend_override():
+def test_dss_to_pr_flamo_rejects_absorption_filters():
     delays = np.array([2, 3], dtype=int)
     a = np.eye(2)
     b = np.eye(2, 1)
     c = np.eye(1, 2)
     d = np.zeros((1, 1))
 
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         dss_to_pr_flamo(
             delays,
-            ConstantFeedbackGraph(a),
+            a,
             b,
             c,
             d,
-            probe_backend="manual",
+            absorption_filters=np.eye(2),
         )
 

@@ -11,6 +11,7 @@ from numpy.typing import ArrayLike
 
 from pyFDN.auxiliary.flamo_runtime_probe import probe_flamo_runtime
 from pyFDN.auxiliary.math import det_polynomial, poly_degree
+from pyFDN.translate.dss_to_flamo import dss_to_flamo
 
 
 class _ConstantMatrixProbe:
@@ -253,6 +254,106 @@ def _to_probe(
             stacklevel=2,
         )
     return _FlamoGraphProbe(value), int(delay_units_hint or 0)
+
+
+def _as_module_list(node: Any) -> list[Any]:
+    """Return modules in processing order for a FLAMO node/series."""
+    try:
+        modules = list(node)
+    except Exception:
+        return [node]
+    if len(modules) == 0:
+        return [node]
+    return modules
+
+
+def _compose_module_chain_probe(
+    modules: list[Any], *, identity_dim: int | None = None
+) -> Any:
+    """
+    Compose a FLAMO module chain into a single probe.
+
+    For modules [m1, m2, ..., mk], returns H = Hk @ ... @ H2 @ H1.
+    """
+    if len(modules) == 0:
+        if identity_dim is None:
+            raise ValueError("Empty module chain requires identity_dim.")
+        return _ConstantMatrixProbe(np.eye(identity_dim, dtype=np.complex128))
+
+    probe: Any = _FlamoGraphProbe(modules[0])
+    for module in modules[1:]:
+        probe = _SeriesProbe(_FlamoGraphProbe(module), probe)
+    return probe
+
+
+def _is_delay_like_module(module: Any) -> bool:
+    name = module.__class__.__name__.lower()
+    if "delay" not in name:
+        return False
+    # Delay modules expose sample conversion helper in FLAMO dsp.
+    return hasattr(module, "s2sample")
+
+
+def _extract_flamo_recursion_probes(
+    model: Any,
+    delays: np.ndarray,
+) -> tuple[Any, Any, Any, Any, Any]:
+    """
+    Extract B/C/D probes and loop probes from a dss_to_flamo-like graph.
+
+    Expected core topology:
+        Parallel(sum_output=True):
+            branchA = Series(input_gain, Recursion(feedforward, feedback), output_gain)
+            branchB = direct gain path
+    """
+    core = model.get_core() if callable(getattr(model, "get_core", None)) else model
+
+    if not hasattr(core, "branchA") or not hasattr(core, "branchB"):
+        raise ValueError(
+            "flamo_to_pr expects a FLAMO core with branchA/branchB "
+            "(e.g., produced by dss_to_flamo)."
+        )
+
+    fdn_branch = core.branchA
+    direct_branch = core.branchB
+    fdn_modules = _as_module_list(fdn_branch)
+
+    rec_indices = [
+        i
+        for i, mod in enumerate(fdn_modules)
+        if hasattr(mod, "feedforward") and hasattr(mod, "feedback")
+    ]
+    if len(rec_indices) != 1:
+        raise ValueError(
+            "Could not locate a unique Recursion block in branchA. "
+            "Expected dss_to_flamo branch layout."
+        )
+
+    rec_idx = rec_indices[0]
+    recursion = fdn_modules[rec_idx]
+
+    n = int(np.asarray(delays).size)
+    in_modules = fdn_modules[:rec_idx]
+    out_modules = fdn_modules[rec_idx + 1 :]
+    b_probe = _compose_module_chain_probe(in_modules, identity_dim=n)
+    c_probe = _compose_module_chain_probe(out_modules, identity_dim=n)
+    direct_probe = _compose_module_chain_probe(_as_module_list(direct_branch))
+
+    ff_modules = _as_module_list(recursion.feedforward)
+    if len(ff_modules) == 0 or not _is_delay_like_module(ff_modules[0]):
+        raise ValueError(
+            "Recursion feedforward must start with a FLAMO delay module "
+            "for flamo_to_pr decomposition."
+        )
+    post_delay_modules = ff_modules[1:]
+    if len(post_delay_modules) == 0:
+        fwd_inv_probe = _ConstantMatrixProbe(np.eye(n, dtype=np.complex128))
+    else:
+        post_probe = _compose_module_chain_probe(post_delay_modules, identity_dim=n)
+        fwd_inv_probe = _InverseProbe(post_probe)
+
+    fb_probe = _compose_module_chain_probe(_as_module_list(recursion.feedback))
+    return b_probe, c_probe, direct_probe, fwd_inv_probe, fb_probe
 
 
 def _rcond(mat: np.ndarray) -> float:
@@ -587,48 +688,36 @@ def _dss_to_res_flamo(
     return residues, direct_term, undriven, eigenvectors
 
 
-def dss_to_pr_flamo(
+def flamo_to_pr(
+    model: Any,
     delays: ArrayLike,
-    A: Any,
-    B: Any,
-    C: Any,
-    D: Any,
     *,
     inverse_matrix: Any | None = None,
     deflation_type: str = "fullDeflation",
-    absorption_filters: Any | None = None,
     reject_unstable_poles: bool = False,
     quality_threshold: float | None = None,
     maximum_iterations: int = 50,
     verbose: bool = True,
-    feedback_delay_units: int | None = None,
-    absorption_delay_units: int | None = None,
+    feedback_delay_units: int | None = 0,
+    absorption_delay_units: int | None = 0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
-    """FLAMO/autograd-only DSS2PR path without ZFilter in this module."""
+    """
+    Poles/residues directly from a FLAMO model.
+
+    The model is expected to be built from :func:`dss_to_flamo` (or follow the
+    same topology), from which the recursion loop and B/C/D branches are
+    extracted for decomposition.
+    """
     delays_arr = np.asarray(delays, dtype=int).ravel()
     if delays_arr.ndim != 1 or delays_arr.size == 0:
         raise ValueError("delays must be a non-empty 1-D array")
-    n = delays_arr.size
 
-    if quality_threshold is None:
-        quality_threshold = 1000.0 * np.finfo(float).eps
-
-    # Forward absorption branch (default identity)
-    if absorption_filters is None:
-        absorption_filters = np.eye(n, dtype=np.float64)
-    fwd_probe, fwd_delay_units = _to_probe(
-        absorption_filters,
-        name="absorption_filters",
-        delay_units_hint=absorption_delay_units,
+    b_probe, c_probe, direct_probe, fwd_inv_probe, fb_probe = _extract_flamo_recursion_probes(
+        model, delays_arr
     )
-    fwd_inv_probe = _InverseProbe(fwd_probe)
+    fb_delay_units_i = int(feedback_delay_units or 0)
+    fwd_delay_units_i = int(absorption_delay_units or 0)
 
-    # Feedback branch
-    fb_probe, fb_delay_units = _to_probe(
-        A,
-        name="A",
-        delay_units_hint=feedback_delay_units,
-    )
     fb_inv_probe = None
     if inverse_matrix is not None:
         fb_inv_probe, _ = _to_probe(
@@ -637,16 +726,16 @@ def dss_to_pr_flamo(
             delay_units_hint=0,
         )
 
-    b_probe, _ = _to_probe(B, name="B", delay_units_hint=0)
-    c_probe, _ = _to_probe(C, name="C", delay_units_hint=0)
+    if quality_threshold is None:
+        quality_threshold = 1000.0 * np.finfo(float).eps
 
     loop = _FDNLoopFlamo(
         delays=delays_arr,
         forward_inv_probe=fwd_inv_probe,
         feedback_probe=fb_probe,
         feedback_inv_probe=fb_inv_probe,
-        number_of_matrix_delays=int(fb_delay_units),
-        number_of_delay_units=int(np.sum(delays_arr) + fwd_delay_units + fb_delay_units),
+        number_of_matrix_delays=fb_delay_units_i,
+        number_of_delay_units=int(np.sum(delays_arr) + fwd_delay_units_i + fb_delay_units_i),
     )
 
     n_poles = int(loop.number_of_delay_units)
@@ -691,10 +780,79 @@ def dss_to_pr_flamo(
         print(f"Final number of poles are: {final_count} of possible {n_poles}")
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(
-        poles, loop, b_probe, c_probe, D
+        poles, loop, b_probe, c_probe, direct_probe
     )
     meta_data["undrivenResidues"] = undriven
     meta_data["eigenvectors"] = eigenvectors
 
     return residues, poles, direct, is_conjugate, meta_data
+
+
+def dss_to_pr_flamo(
+    delays: ArrayLike,
+    A: Any,
+    B: Any,
+    C: Any,
+    D: Any,
+    *,
+    inverse_matrix: Any | None = None,
+    deflation_type: str = "fullDeflation",
+    absorption_filters: Any | None = None,
+    reject_unstable_poles: bool = False,
+    quality_threshold: float | None = None,
+    maximum_iterations: int = 50,
+    verbose: bool = True,
+    feedback_delay_units: int | None = 0,
+    absorption_delay_units: int | None = 0,
+    Fs: float = 1.0,
+    nfft: int = 2**16,
+    device: Any = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+    """
+    DSS -> FLAMO -> PR wrapper.
+
+    Converts delay state-space to a FLAMO core using :func:`dss_to_flamo`, then
+    decomposes that FLAMO model via :func:`flamo_to_pr`.
+    """
+    if absorption_filters is not None:
+        raise ValueError(
+            "dss_to_pr_flamo no longer accepts absorption_filters directly. "
+            "Build a FLAMO model with dss_to_flamo(post_delay_module=...) and "
+            "use flamo_to_pr(model, delays, ...)."
+        )
+
+    delays_arr = np.asarray(delays, dtype=int).ravel()
+    if delays_arr.ndim != 1 or delays_arr.size == 0:
+        raise ValueError("delays must be a non-empty 1-D array")
+
+    if not all(isinstance(v, (np.ndarray, list, tuple)) for v in (A, B, C, D)):
+        raise TypeError(
+            "dss_to_pr_flamo expects numeric DSS matrices (A,B,C,D). "
+            "For existing FLAMO graph models, use flamo_to_pr(model, delays, ...)."
+        )
+
+    model = dss_to_flamo(
+        A=np.asarray(A, dtype=np.float64),
+        B=np.asarray(B, dtype=np.float64),
+        C=np.asarray(C, dtype=np.float64),
+        D=np.asarray(D, dtype=np.float64),
+        m=delays_arr,
+        Fs=float(Fs),
+        nfft=int(nfft),
+        device=device,
+        shell=False,
+    )
+
+    return flamo_to_pr(
+        model,
+        delays_arr,
+        inverse_matrix=inverse_matrix,
+        deflation_type=deflation_type,
+        reject_unstable_poles=reject_unstable_poles,
+        quality_threshold=quality_threshold,
+        maximum_iterations=maximum_iterations,
+        verbose=verbose,
+        feedback_delay_units=feedback_delay_units,
+        absorption_delay_units=absorption_delay_units,
+    )
 

@@ -69,6 +69,7 @@ __all__ = [
     "dss_to_flamo",
     "dss_to_impz",
     "dss_to_pr",
+    "flamo_to_pr",
     "dss_to_pr_flamo",
     "dss_to_pr_flamo_direct",
     "dss_to_ss",
@@ -254,7 +255,7 @@ from .translate.dss_to_flamo import dss_to_flamo
 from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_impz import dss_to_impz
 from .translate.dss_to_pr import dss_to_pr
-from .translate.dss_to_pr_flamo import dss_to_pr_flamo
+from .translate.dss_to_pr_flamo import dss_to_pr_flamo, flamo_to_pr
 from .translate.dss_to_pr_flamo_direct import dss_to_pr_flamo_direct
 from .translate.dss_to_tf import dss_to_tf
 from .translate.impz_to_res import impz_to_res
