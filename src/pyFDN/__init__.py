@@ -68,9 +68,12 @@ __all__ = [
     # state-space translators
     "dss_to_flamo",
     "dss_to_impz",
+    "dss_to_pr",
     "dss_to_ss",
     "dss_to_tf",
+    "impz_to_res",
     "mtf_to_impz",
+    "pr_to_impz",
     # fdn processing
     "process_fdn",
     # plotting
@@ -232,8 +235,11 @@ from .generate.SDN import SDN
 from .translate.dss_to_flamo import dss_to_flamo
 from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_impz import dss_to_impz
+from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_tf import dss_to_tf
+from .translate.impz_to_res import impz_to_res
 from .translate.mtf_to_impz import mtf_to_impz
+from .translate.pr_to_impz import pr_to_impz
 
 #fdn processing
 from .process import process_fdn
