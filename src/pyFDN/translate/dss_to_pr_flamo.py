@@ -9,11 +9,8 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
+import torch
 
-from pyFDN.auxiliary.flamo_runtime_probe import (
-    probe_flamo_recursion_runtime,
-    probe_flamo_runtime,
-)
 from pyFDN.translate.dss_to_flamo import dss_to_flamo
 
 
@@ -33,26 +30,63 @@ class _IdentityProbe:
         return np.zeros_like(self._eye)
 
 
+def _infer_model_device(model: Any) -> torch.device:
+    params = getattr(model, "parameters", None)
+    if callable(params):
+        try:
+            first = next(params())
+            return first.device
+        except Exception:
+            pass
+    return torch.device("cpu")
+
+
+def _infer_model_complex_dtype(model: Any) -> torch.dtype:
+    dt = getattr(model, "dtype", None)
+    if dt in (torch.float16, torch.float32):
+        return torch.complex64
+    return torch.complex128
+
+
+def _as_torch_complex_scalar(z: complex, *, model: Any) -> torch.Tensor:
+    return torch.tensor(
+        complex(np.asarray(z, dtype=np.complex128)),
+        device=_infer_model_device(model),
+        dtype=_infer_model_complex_dtype(model),
+    )
+
+
 class _FlamoGraphProbe:
     """Probe adapter for FLAMO graph objects via autograd probing."""
 
     def __init__(self, model: Any):
         self.model = model
-        h0 = np.asarray(
-            probe_flamo_runtime(model, 1.0 + 0j, derivative=False), dtype=np.complex128
-        )
+        h0 = np.asarray(self.at(1.0 + 0j), dtype=np.complex128)
         if h0.ndim != 2:
             raise ValueError(f"Graph probe at scalar z must be 2-D, got {h0.shape}")
         self.output_channels, self.input_channels = h0.shape
 
     def at(self, z: complex) -> np.ndarray:
-        return np.asarray(
-            probe_flamo_runtime(self.model, z, derivative=False), dtype=np.complex128
-        )
+        z_t = _as_torch_complex_scalar(z, model=self.model)
+        out = self.model.probe(z_t)
+        if isinstance(out, tuple):
+            if len(out) == 0:
+                raise RuntimeError("model.probe returned empty tuple")
+            out = out[0]
+        return np.asarray(out.detach().cpu().numpy(), dtype=np.complex128)
 
     def der(self, z: complex) -> np.ndarray:
-        _, dh = probe_flamo_runtime(self.model, z, derivative=True)
-        return np.asarray(dh, dtype=np.complex128)
+        z_t = _as_torch_complex_scalar(z, model=self.model)
+        if callable(getattr(self.model, "probe_with_derivative", None)):
+            out = self.model.probe_with_derivative(z_t)
+        else:
+            out = self.model.probe(z_t, derivative=True)
+        if not (isinstance(out, tuple) and len(out) == 2):
+            raise RuntimeError(
+                "FLAMO model must expose derivative probe support "
+                "(probe_with_derivative or probe(..., derivative=True))."
+            )
+        return np.asarray(out[1].detach().cpu().numpy(), dtype=np.complex128)
 
 
 class _FlamoRecursionCharacteristicProbe:
@@ -60,23 +94,32 @@ class _FlamoRecursionCharacteristicProbe:
 
     def __init__(self, recursion: Any):
         self.recursion = recursion
-        p0 = np.asarray(
-            probe_flamo_recursion_runtime(recursion, 1.0 + 0j, derivative=False),
-            dtype=np.complex128,
-        )
+        p0 = np.asarray(self.at(1.0 + 0j), dtype=np.complex128)
         if p0.ndim != 2:
             raise ValueError(f"Recursion characteristic probe must be 2-D, got {p0.shape}")
         self.output_channels, self.input_channels = p0.shape
 
     def at(self, z: complex) -> np.ndarray:
-        return np.asarray(
-            probe_flamo_recursion_runtime(self.recursion, z, derivative=False),
-            dtype=np.complex128,
-        )
+        z_t = _as_torch_complex_scalar(z, model=self.recursion)
+        out = self.recursion.probe_recursion(z_t)
+        if isinstance(out, tuple):
+            if len(out) == 0:
+                raise RuntimeError("probe_recursion returned empty tuple")
+            out = out[0]
+        return np.asarray(out.detach().cpu().numpy(), dtype=np.complex128)
 
     def der(self, z: complex) -> np.ndarray:
-        _, dp = probe_flamo_recursion_runtime(self.recursion, z, derivative=True)
-        return np.asarray(dp, dtype=np.complex128)
+        z_t = _as_torch_complex_scalar(z, model=self.recursion)
+        if callable(getattr(self.recursion, "probe_recursion_with_derivative", None)):
+            out = self.recursion.probe_recursion_with_derivative(z_t)
+        else:
+            out = self.recursion.probe_recursion(z_t, derivative=True)
+        if not (isinstance(out, tuple) and len(out) == 2):
+            raise RuntimeError(
+                "Recursion must expose derivative characteristic probe support "
+                "(probe_recursion_with_derivative or probe_recursion(..., derivative=True))."
+            )
+        return np.asarray(out[1].detach().cpu().numpy(), dtype=np.complex128)
 
 
 @dataclass
@@ -185,21 +228,18 @@ def _rcond(mat: np.ndarray) -> float:
 
 @dataclass
 class _FDNLoopFlamo:
-    delays: np.ndarray
     characteristic_probe: Any
     number_of_delay_units: int
-    number_of_matrix_delays: int
 
     def __post_init__(self):
-        self.delays = np.asarray(self.delays, dtype=np.float64).ravel()
-        self.n = int(self.delays.size)
         out_ch = int(getattr(self.characteristic_probe, "output_channels"))
         in_ch = int(getattr(self.characteristic_probe, "input_channels"))
-        if out_ch != self.n or in_ch != self.n:
+        if out_ch != in_ch:
             raise ValueError(
-                "Recursion characteristic probe dimensions must match "
-                f"delay count {self.n}, got ({out_ch},{in_ch})."
+                "Characteristic probe must be square, "
+                f"got ({out_ch},{in_ch})."
             )
+        self.n = out_ch
 
     def at(self, z: complex) -> np.ndarray:
         return np.asarray(self.characteristic_probe.at(z), dtype=np.complex128)
@@ -496,14 +536,19 @@ def flamo_to_pr(
     decomposition = _extract_flamo_recursion_probes(model, recursion_module, delays_arr)
     fb_delay_units_i = int(feedback_delay_units or 0)
     fwd_delay_units_i = int(absorption_delay_units or 0)
+    p_out = int(getattr(decomposition.p_probe, "output_channels"))
+    p_in = int(getattr(decomposition.p_probe, "input_channels"))
+    if p_out != delays_arr.size or p_in != delays_arr.size:
+        raise ValueError(
+            "Characteristic probe dimensions must match delay count: "
+            f"expected ({delays_arr.size},{delays_arr.size}), got ({p_out},{p_in})."
+        )
 
     if quality_threshold is None:
         quality_threshold = 1000.0 * np.finfo(float).eps
 
     loop = _FDNLoopFlamo(
-        delays=delays_arr,
         characteristic_probe=decomposition.p_probe,
-        number_of_matrix_delays=fb_delay_units_i,
         number_of_delay_units=int(np.sum(delays_arr) + fwd_delay_units_i + fb_delay_units_i),
     )
 

@@ -20,7 +20,6 @@ from .flamo_autograd_probe import (
 from .flamo_runtime_probe import (
     has_flamo_native_probe,
     probe_flamo_runtime,
-    probe_flamo_recursion_runtime,
 )
 
 __all__ = [
@@ -46,5 +45,4 @@ __all__ = [
     "attach_autograd_probe",
     "has_flamo_native_probe",
     "probe_flamo_runtime",
-    "probe_flamo_recursion_runtime",
 ]
