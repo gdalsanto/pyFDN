@@ -5,7 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.flamo_runtime_probe import probe_flamo_runtime
+from pyFDN.auxiliary.flamo_runtime_probe import (
+    has_flamo_native_probe,
+    probe_flamo_runtime,
+)
 
 
 class NativeProbeModel:
@@ -48,6 +51,8 @@ def test_probe_flamo_runtime_prefers_native_model_methods():
 def test_probe_flamo_runtime_raises_without_native_api():
     class NoProbeModel:
         pass
+
+    assert has_flamo_native_probe(NoProbeModel()) is False
 
     with pytest.raises(RuntimeError):
         probe_flamo_runtime(NoProbeModel(), 0.8 + 0.1j, derivative=True)

@@ -11,6 +11,7 @@ from functools import lru_cache
 from typing import Any
 
 import numpy as np
+import torch
 
 
 def _to_numpy(value: Any) -> np.ndarray:
@@ -34,6 +35,48 @@ def _call_with_supported_kwargs(fn: Any, *args, **kwargs):
     return fn(*args, **filtered)
 
 
+def _is_flamo_object(obj: Any) -> bool:
+    module_name = getattr(obj.__class__, "__module__", "")
+    return module_name.startswith("flamo.")
+
+
+def _infer_model_device(model: Any) -> torch.device:
+    params = getattr(model, "parameters", None)
+    if callable(params):
+        try:
+            first = next(params())
+            return first.device
+        except Exception:
+            pass
+    alias_decay = getattr(model, "alias_decay_db", None)
+    if isinstance(alias_decay, torch.Tensor):
+        return alias_decay.device
+    return torch.device("cpu")
+
+
+def _infer_model_complex_dtype(model: Any) -> torch.dtype:
+    dt = getattr(model, "dtype", None)
+    if dt in (torch.float16, torch.float32):
+        return torch.complex64
+    return torch.complex128
+
+
+def _to_torch_complex_scalar(z: complex | np.ndarray, *, model: Any) -> torch.Tensor:
+    z_arr = np.asarray(z, dtype=np.complex128)
+    if z_arr.ndim != 0:
+        raise ValueError("Expected scalar z for scalar probe call")
+    device = _infer_model_device(model)
+    dtype = _infer_model_complex_dtype(model)
+    return torch.tensor(complex(z_arr.item()), device=device, dtype=dtype)
+
+
+def _to_torch_complex_points(z: complex | np.ndarray, *, model: Any) -> torch.Tensor:
+    z_arr = np.asarray(z, dtype=np.complex128).reshape(-1)
+    device = _infer_model_device(model)
+    dtype = _infer_model_complex_dtype(model)
+    return torch.as_tensor(z_arr, device=device, dtype=dtype)
+
+
 @lru_cache(maxsize=1)
 def _flamo_probe_module():
     try:
@@ -53,6 +96,10 @@ def has_flamo_native_probe(model: Any) -> bool:
         return True
     probe_mod = _flamo_probe_module()
     if probe_mod is None:
+        return False
+    if not _is_flamo_object(model):
+        return False
+    if not callable(getattr(model, "probe", None)):
         return False
     return callable(getattr(probe_mod, "probe_with_derivative", None)) or callable(
         getattr(probe_mod, "probe_points", None)
@@ -74,10 +121,13 @@ def probe_flamo_runtime(
       2) flamo.processor.probe helpers
     """
     # 1) model-bound native methods
+    z_for_model = _to_torch_complex_scalar(z, model=model) if _is_flamo_object(model) else z
+    h_from_probe_only = None
+
     if derivative and callable(getattr(model, "probe_with_derivative", None)):
         out = _call_with_supported_kwargs(
             model.probe_with_derivative,
-            z,
+            z_for_model,
             include_shell_io=include_shell_io,
         )
         if isinstance(out, tuple) and len(out) == 2:
@@ -86,28 +136,29 @@ def probe_flamo_runtime(
     if callable(getattr(model, "probe", None)):
         out = _call_with_supported_kwargs(
             model.probe,
-            z,
+            z_for_model,
             derivative=derivative,
             include_shell_io=include_shell_io,
         )
         if derivative and isinstance(out, tuple) and len(out) == 2:
             return _to_numpy(out[0]), _to_numpy(out[1])
-        if not derivative and not isinstance(out, tuple):
+        if not derivative:
+            if isinstance(out, tuple):
+                if len(out) == 0:
+                    raise RuntimeError("model.probe returned empty tuple")
+                return _to_numpy(out[0])
             return _to_numpy(out)
-        if derivative and not (isinstance(out, tuple) and len(out) == 2):
-            raise RuntimeError(
-                "model.probe was found but did not return (H, dH) for derivative=True. "
-                "Please use a FLAMO version exposing probe_with_derivative support."
-            )
+        if not (isinstance(out, tuple) and len(out) == 2):
+            h_from_probe_only = out
 
     # 2) module-level FLAMO helpers
     probe_mod = _flamo_probe_module()
-    if probe_mod is not None:
+    if probe_mod is not None and _is_flamo_object(model):
         if derivative and callable(getattr(probe_mod, "probe_with_derivative", None)):
             out = _call_with_supported_kwargs(
                 probe_mod.probe_with_derivative,
                 model,
-                z,
+                _to_torch_complex_scalar(z, model=model),
                 include_shell_io=include_shell_io,
             )
             if isinstance(out, tuple) and len(out) == 2:
@@ -116,7 +167,7 @@ def probe_flamo_runtime(
         if callable(getattr(probe_mod, "probe_points", None)):
             z_arr = np.asarray(z, dtype=np.complex128)
             scalar = z_arr.ndim == 0
-            z_points = z_arr.reshape(-1) if scalar else z_arr
+            z_points = _to_torch_complex_points(z, model=model)
             out = _call_with_supported_kwargs(
                 probe_mod.probe_points,
                 model,
@@ -128,7 +179,14 @@ def probe_flamo_runtime(
                 out_np = out_np.reshape(-1, *out_np.shape[-2:])[0]
             if not derivative:
                 return out_np
+            if derivative and h_from_probe_only is None:
+                h_from_probe_only = out_np
 
+    if derivative and h_from_probe_only is not None:
+        raise RuntimeError(
+            "Native FLAMO probe found only H(z) but not derivative support. "
+            "Please use a FLAMO version exposing probe_with_derivative."
+        )
     raise RuntimeError(
         "No native FLAMO probing API detected. "
         "Install/use the FLAMO branch that implements probe()/probe_with_derivative "
