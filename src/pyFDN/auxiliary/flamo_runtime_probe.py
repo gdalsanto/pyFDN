@@ -1,8 +1,7 @@
 """
 Runtime FLAMO probing bridge.
 
-This module prepares pyFDN for native FLAMO probe APIs (Stage B) while keeping
-backward compatibility with the current pyFDN autograd fallback.
+This module prepares pyFDN for native FLAMO probe APIs (Stage B).
 """
 
 from __future__ import annotations
@@ -12,8 +11,6 @@ from functools import lru_cache
 from typing import Any
 
 import numpy as np
-
-from pyFDN.auxiliary.flamo_autograd_probe import probe_flamo_z_autograd
 
 
 def _to_numpy(value: Any) -> np.ndarray:
@@ -70,12 +67,11 @@ def probe_flamo_runtime(
     include_shell_io: bool = False,
 ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """
-    Probe FLAMO graph via native API if available, otherwise fallback to pyFDN.
+    Probe FLAMO graph via native API.
 
     Priority order:
       1) model.probe_with_derivative / model.probe
       2) flamo.processor.probe helpers
-      3) pyFDN probe_flamo_z_autograd fallback
     """
     # 1) model-bound native methods
     if derivative and callable(getattr(model, "probe_with_derivative", None)):
@@ -98,6 +94,11 @@ def probe_flamo_runtime(
             return _to_numpy(out[0]), _to_numpy(out[1])
         if not derivative and not isinstance(out, tuple):
             return _to_numpy(out)
+        if derivative and not (isinstance(out, tuple) and len(out) == 2):
+            raise RuntimeError(
+                "model.probe was found but did not return (H, dH) for derivative=True. "
+                "Please use a FLAMO version exposing probe_with_derivative support."
+            )
 
     # 2) module-level FLAMO helpers
     probe_mod = _flamo_probe_module()
@@ -128,11 +129,9 @@ def probe_flamo_runtime(
             if not derivative:
                 return out_np
 
-    # 3) fallback
-    return probe_flamo_z_autograd(
-        model,
-        z,
-        derivative=derivative,
-        include_shell_io=include_shell_io,
+    raise RuntimeError(
+        "No native FLAMO probing API detected. "
+        "Install/use the FLAMO branch that implements probe()/probe_with_derivative "
+        "or flamo.processor.probe helpers."
     )
 

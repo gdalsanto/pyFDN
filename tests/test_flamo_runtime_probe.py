@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-import torch
+import pytest
 
 from pyFDN.auxiliary.flamo_runtime_probe import probe_flamo_runtime
 
@@ -30,17 +30,6 @@ class NativeProbeModel:
         return h, dh
 
 
-class Gain:
-    """Stage-A compatible Gain-like leaf (for fallback path)."""
-
-    def __init__(self, value: np.ndarray):
-        arr = np.asarray(value, dtype=np.float64)
-        self.param = torch.as_tensor(arr, dtype=torch.float64)
-        self.map = lambda x: x
-        self.input_channels = arr.shape[1]
-        self.output_channels = arr.shape[0]
-
-
 def test_probe_flamo_runtime_prefers_native_model_methods():
     model = NativeProbeModel()
     z = 0.9 + 0.1j
@@ -56,13 +45,10 @@ def test_probe_flamo_runtime_prefers_native_model_methods():
     assert model.probe_der_calls == 1
 
 
-def test_probe_flamo_runtime_falls_back_to_pyfdn_autograd():
-    gain = Gain(np.array([[1.25]], dtype=np.float64))
-    z = np.array([0.7 + 0.2j, 1.1 - 0.3j], dtype=np.complex128)
-    h, dh = probe_flamo_runtime(gain, z, derivative=True)
+def test_probe_flamo_runtime_raises_without_native_api():
+    class NoProbeModel:
+        pass
 
-    expected_h = np.array([[[1.25]], [[1.25]]], dtype=np.complex128)
-    expected_dh = np.zeros_like(expected_h)
-    np.testing.assert_allclose(h, expected_h, rtol=0, atol=0)
-    np.testing.assert_allclose(dh, expected_dh, rtol=0, atol=0)
+    with pytest.raises(RuntimeError):
+        probe_flamo_runtime(NoProbeModel(), 0.8 + 0.1j, derivative=True)
 
