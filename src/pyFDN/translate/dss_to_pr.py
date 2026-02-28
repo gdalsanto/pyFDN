@@ -512,7 +512,7 @@ def dss_to_pr(
     residues, poles, direct, is_conjugate_pole_pair, meta_data
     """
     # FLAMO-graph probing in this legacy entrypoint is kept for compatibility.
-    # Prefer dss_to_pr_flamo / dss_to_pr_flamo_direct for new code.
+    # Prefer dss_to_pr_flamo for FLAMO models.
     graph_like = any(
         not isinstance(v, (np.ndarray, list, tuple, ZFilter)) and v is not None
         for v in (A, B, C, absorption_filters, inverse_matrix)
@@ -520,7 +520,7 @@ def dss_to_pr(
     if graph_like or str(probe_backend).lower() != "manual":
         warnings.warn(
             "dss_to_pr FLAMO probing paths are compatibility mode. "
-            "Use dss_to_pr_flamo (or dss_to_pr_flamo_direct) for the maintained FLAMO architecture.",
+            "Use dss_to_pr_flamo for the maintained FLAMO architecture.",
             DeprecationWarning,
             stacklevel=2,
         )

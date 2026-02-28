@@ -1,7 +1,7 @@
 """
-Dedicated direct FLAMO/autograd DSS2PR example.
+Dedicated direct DSS2PR example.
 
-Uses ``dss_to_pr_flamo_direct`` only.
+Uses ``dss_to_pr_direct`` (numeric DSS-only path).
 """
 
 from __future__ import annotations
@@ -9,7 +9,6 @@ from __future__ import annotations
 import numpy as np
 
 import pyFDN
-from pyFDN.auxiliary.flamo import gain_module
 
 
 def main() -> None:
@@ -22,11 +21,9 @@ def main() -> None:
     c = np.eye(1, n)
     d = np.zeros((1, 1))
 
-    a_graph = gain_module(a_num, nfft=2**12, device="cpu")
-
-    residues, poles, direct, is_pair, _ = pyFDN.dss_to_pr_flamo_direct(
+    residues, poles, direct, is_pair, _ = pyFDN.dss_to_pr_direct(
         delays,
-        a_graph,
+        a_num,
         b,
         c,
         d,
