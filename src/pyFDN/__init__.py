@@ -87,6 +87,10 @@ __all__ = [
     "probe_flamo_z",
     "FlamoGraphZFilter",
     "flamo_graph_to_zfilter",
+    "probe_flamo_z_autograd",
+    "FlamoAutogradGraphZFilter",
+    "flamo_graph_to_autograd_zfilter",
+    "attach_autograd_probe",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -186,6 +190,12 @@ from .auxiliary.flamo_probe import (
     probe_flamo_z,
     FlamoGraphZFilter,
     flamo_graph_to_zfilter,
+)
+from .auxiliary.flamo_autograd_probe import (
+    probe_flamo_z_autograd,
+    FlamoAutogradGraphZFilter,
+    flamo_graph_to_autograd_zfilter,
+    attach_autograd_probe,
 )
 
 from .auxiliary.allpass import (

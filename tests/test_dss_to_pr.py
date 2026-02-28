@@ -99,6 +99,7 @@ def test_dss_to_pr_accepts_flamo_graph_like_feedback():
         c,
         d,
         feedback_delay_units=0,
+        probe_backend="autograd",
         verbose=False,
     )
 

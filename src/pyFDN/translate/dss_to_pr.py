@@ -1,7 +1,7 @@
 """Delay state-space to poles/residues (dss2pr translation).
 
-This module translates fdnToolbox's ``dss2pr.m`` pipeline and uses
-``pyFDN.auxiliary.flamo_probe`` as the z-domain probing backend.
+This module translates fdnToolbox's ``dss2pr.m`` pipeline and supports both
+analytic and autograd z-domain probing backends for FLAMO graphs.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from pyFDN.auxiliary.filters import ZFilter, ZScalar
+from pyFDN.auxiliary.flamo_autograd_probe import flamo_graph_to_autograd_zfilter
 from pyFDN.auxiliary.flamo_probe import flamo_graph_to_zfilter
 
 
@@ -38,6 +39,7 @@ def _as_probe_filter(
     *,
     name: str,
     delay_units_hint: int | None = None,
+    probe_backend: str = "manual",
 ) -> tuple[ZFilter, int, ZFilter | None]:
     """
     Convert numeric / ZFilter / FLAMO graph to a probe-capable ZFilter adapter.
@@ -51,12 +53,18 @@ def _as_probe_filter(
     original_zfilter:
         The underlying ZFilter (if available), else ``None``.
     """
+    backend = str(probe_backend).lower()
+    if backend not in {"manual", "autograd"}:
+        raise ValueError("probe_backend must be 'manual' or 'autograd'")
+
     if isinstance(value, ZFilter):
         zf = value
+        # Keep numeric/ZFilter leaves on the analytic adapter.
         return flamo_graph_to_zfilter(_ZFilterLeaf(zf)), int(zf.number_of_delay_units), zf
 
     if isinstance(value, (np.ndarray, list, tuple)):
         zf = ZFilter.from_any(value)
+        # Keep numeric/ZFilter leaves on the analytic adapter.
         return flamo_graph_to_zfilter(_ZFilterLeaf(zf)), int(zf.number_of_delay_units), zf
 
     # Assume FLAMO graph-like object
@@ -69,7 +77,12 @@ def _as_probe_filter(
         delay_units = 0
     else:
         delay_units = int(delay_units_hint)
-    return flamo_graph_to_zfilter(value), delay_units, None
+    adapter = (
+        flamo_graph_to_autograd_zfilter
+        if backend == "autograd"
+        else flamo_graph_to_zfilter
+    )
+    return adapter(value), delay_units, None
 
 
 def _rcond(mat: np.ndarray) -> float:
@@ -460,6 +473,7 @@ def dss_to_pr(
     maximum_iterations: int = 50,
     verbose: bool = True,
     feedback_delay_units: int | None = None,
+    probe_backend: str = "manual",
     **kwargs,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """
@@ -489,6 +503,10 @@ def dss_to_pr(
         Print refinement progress.
     feedback_delay_units : int, optional
         Delay-unit hint when ``A`` is passed as a FLAMO graph.
+    probe_backend : {"manual", "autograd"}
+        z-domain probing backend for FLAMO graph inputs. ``"autograd"``
+        evaluates module values through the graph and obtains derivatives via
+        torch autograd.
 
     Returns
     -------
@@ -505,6 +523,7 @@ def dss_to_pr(
     maximum_iterations = kwargs.pop("MaximumIterations", maximum_iterations)
     verbose = kwargs.pop("Verbose", verbose)
     feedback_delay_units = kwargs.pop("feedbackDelayUnits", feedback_delay_units)
+    probe_backend = kwargs.pop("probeBackend", probe_backend)
     if kwargs:
         unknown = ", ".join(sorted(kwargs.keys()))
         raise TypeError(f"Unexpected keyword arguments: {unknown}")
@@ -522,7 +541,10 @@ def dss_to_pr(
         absorption_filters = ZScalar(np.ones((n, 1), dtype=np.float64), is_diagonal=True)
 
     fwd_probe, fwd_delay_units, fwd_zf = _as_probe_filter(
-        absorption_filters, name="absorption_filters", delay_units_hint=0
+        absorption_filters,
+        name="absorption_filters",
+        delay_units_hint=0,
+        probe_backend=probe_backend,
     )
     if fwd_zf is None:
         raise ValueError(
@@ -535,6 +557,7 @@ def dss_to_pr(
         A,
         name="A",
         delay_units_hint=feedback_delay_units,
+        probe_backend=probe_backend,
     )
     fb_inv_probe: ZFilter | None = None
     if inverse_matrix is not None:
@@ -542,12 +565,17 @@ def dss_to_pr(
             inverse_matrix,
             name="inverse_matrix",
             delay_units_hint=0,
+            probe_backend=probe_backend,
         )
     elif fb_zf is not None:
         fb_inv_probe = flamo_graph_to_zfilter(_ZFilterLeaf(fb_zf.inverse()))
 
-    b_probe, _, _ = _as_probe_filter(B, name="B", delay_units_hint=0)
-    c_probe, _, _ = _as_probe_filter(C, name="C", delay_units_hint=0)
+    b_probe, _, _ = _as_probe_filter(
+        B, name="B", delay_units_hint=0, probe_backend=probe_backend
+    )
+    c_probe, _, _ = _as_probe_filter(
+        C, name="C", delay_units_hint=0, probe_backend=probe_backend
+    )
 
     loop = _FDNLoop(
         delays=delays_arr,

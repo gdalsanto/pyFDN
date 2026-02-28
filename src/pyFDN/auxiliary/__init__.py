@@ -11,6 +11,12 @@ from .allpass import (
 )
 from .flamo_graph import flamo_model_to_nodes, flamo_nodes_flat, draw_flamo_graph
 from .flamo_probe import FlamoGraphZFilter, flamo_graph_to_zfilter, probe_flamo_z
+from .flamo_autograd_probe import (
+    FlamoAutogradGraphZFilter,
+    attach_autograd_probe,
+    flamo_graph_to_autograd_zfilter,
+    probe_flamo_z_autograd,
+)
 
 __all__ = [
     "skew",
@@ -29,4 +35,8 @@ __all__ = [
     "probe_flamo_z",
     "FlamoGraphZFilter",
     "flamo_graph_to_zfilter",
+    "probe_flamo_z_autograd",
+    "FlamoAutogradGraphZFilter",
+    "flamo_graph_to_autograd_zfilter",
+    "attach_autograd_probe",
 ]
