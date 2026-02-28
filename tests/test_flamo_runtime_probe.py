@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import torch
 
 from pyFDN.auxiliary.flamo_runtime_probe import (
     has_flamo_native_probe,
+    probe_flamo_recursion_runtime,
     probe_flamo_runtime,
 )
 
@@ -56,4 +58,47 @@ def test_probe_flamo_runtime_raises_without_native_api():
 
     with pytest.raises(RuntimeError):
         probe_flamo_runtime(NoProbeModel(), 0.8 + 0.1j, derivative=True)
+
+
+class NativeRecursionProbeModel:
+    # Mark as FLAMO-like so torch scalar conversion/autograd fallback are enabled.
+    __module__ = "flamo.processor.system"
+
+    def __init__(self):
+        self.dtype = torch.float64
+
+    def probe_recursion(self, z, derivative: bool = False, include_shell_io: bool = False):
+        val = z**2 + 2.0 * z + 1.0
+        h = val.reshape(1, 1)
+        if derivative:
+            dh = (2.0 * z + 2.0).reshape(1, 1)
+            return h, dh
+        return h
+
+
+class NativeRecursionProbeNoDerivativeModel:
+    __module__ = "flamo.processor.system"
+
+    def __init__(self):
+        self.dtype = torch.float64
+
+    def probe_recursion(self, z, include_shell_io: bool = False):
+        val = z**2 + 2.0 * z + 1.0
+        return val.reshape(1, 1)
+
+
+def test_probe_flamo_recursion_runtime_native_derivative_tuple():
+    model = NativeRecursionProbeModel()
+    z = 0.8 + 0.1j
+    p, dp = probe_flamo_recursion_runtime(model, z, derivative=True)
+    np.testing.assert_allclose(p, np.array([[(z**2 + 2.0 * z + 1.0)]], dtype=np.complex128))
+    np.testing.assert_allclose(dp, np.array([[(2.0 * z + 2.0)]], dtype=np.complex128))
+
+
+def test_probe_flamo_recursion_runtime_autograd_fallback():
+    model = NativeRecursionProbeNoDerivativeModel()
+    z = 0.7 - 0.2j
+    p, dp = probe_flamo_recursion_runtime(model, z, derivative=True)
+    np.testing.assert_allclose(p, np.array([[(z**2 + 2.0 * z + 1.0)]], dtype=np.complex128))
+    np.testing.assert_allclose(dp, np.array([[(2.0 * z + 2.0)]], dtype=np.complex128))
 

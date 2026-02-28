@@ -9,7 +9,10 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pyFDN.auxiliary.flamo_runtime_probe import probe_flamo_runtime
+from pyFDN.auxiliary.flamo_runtime_probe import (
+    probe_flamo_recursion_runtime,
+    probe_flamo_runtime,
+)
 from pyFDN.auxiliary.math import det_polynomial, poly_degree
 from pyFDN.translate.dss_to_flamo import dss_to_flamo
 
@@ -104,6 +107,30 @@ class _FlamoGraphProbe:
     def der(self, z: complex) -> np.ndarray:
         _, dh = probe_flamo_runtime(self.model, z, derivative=True)
         return np.asarray(dh, dtype=np.complex128)
+
+
+class _FlamoRecursionCharacteristicProbe:
+    """Probe adapter for Recursion.probe_recursion(z) = I - F(z)B(z)."""
+
+    def __init__(self, recursion: Any):
+        self.recursion = recursion
+        p0 = np.asarray(
+            probe_flamo_recursion_runtime(recursion, 1.0 + 0j, derivative=False),
+            dtype=np.complex128,
+        )
+        if p0.ndim != 2:
+            raise ValueError(f"Recursion characteristic probe must be 2-D, got {p0.shape}")
+        self.output_channels, self.input_channels = p0.shape
+
+    def at(self, z: complex) -> np.ndarray:
+        return np.asarray(
+            probe_flamo_recursion_runtime(self.recursion, z, derivative=False),
+            dtype=np.complex128,
+        )
+
+    def der(self, z: complex) -> np.ndarray:
+        _, dp = probe_flamo_recursion_runtime(self.recursion, z, derivative=True)
+        return np.asarray(dp, dtype=np.complex128)
 
 
 class _InverseProbe:
@@ -297,7 +324,7 @@ def _is_delay_like_module(module: Any) -> bool:
 def _extract_flamo_recursion_probes(
     model: Any,
     delays: np.ndarray,
-) -> tuple[Any, Any, Any, Any, Any]:
+) -> tuple[Any, Any, Any, Any, Any, Any | None]:
     """
     Extract B/C/D probes and loop probes from a dss_to_flamo-like graph.
 
@@ -353,7 +380,19 @@ def _extract_flamo_recursion_probes(
         fwd_inv_probe = _InverseProbe(post_probe)
 
     fb_probe = _compose_module_chain_probe(_as_module_list(recursion.feedback))
-    return b_probe, c_probe, direct_probe, fwd_inv_probe, fb_probe
+    recursion_characteristic_probe = None
+    if callable(getattr(recursion, "probe_recursion", None)) or callable(
+        getattr(recursion, "probe_recursion_with_derivative", None)
+    ):
+        recursion_characteristic_probe = _FlamoRecursionCharacteristicProbe(recursion)
+    return (
+        b_probe,
+        c_probe,
+        direct_probe,
+        fwd_inv_probe,
+        fb_probe,
+        recursion_characteristic_probe,
+    )
 
 
 def _rcond(mat: np.ndarray) -> float:
@@ -390,13 +429,24 @@ class _FDNLoopFlamo:
     feedback_inv_probe: Any | None
     number_of_delay_units: int
     number_of_matrix_delays: int
+    characteristic_probe: Any | None = None
 
     def __post_init__(self):
         self.delays = np.asarray(self.delays, dtype=np.float64).ravel()
         self.n = int(self.delays.size)
         self.delay_inv_probe = _DelayInverseProbe(self.delays)
         self.forward_probe = _SeriesProbe(self.delay_inv_probe, self.forward_inv_probe)
-        self.loop_probe = _DifferenceProbe(self.forward_probe, self.feedback_probe)
+        if self.characteristic_probe is not None:
+            out_ch = int(getattr(self.characteristic_probe, "output_channels"))
+            in_ch = int(getattr(self.characteristic_probe, "input_channels"))
+            if out_ch != self.n or in_ch != self.n:
+                raise ValueError(
+                    "Recursion characteristic probe dimensions must match "
+                    f"delay count {self.n}, got ({out_ch},{in_ch})."
+                )
+            self.loop_probe = self.characteristic_probe
+        else:
+            self.loop_probe = _DifferenceProbe(self.forward_probe, self.feedback_probe)
 
         feedback_inv_base = (
             self.feedback_inv_probe
@@ -712,9 +762,14 @@ def flamo_to_pr(
     if delays_arr.ndim != 1 or delays_arr.size == 0:
         raise ValueError("delays must be a non-empty 1-D array")
 
-    b_probe, c_probe, direct_probe, fwd_inv_probe, fb_probe = _extract_flamo_recursion_probes(
-        model, delays_arr
-    )
+    (
+        b_probe,
+        c_probe,
+        direct_probe,
+        fwd_inv_probe,
+        fb_probe,
+        recursion_characteristic_probe,
+    ) = _extract_flamo_recursion_probes(model, delays_arr)
     fb_delay_units_i = int(feedback_delay_units or 0)
     fwd_delay_units_i = int(absorption_delay_units or 0)
 
@@ -736,6 +791,7 @@ def flamo_to_pr(
         feedback_inv_probe=fb_inv_probe,
         number_of_matrix_delays=fb_delay_units_i,
         number_of_delay_units=int(np.sum(delays_arr) + fwd_delay_units_i + fb_delay_units_i),
+        characteristic_probe=recursion_characteristic_probe,
     )
 
     n_poles = int(loop.number_of_delay_units)

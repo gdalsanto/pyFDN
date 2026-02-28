@@ -96,6 +96,7 @@ __all__ = [
     "attach_autograd_probe",
     "has_flamo_native_probe",
     "probe_flamo_runtime",
+    "probe_flamo_recursion_runtime",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -205,6 +206,7 @@ from .auxiliary.flamo_autograd_probe import (
 from .auxiliary.flamo_runtime_probe import (
     has_flamo_native_probe,
     probe_flamo_runtime,
+    probe_flamo_recursion_runtime,
 )
 
 from .auxiliary.allpass import (
