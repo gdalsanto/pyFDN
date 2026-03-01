@@ -16,25 +16,28 @@ from pyFDN.translate.dss_to_flamo import dss_to_flamo
 
 
 class _IdentityProbe:
-    """Constant identity matrix probe used for empty module chains."""
+    """Constant identity matrix probe used for empty module chains. Returns torch."""
 
-    def __init__(self, size: int):
+    def __init__(self, size: int, *, device: torch.device | None = None, dtype: torch.dtype | None = None):
         self.size = int(size)
         self.output_channels = self.size
         self.input_channels = self.size
-        self._eye = np.eye(self.size, dtype=np.complex128)
+        self._device = device or torch.device("cpu")
+        self._dtype = dtype or torch.complex128
+        self._eye = torch.eye(self.size, device=self._device, dtype=self._dtype)
+        self._zero = torch.zeros(self.size, self.size, device=self._device, dtype=self._dtype)
 
-    def at_z(self, z: complex) -> np.ndarray:
+    def at_z(self, z: complex) -> torch.Tensor:
         return self._eye
 
-    def at_w(self, w: complex) -> np.ndarray:
+    def at_w(self, w: complex) -> torch.Tensor:
         return self._eye
 
-    def at(self, z: complex) -> np.ndarray:
+    def at(self, z: complex) -> torch.Tensor:
         return self.at_z(z)
 
-    def der(self, z: complex) -> np.ndarray:
-        return np.zeros_like(self._eye)
+    def der(self, z: complex) -> torch.Tensor:
+        return self._zero
 
 
 def _infer_model_device(model: Any) -> torch.device:
@@ -63,17 +66,40 @@ def _as_torch_complex_scalar(z: complex, *, model: Any) -> torch.Tensor:
     )
 
 
+def _to_numpy(t: torch.Tensor | np.ndarray) -> np.ndarray:
+    """Convert tensor to numpy; safe for conjugate bit. Pass-through for ndarray."""
+    if isinstance(t, np.ndarray):
+        return t
+    return t.detach().cpu().resolve_conj().numpy()
+
+
+def _device_dtype_from_decomposition(decomposition: Any) -> tuple[torch.device, torch.dtype]:
+    """Infer device and complex dtype from decomposition's P probe (recursion)."""
+    rec = getattr(decomposition.p_probe, "recursion", None)
+    if rec is None:
+        return torch.device("cpu"), torch.complex128
+    return _infer_model_device(rec), _infer_model_complex_dtype(rec)
+
+
+def _sort_by_torch(a: torch.Tensor, key: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Sort tensor a by key (by angle for complex); return (a_sorted, indices)."""
+    key_np = _to_numpy(key)
+    ind = np.argsort(key_np)
+    ind_t = torch.as_tensor(ind, device=a.device, dtype=torch.long)
+    return a[ind_t], ind_t
+
+
 class _FlamoGraphProbe:
-    """Probe adapter for FLAMO graph objects via probe(z) / probe_w(w)."""
+    """Probe adapter for FLAMO graph objects via probe(z) / probe_w(w). Returns torch."""
 
     def __init__(self, model: Any):
         self.model = model
-        h0 = np.asarray(self.at_z(1.0 + 0j), dtype=np.complex128)
+        h0 = self.at_z(1.0 + 0j)
         if h0.ndim != 2:
             raise ValueError(f"Graph probe at scalar z must be 2-D, got {h0.shape}")
         self.output_channels, self.input_channels = h0.shape
 
-    def at_z(self, z: complex) -> np.ndarray:
+    def at_z(self, z: complex) -> torch.Tensor:
         """H(z) via FLAMO model.probe(z)."""
         z_t = _as_torch_complex_scalar(z, model=self.model)
         out = self.model.probe(z_t)
@@ -81,9 +107,9 @@ class _FlamoGraphProbe:
             if len(out) == 0:
                 raise RuntimeError("model.probe returned empty tuple")
             out = out[0]
-        return np.asarray(out.detach().cpu().numpy(), dtype=np.complex128)
+        return out.detach()
 
-    def at_w(self, w: complex) -> np.ndarray:
+    def at_w(self, w: complex) -> torch.Tensor:
         """H(1/w) via FLAMO model.probe_w(w) when available, else at_z(1/w)."""
         probe_w_fn = getattr(self.model, "probe_w", None)
         if callable(probe_w_fn):
@@ -91,14 +117,14 @@ class _FlamoGraphProbe:
             out = probe_w_fn(w_t)
             if isinstance(out, tuple) and out:
                 out = out[0]
-            return np.asarray(out.detach().cpu().numpy(), dtype=np.complex128)
+            return out.detach()
         return self.at_z(1.0 / w)
 
-    def at(self, z: complex) -> np.ndarray:
+    def at(self, z: complex) -> torch.Tensor:
         """Backward-compatible alias for at_z(z)."""
         return self.at_z(z)
 
-    def der(self, z: complex) -> np.ndarray:
+    def der(self, z: complex) -> torch.Tensor:
         z_t = _as_torch_complex_scalar(z, model=self.model)
         if callable(getattr(self.model, "probe_with_derivative", None)):
             out = self.model.probe_with_derivative(z_t)
@@ -109,20 +135,20 @@ class _FlamoGraphProbe:
                 "FLAMO model must expose derivative probe support "
                 "(probe_with_derivative or probe(..., derivative=True))."
             )
-        return np.asarray(out[1].detach().cpu().numpy(), dtype=np.complex128)
+        return out[1].detach()
 
 
 class _FlamoRecursionCharacteristicProbe:
-    """Probe adapter for Recursion.probe_recursion(z) / probe_recursion_w(w) = P."""
+    """Probe adapter for Recursion.probe_recursion(z) / probe_recursion_w(w) = P. Returns torch."""
 
     def __init__(self, recursion: Any):
         self.recursion = recursion
-        p0 = np.asarray(self.at_z(1.0 + 0j), dtype=np.complex128)
+        p0 = self.at_z(1.0 + 0j)
         if p0.ndim != 2:
             raise ValueError(f"Recursion characteristic probe must be 2-D, got {p0.shape}")
         self.output_channels, self.input_channels = p0.shape
 
-    def at_z(self, z: complex) -> np.ndarray:
+    def at_z(self, z: complex) -> torch.Tensor:
         """P(z) via FLAMO Recursion.probe_recursion(z)."""
         z_t = _as_torch_complex_scalar(z, model=self.recursion)
         out = self.recursion.probe_recursion(z_t)
@@ -130,22 +156,24 @@ class _FlamoRecursionCharacteristicProbe:
             if len(out) == 0:
                 raise RuntimeError("probe_recursion returned empty tuple")
             out = out[0]
-        return np.asarray(out.detach().cpu().numpy(), dtype=np.complex128)
+        return out.detach()
 
-    def at_w(self, w: complex) -> np.ndarray:
+    def at_w(self, w: complex) -> torch.Tensor:
         """P(w) = P(1/z) via FLAMO Recursion.probe_recursion_w(w)."""
         if np.abs(w) < 1e-14:
             n = self.output_channels
-            return np.full((n, n), np.inf + 0j, dtype=np.complex128)
+            dev = _infer_model_device(self.recursion)
+            dtype = _infer_model_complex_dtype(self.recursion)
+            return torch.full((n, n), float("inf"), device=dev, dtype=dtype)
         w_t = _as_torch_complex_scalar(w, model=self.recursion)
         out = self.recursion.probe_recursion_w(w_t)
-        return np.asarray(out.detach().cpu().numpy(), dtype=np.complex128)
+        return out.detach()
 
-    def at(self, z: complex) -> np.ndarray:
+    def at(self, z: complex) -> torch.Tensor:
         """Backward-compatible alias for at_z(z)."""
         return self.at_z(z)
 
-    def der(self, z: complex) -> np.ndarray:
+    def der(self, z: complex) -> torch.Tensor:
         z_t = _as_torch_complex_scalar(z, model=self.recursion)
         if callable(getattr(self.recursion, "probe_recursion_with_derivative", None)):
             out = self.recursion.probe_recursion_with_derivative(z_t)
@@ -156,19 +184,17 @@ class _FlamoRecursionCharacteristicProbe:
                 "Recursion must expose derivative characteristic probe support "
                 "(probe_recursion_with_derivative or probe_recursion(..., derivative=True))."
             )
-        return np.asarray(out[1].detach().cpu().numpy(), dtype=np.complex128)
+        return out[1].detach()
 
-    def log_det_derivative(self, z: complex) -> complex:
+    def log_det_derivative(self, z: complex) -> torch.Tensor:
         """(d/dz) log det P(z) via FLAMO Recursion.log_det_derivative(z)."""
         z_t = _as_torch_complex_scalar(z, model=self.recursion)
-        out = self.recursion.log_det_derivative(z_t)
-        return complex(out.detach().cpu().numpy())
+        return self.recursion.log_det_derivative(z_t).detach()
 
-    def log_det_derivative_w(self, w: complex) -> complex:
+    def log_det_derivative_w(self, w: complex) -> torch.Tensor:
         """(d/dw) log det P(w) at w=z^{-1} via FLAMO Recursion.log_det_derivative_w(w)."""
         w_t = _as_torch_complex_scalar(w, model=self.recursion)
-        out = self.recursion.log_det_derivative_w(w_t)
-        return complex(out.detach().cpu().numpy())
+        return self.recursion.log_det_derivative_w(w_t).detach()
 
 
 @dataclass
@@ -301,10 +327,16 @@ def _delays_from_recursion(recursion_module: Any) -> np.ndarray:
     return np.asarray(np.round(out), dtype=int)
 
 
-def _subgraph_to_probe(subgraph: Any | None, *, identity_dim: int) -> Any:
-    """Wrap a FLAMO subgraph (or None) as a probe with .at_z(z) / .at_w(w) -> ndarray."""
+def _subgraph_to_probe(
+    subgraph: Any | None,
+    *,
+    identity_dim: int,
+    device: torch.device | None = None,
+    dtype: torch.dtype | None = None,
+) -> Any:
+    """Wrap a FLAMO subgraph (or None) as a probe with .at_z(z) / .at_w(w) -> torch."""
     if subgraph is None:
-        return _IdentityProbe(identity_dim)
+        return _IdentityProbe(identity_dim, device=device, dtype=dtype)
     return _FlamoGraphProbe(subgraph)
 
 
@@ -314,10 +346,16 @@ def _extract_flamo_recursion_probes(
     """Build characteristic decomposition from pre-decomposed FLAMO subgraphs."""
     n = int(decomposition.delays.size)
     rec = decomposition.recursion_module
+    device = _infer_model_device(rec)
+    dtype = _infer_model_complex_dtype(rec)
 
     f_probe = _FlamoGraphProbe(decomposition.f_subgraph)
-    in_probe = _subgraph_to_probe(decomposition.in_subgraph, identity_dim=n)
-    out_probe = _subgraph_to_probe(decomposition.out_subgraph, identity_dim=n)
+    in_probe = _subgraph_to_probe(
+        decomposition.in_subgraph, identity_dim=n, device=device, dtype=dtype
+    )
+    out_probe = _subgraph_to_probe(
+        decomposition.out_subgraph, identity_dim=n, device=device, dtype=dtype
+    )
     direct_probe = _FlamoGraphProbe(decomposition.direct_subgraph)
 
     characteristic_probe = _FlamoRecursionCharacteristicProbe(rec)
@@ -354,6 +392,19 @@ def _rcond(mat: np.ndarray) -> float:
     return float(1.0 / cond)
 
 
+def _rcond_torch(mat: torch.Tensor) -> float:
+    """Reciprocal condition number for torch (complex) matrix."""
+    try:
+        m = mat.resolve_conj()
+        cond = torch.linalg.cond(m)
+    except Exception:
+        return 0.0
+    c = float(cond.cpu().numpy())
+    if not np.isfinite(c) or c == 0:
+        return 0.0
+    return float(1.0 / c)
+
+
 @dataclass
 class _FDNLoopFlamo:
     characteristic_probe: Any
@@ -368,161 +419,181 @@ class _FDNLoopFlamo:
             )
         self.n = out_ch
 
-    def at_z(self, z: complex) -> np.ndarray:
+    def at_z(self, z: complex) -> torch.Tensor:
         """P(z) via FLAMO characteristic probe (Recursion.probe_recursion(z))."""
-        return np.asarray(self.characteristic_probe.at_z(z), dtype=np.complex128)
+        return self.characteristic_probe.at_z(z)
 
-    def at_w(self, w: complex) -> np.ndarray:
+    def at_w(self, w: complex) -> torch.Tensor:
         """P(w) = P(1/z) via FLAMO probe_recursion_w(w)."""
-        return np.asarray(self.characteristic_probe.at_w(w), dtype=np.complex128)
+        return self.characteristic_probe.at_w(w)
 
-    def der(self, z: complex) -> np.ndarray:
-        return np.asarray(self.characteristic_probe.der(z), dtype=np.complex128)
+    def der(self, z: complex) -> torch.Tensor:
+        return self.characteristic_probe.der(z)
 
-    def log_det_derivative_z(self, z: complex) -> complex:
+    def log_det_derivative_z(self, z: complex) -> torch.Tensor:
         """Return (d/dz) log det P(z) via FLAMO log_det_derivative(z)."""
-        out = self.characteristic_probe.log_det_derivative(z)
-        return complex(out)
+        return self.characteristic_probe.log_det_derivative(z)
 
-    def log_det_derivative_w(self, w: complex) -> complex:
+    def log_det_derivative_w(self, w: complex) -> torch.Tensor:
         """Return (d/dw) log det P(1/w) via FLAMO log_det_derivative_w(w)."""
-        out = self.characteristic_probe.log_det_derivative_w(w)
-        return complex(out)
+        return self.characteristic_probe.log_det_derivative_w(w)
 
-    def inverse_newton_step(self, z: complex, *, use_w_plane_for_small_z: bool = True) -> complex:
+    def inverse_newton_step(self, z: complex, *, use_w_plane_for_small_z: bool = True) -> torch.Tensor:
         """Backwards-compatible alias for z-domain Newton term."""
         return self.log_det_derivative_z(z)
 
-    def inverse_newton_step_w(self, w: complex) -> complex:
+    def inverse_newton_step_w(self, w: complex) -> torch.Tensor:
         """Newton term directly in w-domain."""
         return self.log_det_derivative_w(w)
 
 
-def _pole_quality_z(poles_z: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
-    """Pole quality in z-domain: rcond(P(z)) for each pole z."""
-    quality = np.zeros_like(poles_z, dtype=np.float64)
-    for i, z in enumerate(np.asarray(poles_z, dtype=np.complex128).ravel()):
+def _pole_quality_z(
+    poles_z: torch.Tensor,
+    loop: _FDNLoopFlamo,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Pole quality in z-domain: rcond(P(z)) for each pole z. Returns torch tensor."""
+    poles_flat = poles_z.ravel()
+    n = poles_flat.shape[0]
+    quality = torch.zeros(n, device=device, dtype=torch.float64)
+    for i in range(n):
+        z = poles_flat[i].item()
         m = loop.at_z(z)
-        if np.ndim(m) == 0:
-            q = float(np.abs(m))
+        if m.ndim == 0:
+            q = m.abs().item()
         else:
-            m = np.asarray(m, dtype=np.complex128)
-            q = _rcond(m)
-        
-        if np.all(np.isfinite(m)) and np.max(np.abs(m)) > 1e10:
+            q = _rcond_torch(m)
+        if torch.isfinite(m).all() and m.abs().max().item() > 1e10:
             q = 1e10
         quality[i] = q
     return quality
 
 
-def _pole_quality_w(roots_w: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
+def _pole_quality_w(
+    roots_w: torch.Tensor,
+    loop: _FDNLoopFlamo,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
     """
     Pole quality for roots w: rcond(P(1/w)).
-    Uses z-domain (P(z) at z=1/w) when |w| > 1 for numerical stability;
-    otherwise uses w-domain probing (handles small |w| via loop.at_w).
+    Uses z-domain when |w| > 1; else w-domain. Returns torch tensor.
     """
-    roots_w = np.asarray(roots_w, dtype=np.complex128).ravel()
-    quality = np.zeros_like(roots_w, dtype=np.float64)
-    for i, w in enumerate(roots_w):
-        if np.abs(w) > 1:
+    roots_flat = roots_w.ravel()
+    n = roots_flat.shape[0]
+    quality = torch.zeros(n, device=device, dtype=torch.float64)
+    for i in range(n):
+        w = roots_flat[i].item()
+        if abs(w) > 1:
             z = 1.0 / w
-            q = _pole_quality_z(np.array([z]), loop)[0]
+            q = _pole_quality_z(
+                torch.tensor([z], device=device, dtype=dtype), loop, device, dtype
+            )[0].item()
         else:
             m = loop.at_w(w)
-            if np.ndim(m) == 0:
-                q = float(np.abs(m))
+            if m.ndim == 0:
+                q = m.abs().item()
             else:
-                m = np.asarray(m, dtype=np.complex128)
-                q = _rcond(m)
-                if np.all(np.isfinite(m)) and np.max(np.abs(m)) > 1e10:
-                    q = 1e10
+                q = _rcond_torch(m)
+            if torch.isfinite(m).all() and m.abs().max().item() > 1e10:
+                q = 1e10
         quality[i] = q
     return quality
 
 
-def _sort_by(a: np.ndarray, key: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    ind = np.argsort(key)
-    return a[ind], ind
-
-
 def _compute_deflation(
     it: int,
-    poles: np.ndarray,
-    inv_newton_step: complex,
+    roots_w: torch.Tensor,
+    inv_newton_step: torch.Tensor,
     *,
     deflation_type: str,
     number_of_neighbors: int,
     deflation_max_error: float,
     steps: int,
-) -> tuple[complex, bool]:
-    pole = poles[it]
+    device: torch.device,
+    dtype: torch.dtype,
+) -> tuple[torch.Tensor, bool]:
+    """Deflation term in w-domain. All torch; returns (deflation scalar tensor, is_exact)."""
+    pole = roots_w[it]
+    n_poles = roots_w.shape[0]
+    # Large value so 1/(self-distance) ≈ 0 in deflation sum
+    huge = 1.0 / np.finfo(float).eps
+    huge_t = torch.tensor(huge + 0.0j, device=device, dtype=dtype)
+
     if deflation_type == "fullDeflation":
-        neighbor_distance = pole - poles
-        neighbor_distance[it] = 1.0 / np.finfo(float).eps
-        return np.sum(1.0 / neighbor_distance), True
+        neighbor_distance = pole - roots_w
+        neighbor_distance = neighbor_distance.clone()
+        neighbor_distance[it] = huge_t
+        deflation = (1.0 / neighbor_distance).sum()
+        return deflation, True
     if deflation_type == "noDeflation":
-        return 0.0 + 0.0j, False
+        return torch.tensor(0.0 + 0.0j, device=device, dtype=dtype), False
     if deflation_type != "neighborDeflation":
         raise ValueError(f"Unknown deflation type: {deflation_type}")
 
-    # Compute neighbor deflation.
-    n_poles = poles.size
-    if steps == 1: # First iteration, no neighbors.
-        neighbor_deflation = 0.0 + 0.0j
+    if steps == 1:
+        neighbor_deflation = torch.tensor(0.0 + 0.0j, device=device, dtype=dtype)
         factor_nonneighbor = (n_poles - 1) / 2.0
     else:
         n_neigh = int(max(0, min(number_of_neighbors, n_poles - 1)))
         if n_neigh % 2 != 0:
             n_neigh -= 1
         if n_neigh <= 0:
-            neighbor_deflation = 0.0 + 0.0j
+            neighbor_deflation = torch.tensor(0.0 + 0.0j, device=device, dtype=dtype)
             factor_nonneighbor = (n_poles - 1) / 2.0
         else:
             offsets = np.concatenate(
                 [np.arange(-n_neigh // 2, 0), np.arange(1, n_neigh // 2 + 1)]
             )
             idx = (it + offsets) % n_poles
-            neighbor_deflation = np.sum(1.0 / (pole - poles[idx]))
+            idx_t = torch.as_tensor(idx, device=roots_w.device, dtype=torch.long)
+            neighbor_deflation = (1.0 / (pole - roots_w[idx_t])).sum()
             factor_nonneighbor = (n_poles - n_neigh - 1) / 2.0
 
-    equi_deflation = np.conj(pole) * factor_nonneighbor
+    equi_deflation = pole.conj() * factor_nonneighbor
     deflation = neighbor_deflation + equi_deflation
-    if steps != 1 and np.abs(inv_newton_step - deflation) < deflation_max_error:
+    if steps != 1 and (inv_newton_step - deflation).abs().item() < deflation_max_error:
         return _compute_deflation(
             it,
-            poles,
+            roots_w,
             inv_newton_step,
             deflation_type="fullDeflation",
             number_of_neighbors=number_of_neighbors,
             deflation_max_error=deflation_max_error,
             steps=steps,
+            device=device,
+            dtype=dtype,
         )
     return deflation, False
 
 
 def _refine_pole_positions_w(
-    roots_w: np.ndarray,
+    roots_w: torch.Tensor,
     loop: _FDNLoopFlamo,
     *,
+    device: torch.device,
+    dtype: torch.dtype,
     quality_threshold: float,
     maximum_iterations: int,
     deflation_type: str,
     verbose: bool,
     refinement_tol: float | None = None,
-) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
-    roots_w = np.asarray(roots_w, dtype=np.complex128).ravel()
-    roots_w, _ = _sort_by(roots_w, np.angle(roots_w))
-    n_poles = roots_w.size
+) -> tuple[torch.Tensor, torch.Tensor, dict[str, Any]]:
+    """Refine roots in w-domain. All state in torch; returns (roots_w, quality, meta)."""
+    roots_w = roots_w.ravel().clone()
+    roots_w, _ = _sort_by_torch(roots_w, torch.angle(roots_w))
+    n_poles = roots_w.shape[0]
 
     newton_step_counter = 0
     exact_counter = 0
-    record_roots_w: list[np.ndarray] = [roots_w.copy()]
+    record_roots_w: list[torch.Tensor] = [roots_w.clone()]
 
     number_of_neighbors = int(round(n_poles / 100.0 / 2.0) * 2.0)
     deflation_max_error = 1000.0
 
-    quality = _pole_quality_w(roots_w, loop)
-    quality_last = quality.copy()
+    quality = _pole_quality_w(roots_w, loop, device, dtype)
+    quality_last = quality.clone()
     current_deflation = deflation_type
 
     if verbose:
@@ -531,35 +602,43 @@ def _refine_pole_positions_w(
             f"{maximum_iterations} iterations"
         )
 
-
     for iteration_counter in range(1, maximum_iterations + 1):
         if current_deflation == "neighborDeflation":
-            roots_w, sort_ind = _sort_by(roots_w, np.angle(roots_w))
+            roots_w, sort_ind = _sort_by_torch(roots_w, torch.angle(roots_w))
             quality = quality[sort_ind]
             quality_last = quality_last[sort_ind]
 
-        roots_w_old = roots_w.copy()
-        non_converged = np.where(quality > quality_threshold)[0]
+        roots_w_old = roots_w.clone()
+        non_converged = (quality > quality_threshold).nonzero(as_tuple=True)[0]
 
-        # If fewer than 10% of poles are non-converged, switch to full deflation.
-        if non_converged.size < n_poles / 10.0:
+        if non_converged.numel() < n_poles / 10.0:
             current_deflation = "fullDeflation"
 
-        # Iterate over non-converged poles.
-        for it in non_converged:
+        for idx in range(non_converged.numel()):
+            it = int(non_converged[idx].item())
             if quality[it] <= quality_threshold:
                 continue
             if quality[it] > 10000.0:
-                # If pole quality is too bad, set it to a random value on the unit circle.
-                roots_w[it] = np.exp(1j * np.random.uniform(0, 2 * np.pi))
-                quality[it] = _pole_quality_w(np.array([roots_w[it]]), loop)[0]
+                new_w = torch.tensor(
+                    np.exp(1j * np.random.uniform(0, 2 * np.pi)),
+                    device=device,
+                    dtype=dtype,
+                )
+                roots_w = roots_w.clone()
+                roots_w[it] = new_w
+                q_new = _pole_quality_w(roots_w[it : it + 1], loop, device, dtype)[0]
+                quality = quality.clone()
+                quality[it] = q_new
                 if verbose:
-                    print(f"Pole {it} was at {roots_w_old[it]:.3f} and set to random value on unit circle: {roots_w[it]:.3f}")
-            
-            # Compute Newton step and deflation.
+                    print(
+                        f"Pole {it} was at {roots_w_old[it].item():.3f} and set to random "
+                        f"value on unit circle: {roots_w[it].item():.3f}"
+                    )
+                continue
+
             newton_step_counter += 1
-            w_i = roots_w[it]
-            inv_newton_w = loop.inverse_newton_step_w(w_i)
+            w_i = roots_w[it].item()
+            inv_newton_w = loop.inverse_newton_step_w(w_i).resolve_conj()
             deflation, is_exact = _compute_deflation(
                 it,
                 roots_w,
@@ -568,51 +647,59 @@ def _refine_pole_positions_w(
                 number_of_neighbors=number_of_neighbors,
                 deflation_max_error=deflation_max_error,
                 steps=iteration_counter,
+                device=device,
+                dtype=dtype,
             )
             denom = inv_newton_w - deflation
-            if not np.isfinite(denom) or np.abs(denom) < 1e-20:
+            denom_val = denom.abs().item()
+            if not torch.isfinite(denom).all() or denom_val < 1e-20:
                 continue
-            roots_w[it] = w_i - 1.0 / denom
-            quality[it] = _pole_quality_w(np.array([roots_w[it]]), loop)[0]
+            new_val = roots_w[it] - 1.0 / denom
+            roots_w = roots_w.clone()
+            roots_w[it] = new_val
+            q_new = _pole_quality_w(roots_w[it : it + 1], loop, device, dtype)[0]
+            quality = quality.clone()
+            quality[it] = q_new
             exact_counter += int(is_exact)
 
         if verbose:
-            record_roots_w.append(roots_w.copy())
+            record_roots_w.append(roots_w.clone())
 
         if refinement_tol is not None:
-            max_step = float(np.max(np.abs(roots_w - roots_w_old)))
+            max_step = (roots_w - roots_w_old).abs().max().item()
             if max_step < refinement_tol:
                 if verbose:
                     print(f"Converged (max |Δw| = {max_step:.3e} < {refinement_tol})")
                 break
         else:
-            max_improvement = float(np.abs(np.max(quality_last - quality)))
+            max_improvement = (quality_last - quality).abs().max().item()
             if max_improvement < quality_threshold:
                 if verbose:
                     print("No further improvement possible")
                 break
         if verbose:
-            max_improvement = float(np.abs(np.max(quality_last - quality)))
+            max_improvement = (quality_last - quality).abs().max().item()
+            n_nc = non_converged.numel()
             print(
                 f"Iter: {iteration_counter}, "
                 f"Max Improvement: {max_improvement:.3e}, "
-                f"Worst Pole Quality: {np.max(quality):.3e}, "
-                f"Number of Non-converged Poles: {non_converged.size}"
+                f"Worst Pole Quality: {quality.max().item():.3e}, "
+                f"Number of Non-converged Poles: {n_nc}"
             )
-        quality_last = quality.copy()
+        quality_last = quality.clone()
 
     if verbose:
         print(f"Number of Exact Deflations: {exact_counter}")
         print(f"Number of Newton Steps: {newton_step_counter}")
         print(f"Number of Poles: {n_poles}")
-        print(f"Number of Non-converged Poles: {non_converged.size}")
+        print(f"Number of Non-converged Poles: {(quality > quality_threshold).sum().item()}")
     meta = {
         "newtonStepCounter": int(newton_step_counter),
         "iterations": int(iteration_counter),
         "exactCounter": int(exact_counter),
         "recordNeighborDeflation": [],
         "recordNewton": [],
-        "recordRootsW": np.asarray(record_roots_w, dtype=np.complex128),
+        "recordRootsW": np.asarray([_to_numpy(r) for r in record_roots_w], dtype=np.complex128),
     }
     return roots_w, quality, meta
 
@@ -620,58 +707,64 @@ def _refine_pole_positions_w(
 def _dss_to_res_flamo(
     poles: np.ndarray,
     loop: _FDNLoopFlamo,
-    decomposition: _CharacteristicDecomposition,
+    decomposition: Any,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, np.ndarray]]:
+    """Residues from poles; internal math in torch, convert to numpy at end."""
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     n_poles = poles.size
     n_in = int(getattr(decomposition.in_probe, "input_channels"))
     n_out = int(getattr(decomposition.out_probe, "output_channels"))
     n = loop.n
 
-    r_den = np.zeros(n_poles, dtype=np.complex128)
-    r_nom = np.zeros((n_poles, n_out, n_in), dtype=np.complex128)
-    eig_right = np.zeros((n, n_poles), dtype=np.complex128)
-    eig_left = np.zeros((n, n_poles), dtype=np.complex128)
+    # Infer device/dtype from first probe call
+    p0 = decomposition.p_probe.at(poles[0])
+    device = p0.device
+    dtype = p0.dtype
+
+    r_den = torch.zeros(n_poles, device=device, dtype=dtype)
+    r_nom = torch.zeros((n_poles, n_out, n_in), device=device, dtype=dtype)
+    eig_right = torch.zeros((n, n_poles), device=device, dtype=dtype)
+    eig_left = torch.zeros((n, n_poles), device=device, dtype=dtype)
 
     for it, pole in enumerate(poles):
-        p = np.asarray(decomposition.p_probe.at(pole), dtype=np.complex128)
-        dp = np.asarray(decomposition.p_probe.der(pole), dtype=np.complex128)
-        f_at = np.asarray(decomposition.f_probe.at(pole), dtype=np.complex128)
-        in_at = np.asarray(decomposition.in_probe.at(pole), dtype=np.complex128)
+        p = decomposition.p_probe.at(pole)
+        dp = decomposition.p_probe.der(pole)
+        f_at = decomposition.f_probe.at(pole)
+        in_at = decomposition.in_probe.at(pole)
         b = f_at @ in_at
-        c = np.asarray(decomposition.out_probe.at(pole), dtype=np.complex128)
+        c = decomposition.out_probe.at(pole)
 
-        # Null vectors for simple poles:
-        # P(lambda) r = 0,  l^H P(lambda) = 0
-        u, s, vh = np.linalg.svd(p, full_matrices=False)
+        u, s, vh = torch.linalg.svd(p)
         r = vh.conj().T[:, -1]
         l = u[:, -1]
 
-        denom = np.vdot(l, dp @ r)  # l^H (dP/dz) r
+        denom = torch.vdot(l, (dp @ r).ravel())  # l^H (dP/dz) r
         r_den[it] = denom
         eig_right[:, it] = r
         eig_left[:, it] = l
 
         cr = c @ r.reshape(-1, 1)
-        lh_b = np.conj(l).reshape(1, -1) @ b
+        lh_b = l.conj().reshape(1, -1) @ b
         r_nom[it, :, :] = cr @ lh_b
 
     with np.errstate(divide="ignore", invalid="ignore"):
         undriven = 1.0 / r_den
-    is_multiple = ~np.isfinite(undriven)
-    if np.any(is_multiple):
+    is_multiple = ~torch.isfinite(undriven)
+    if is_multiple.any():
         warnings.warn("There are multipoles. The residues are set to zero.", stacklevel=2)
-        undriven[is_multiple] = 0.0
-        r_den[is_multiple] = np.inf
+        undriven = torch.where(is_multiple, torch.zeros_like(undriven), undriven)
 
-    with np.errstate(divide="ignore", invalid="ignore"):
-        residues = r_nom / r_den[:, None, None]
-    residues = np.where(np.isfinite(residues), residues, 0.0)
-    direct_term = np.asarray(
-        decomposition.direct_probe.at(1.0 + 0j), dtype=np.complex128
+    residues = r_nom / r_den[:, None, None]
+    zero = torch.tensor(0.0 + 0.0j, device=device, dtype=dtype)
+    residues = torch.where(torch.isfinite(residues), residues, zero)
+    direct_term = decomposition.direct_probe.at(1.0 + 0j)
+
+    return (
+        _to_numpy(residues),
+        _to_numpy(direct_term),
+        _to_numpy(undriven),
+        {"right": _to_numpy(eig_right), "left": _to_numpy(eig_left)},
     )
-    eigenvectors = {"right": eig_right, "left": eig_left}
-    return residues, direct_term, undriven, eigenvectors
 
 
 def flamo_to_pr(
@@ -702,18 +795,23 @@ def flamo_to_pr(
     decomposition_obj = _extract_flamo_recursion_probes(decomposition)
 
     loop = _FDNLoopFlamo(characteristic_probe=decomposition_obj.p_probe)
+    device, dtype = _device_dtype_from_decomposition(decomposition_obj)
 
     n_poles = int(np.sum(delays_arr))
 
-    # n_poles = n_poles
-
-    # Initialize on unit circle in w-domain and refine there.
+    # Initialize on unit circle in w-domain (torch), refine in torch
     root_angles = np.linspace(0.0, 2.0 * np.pi, n_poles, endpoint=False)
-    roots_w = np.exp(1j * root_angles)
+    roots_w = torch.tensor(
+        np.exp(1j * root_angles).astype(np.complex128),
+        device=device,
+        dtype=dtype,
+    )
 
     roots_w, quality, meta_refine = _refine_pole_positions_w(
         roots_w,
         loop,
+        device=device,
+        dtype=dtype,
         quality_threshold=float(quality_threshold),
         maximum_iterations=int(maximum_iterations),
         deflation_type=str(deflation_type),
@@ -722,12 +820,10 @@ def flamo_to_pr(
     )
 
     meta_data: dict[str, Any] = dict(meta_refine)
-    refined_roots_w = roots_w.copy()
-    meta_data["refinedRootsW"] = refined_roots_w
-    
-    is_stable = np.abs(roots_w) >= 1.0
+    meta_data["refinedRootsW"] = _to_numpy(roots_w)
+
+    is_stable = roots_w.abs() >= 1.0
     is_converged = quality < float(quality_threshold) * 1000.0
-    
     if reject_unstable_poles:
         is_valid = is_stable & is_converged
     else:
@@ -736,13 +832,14 @@ def flamo_to_pr(
     quality = quality[is_valid]
 
     if verbose:
-        print(f"Number of Stable Poles: {np.sum(is_stable)}")
-        print(f"Number of Converged Poles: {np.sum(is_converged)}")
-        print(f"Number of Valid Poles: {np.sum(is_valid)}")
+        print(f"Number of Stable Poles: {is_stable.sum().item()}")
+        print(f"Number of Converged Poles: {is_converged.sum().item()}")
+        print(f"Number of Valid Poles: {is_valid.sum().item()}")
 
-    poles = 1.0 / roots_w
-
-    poles, is_conjugate, non_paired = reduce_conjugate_pairs(poles, verbose=verbose)
+    poles_torch = 1.0 / roots_w
+    # Convert to numpy only for scipy.optimize.linear_sum_assignment in reduce_conjugate_pairs
+    poles_np = _to_numpy(poles_torch)
+    poles, is_conjugate, non_paired = reduce_conjugate_pairs(poles_np, verbose=verbose)
     meta_data["nonPairedPoles"] = non_paired
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(
