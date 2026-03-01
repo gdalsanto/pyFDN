@@ -24,8 +24,14 @@ class _IdentityProbe:
         self.input_channels = self.size
         self._eye = np.eye(self.size, dtype=np.complex128)
 
-    def at(self, z: complex) -> np.ndarray:
+    def at_z(self, z: complex) -> np.ndarray:
         return self._eye
+
+    def at_w(self, w: complex) -> np.ndarray:
+        return self._eye
+
+    def at(self, z: complex) -> np.ndarray:
+        return self.at_z(z)
 
     def der(self, z: complex) -> np.ndarray:
         return np.zeros_like(self._eye)
@@ -58,16 +64,17 @@ def _as_torch_complex_scalar(z: complex, *, model: Any) -> torch.Tensor:
 
 
 class _FlamoGraphProbe:
-    """Probe adapter for FLAMO graph objects via autograd probing."""
+    """Probe adapter for FLAMO graph objects via probe(z) / probe_w(w)."""
 
     def __init__(self, model: Any):
         self.model = model
-        h0 = np.asarray(self.at(1.0 + 0j), dtype=np.complex128)
+        h0 = np.asarray(self.at_z(1.0 + 0j), dtype=np.complex128)
         if h0.ndim != 2:
             raise ValueError(f"Graph probe at scalar z must be 2-D, got {h0.shape}")
         self.output_channels, self.input_channels = h0.shape
 
-    def at(self, z: complex) -> np.ndarray:
+    def at_z(self, z: complex) -> np.ndarray:
+        """H(z) via FLAMO model.probe(z)."""
         z_t = _as_torch_complex_scalar(z, model=self.model)
         out = self.model.probe(z_t)
         if isinstance(out, tuple):
@@ -75,6 +82,21 @@ class _FlamoGraphProbe:
                 raise RuntimeError("model.probe returned empty tuple")
             out = out[0]
         return np.asarray(out.detach().cpu().numpy(), dtype=np.complex128)
+
+    def at_w(self, w: complex) -> np.ndarray:
+        """H(1/w) via FLAMO model.probe_w(w) when available, else at_z(1/w)."""
+        probe_w_fn = getattr(self.model, "probe_w", None)
+        if callable(probe_w_fn):
+            w_t = _as_torch_complex_scalar(w, model=self.model)
+            out = probe_w_fn(w_t)
+            if isinstance(out, tuple) and out:
+                out = out[0]
+            return np.asarray(out.detach().cpu().numpy(), dtype=np.complex128)
+        return self.at_z(1.0 / w)
+
+    def at(self, z: complex) -> np.ndarray:
+        """Backward-compatible alias for at_z(z)."""
+        return self.at_z(z)
 
     def der(self, z: complex) -> np.ndarray:
         z_t = _as_torch_complex_scalar(z, model=self.model)
@@ -91,16 +113,17 @@ class _FlamoGraphProbe:
 
 
 class _FlamoRecursionCharacteristicProbe:
-    """Probe adapter for Recursion.probe_recursion(z) = I - F(z)B(z)."""
+    """Probe adapter for Recursion.probe_recursion(z) / probe_recursion_w(w) = P."""
 
     def __init__(self, recursion: Any):
         self.recursion = recursion
-        p0 = np.asarray(self.at(1.0 + 0j), dtype=np.complex128)
+        p0 = np.asarray(self.at_z(1.0 + 0j), dtype=np.complex128)
         if p0.ndim != 2:
             raise ValueError(f"Recursion characteristic probe must be 2-D, got {p0.shape}")
         self.output_channels, self.input_channels = p0.shape
 
-    def at(self, z: complex) -> np.ndarray:
+    def at_z(self, z: complex) -> np.ndarray:
+        """P(z) via FLAMO Recursion.probe_recursion(z)."""
         z_t = _as_torch_complex_scalar(z, model=self.recursion)
         out = self.recursion.probe_recursion(z_t)
         if isinstance(out, tuple):
@@ -108,6 +131,19 @@ class _FlamoRecursionCharacteristicProbe:
                 raise RuntimeError("probe_recursion returned empty tuple")
             out = out[0]
         return np.asarray(out.detach().cpu().numpy(), dtype=np.complex128)
+
+    def at_w(self, w: complex) -> np.ndarray:
+        """P(w) = P(1/z) via FLAMO Recursion.probe_recursion_w(w)."""
+        if np.abs(w) < 1e-14:
+            n = self.output_channels
+            return np.full((n, n), np.inf + 0j, dtype=np.complex128)
+        w_t = _as_torch_complex_scalar(w, model=self.recursion)
+        out = self.recursion.probe_recursion_w(w_t)
+        return np.asarray(out.detach().cpu().numpy(), dtype=np.complex128)
+
+    def at(self, z: complex) -> np.ndarray:
+        """Backward-compatible alias for at_z(z)."""
+        return self.at_z(z)
 
     def der(self, z: complex) -> np.ndarray:
         z_t = _as_torch_complex_scalar(z, model=self.recursion)
@@ -123,17 +159,13 @@ class _FlamoRecursionCharacteristicProbe:
         return np.asarray(out[1].detach().cpu().numpy(), dtype=np.complex128)
 
     def log_det_derivative(self, z: complex) -> complex:
-        """(d/dz) log det P(z) via FLAMO native recursion probe when available."""
-        if not callable(getattr(self.recursion, "log_det_derivative", None)):
-            return np.nan + 0j
+        """(d/dz) log det P(z) via FLAMO Recursion.log_det_derivative(z)."""
         z_t = _as_torch_complex_scalar(z, model=self.recursion)
         out = self.recursion.log_det_derivative(z_t)
         return complex(out.detach().cpu().numpy())
 
     def log_det_derivative_w(self, w: complex) -> complex:
-        """(d/dw) log det P(w) at w=z^{-1}, used for stable w-plane refinement."""
-        if not callable(getattr(self.recursion, "log_det_derivative_w", None)):
-            return np.nan + 0j
+        """(d/dw) log det P(w) at w=z^{-1} via FLAMO Recursion.log_det_derivative_w(w)."""
         w_t = _as_torch_complex_scalar(w, model=self.recursion)
         out = self.recursion.log_det_derivative_w(w_t)
         return complex(out.detach().cpu().numpy())
@@ -270,7 +302,7 @@ def _delays_from_recursion(recursion_module: Any) -> np.ndarray:
 
 
 def _subgraph_to_probe(subgraph: Any | None, *, identity_dim: int) -> Any:
-    """Wrap a FLAMO subgraph (or None) as a probe with .at(z) -> ndarray."""
+    """Wrap a FLAMO subgraph (or None) as a probe with .at_z(z) / .at_w(w) -> ndarray."""
     if subgraph is None:
         return _IdentityProbe(identity_dim)
     return _FlamoGraphProbe(subgraph)
@@ -336,61 +368,26 @@ class _FDNLoopFlamo:
             )
         self.n = out_ch
 
-    def at(self, z: complex) -> np.ndarray:
-        return np.asarray(self.characteristic_probe.at(z), dtype=np.complex128)
+    def at_z(self, z: complex) -> np.ndarray:
+        """P(z) via FLAMO characteristic probe (Recursion.probe_recursion(z))."""
+        return np.asarray(self.characteristic_probe.at_z(z), dtype=np.complex128)
 
     def at_w(self, w: complex) -> np.ndarray:
-        """P(1/w) for w-domain probing (z = 1/w)."""
-        if np.abs(w) < 1e-14:
-            return np.full((self.n, self.n), np.inf + 0j, dtype=np.complex128)
-        return self.at(1.0 / w)
+        """P(w) = P(1/z) via FLAMO probe_recursion_w(w)."""
+        return np.asarray(self.characteristic_probe.at_w(w), dtype=np.complex128)
 
     def der(self, z: complex) -> np.ndarray:
         return np.asarray(self.characteristic_probe.der(z), dtype=np.complex128)
 
     def log_det_derivative_z(self, z: complex) -> complex:
-        """Return (d/dz) log det P(z)."""
-        probe = self.characteristic_probe
-        if callable(getattr(probe, "log_det_derivative", None)):
-            try:
-                out = probe.log_det_derivative(z)
-                if np.isfinite(out):
-                    return out
-            except Exception:
-                pass
-        p = self.at(z)
-        dp = self.der(z)
-        try:
-            out = np.trace(np.linalg.solve(p, dp))
-            if np.isfinite(out):
-                return out
-        except np.linalg.LinAlgError:
-            pass
-        return np.inf + 0j
+        """Return (d/dz) log det P(z) via FLAMO log_det_derivative(z)."""
+        out = self.characteristic_probe.log_det_derivative(z)
+        return complex(out)
 
     def log_det_derivative_w(self, w: complex) -> complex:
-        """
-        Return (d/dw) log det P(1/w), i.e. Newton term in w-domain.
-
-        If FLAMO exposes log_det_derivative_w directly we use it; otherwise we
-        convert from z-domain derivative with chain rule:
-            d/dw log det P(1/w) = -(1/w^2) * d/dz log det P(z), z=1/w.
-        """
-        probe = self.characteristic_probe
-        if callable(getattr(probe, "log_det_derivative_w", None)):
-            try:
-                out = probe.log_det_derivative_w(w)
-                if np.isfinite(out):
-                    return out
-            except Exception:
-                pass
-        if np.abs(w) < 1e-14:
-            return np.inf + 0j
-        z = 1.0 / w
-        nz = self.log_det_derivative_z(z)
-        if not np.isfinite(nz):
-            return np.inf + 0j
-        return -(1.0 / (w * w)) * nz
+        """Return (d/dw) log det P(1/w) via FLAMO log_det_derivative_w(w)."""
+        out = self.characteristic_probe.log_det_derivative_w(w)
+        return complex(out)
 
     def inverse_newton_step(self, z: complex, *, use_w_plane_for_small_z: bool = True) -> complex:
         """Backwards-compatible alias for z-domain Newton term."""
@@ -405,14 +402,15 @@ def _pole_quality_z(poles_z: np.ndarray, loop: _FDNLoopFlamo) -> np.ndarray:
     """Pole quality in z-domain: rcond(P(z)) for each pole z."""
     quality = np.zeros_like(poles_z, dtype=np.float64)
     for i, z in enumerate(np.asarray(poles_z, dtype=np.complex128).ravel()):
-        m = loop.at(z)
+        m = loop.at_z(z)
         if np.ndim(m) == 0:
             q = float(np.abs(m))
         else:
             m = np.asarray(m, dtype=np.complex128)
             q = _rcond(m)
-            if np.all(np.isfinite(m)) and np.max(np.abs(m)) > 1e10:
-                q = 1e10
+        
+        if np.all(np.isfinite(m)) and np.max(np.abs(m)) > 1e10:
+            q = 1e10
         quality[i] = q
     return quality
 
@@ -606,6 +604,8 @@ def _refine_pole_positions_w(
     if verbose:
         print(f"Number of Exact Deflations: {exact_counter}")
         print(f"Number of Newton Steps: {newton_step_counter}")
+        print(f"Number of Poles: {n_poles}")
+        print(f"Number of Non-converged Poles: {non_converged.size}")
     meta = {
         "newtonStepCounter": int(newton_step_counter),
         "iterations": int(iteration_counter),
@@ -705,6 +705,8 @@ def flamo_to_pr(
 
     n_poles = int(np.sum(delays_arr))
 
+    # n_poles = n_poles
+
     # Initialize on unit circle in w-domain and refine there.
     root_angles = np.linspace(0.0, 2.0 * np.pi, n_poles, endpoint=False)
     roots_w = np.exp(1j * root_angles)
@@ -722,36 +724,26 @@ def flamo_to_pr(
     meta_data: dict[str, Any] = dict(meta_refine)
     refined_roots_w = roots_w.copy()
     meta_data["refinedRootsW"] = refined_roots_w
-    valid_refined = np.abs(refined_roots_w) > 1e-14
-    refined_poles = np.full_like(refined_roots_w, np.inf + 0j)
-    refined_poles[valid_refined] = 1.0 / refined_roots_w[valid_refined]
-    meta_data["refinedPoles"] = refined_poles
-
-    if reject_unstable_poles:
-        stable = np.abs(roots_w) >= 1.0
-        roots_w = roots_w[stable]
-        quality = quality[stable]
-
+    
+    is_stable = np.abs(roots_w) >= 1.0
     is_converged = quality < float(quality_threshold) * 1000.0
-    if not np.any(is_converged):
-        is_converged = np.ones_like(quality, dtype=bool)
-    roots_w = roots_w[is_converged]
-    meta_data["convergedRootsW"] = roots_w.copy()
+    
+    if reject_unstable_poles:
+        is_valid = is_stable & is_converged
+    else:
+        is_valid = is_converged
+    roots_w = roots_w[is_valid]
+    quality = quality[is_valid]
 
-    valid = np.abs(roots_w) > 1e-14
-    poles = np.where(valid, 1.0 / roots_w, np.inf + 0j)
-    poles = poles[np.isfinite(poles)]
-    if poles.size == 0:
-        poles = refined_poles[np.isfinite(refined_poles)]
-        if poles.size == 0:
-            raise ValueError("No finite poles available after w->z conversion.")
-    meta_data["convergedPoles"] = poles.copy()
-
-    poles, is_conjugate, non_paired = reduce_conjugate_pairs(poles)
-    meta_data["nonPairedPoles"] = non_paired
     if verbose:
-        final_count = int(np.sum(is_conjugate.astype(int) + 1))
-        print(f"Final number of poles: {final_count} of {n_poles}")
+        print(f"Number of Stable Poles: {np.sum(is_stable)}")
+        print(f"Number of Converged Poles: {np.sum(is_converged)}")
+        print(f"Number of Valid Poles: {np.sum(is_valid)}")
+
+    poles = 1.0 / roots_w
+
+    poles, is_conjugate, non_paired = reduce_conjugate_pairs(poles, verbose=verbose)
+    meta_data["nonPairedPoles"] = non_paired
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(
         poles, loop, decomposition_obj
@@ -771,8 +763,6 @@ def dss_to_pr_flamo(
     D: Any,
     *,
     deflation_type: str = "fullDeflation",
-    inverse_matrix: Any | None = None,
-    absorption_filters: Any | None = None,
     reject_unstable_poles: bool = False,
     quality_threshold: float = 1e-7,
     maximum_iterations: int = 50,
@@ -789,29 +779,7 @@ def dss_to_pr_flamo(
     Builds a FLAMO model with :func:`dss_to_flamo`, then runs :func:`flamo_to_pr`
     on it. For an existing FLAMO model use :func:`flamo_to_pr` directly.
     """
-    if absorption_filters is not None:
-        raise ValueError(
-            "dss_to_pr_flamo no longer accepts absorption_filters directly. "
-            "Build a FLAMO model with dss_to_flamo(post_delay_module=...) and "
-            "use flamo_to_pr(model)."
-        )
-
-    if inverse_matrix is not None:
-        raise ValueError(
-            "inverse_matrix is not supported in strict FLAMO-native mode. "
-            "Please rely on native Recursion.probe_recursion APIs."
-        )
-
     delays_arr = np.asarray(delays, dtype=int).ravel()
-    if delays_arr.ndim != 1 or delays_arr.size == 0:
-        raise ValueError("delays must be a non-empty 1-D array")
-
-    if not all(isinstance(v, (np.ndarray, list, tuple)) for v in (A, B, C, D)):
-        raise TypeError(
-            "dss_to_pr_flamo expects numeric DSS matrices (A,B,C,D). "
-            "For existing FLAMO graph models, use flamo_to_pr(model)."
-        )
-
     model = dss_to_flamo(
         A=np.asarray(A, dtype=np.float64),
         B=np.asarray(B, dtype=np.float64),

@@ -17,6 +17,7 @@ def reduce_conjugate_pairs(
     *,
     tol_real: float = 1e-10,
     tol_pair: float = 1e-8,
+    verbose: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Group poles into real and conjugate pairs using optimal assignment.
@@ -65,13 +66,22 @@ def reduce_conjugate_pairs(
             if j != i:
                 pair_type[j] = -1
 
-    if np.any(pair_type == -1):
-        warnings.warn(f"{np.sum(pair_type == -1)} poles could not be paired", stacklevel=2)
-
+    
+    if verbose:
+        print("Poles reduction summary:")
+        print(f"Number of Poles: {n_poles}")
+        print(f"Number of Real Poles: {np.sum(pair_type == 1)}")
+        print(f"Number of Conjugate Pairs: {np.sum(pair_type == 2)}; Number of Complex Poles: {np.sum(pair_type == 2) * 2}")
+        print(f"Number of Unpaired Poles: {np.sum(pair_type == -1)}")
+        print(f"List all unpaired poles: {poles[pair_type == -1]}")
+        
     is_conjugate = np.ones(n_poles, dtype=bool)
     is_conjugate[pair_type == 1] = False
+
     non_paired = poles[pair_type == -1]
-    select = (pair_type == 1) | (pair_type == 2) | (pair_type == -1)
-    poles_out = np.asarray(poles[select], dtype=np.complex128)
-    poles_out = np.real(poles_out) + 1j * np.abs(np.imag(poles_out))
-    return poles_out, is_conjugate[select], non_paired
+    
+    select = (pair_type == 1) | (pair_type == 2) # | (pair_type == -1)
+    
+    # Mirror the poles to the upper half of the complex plane
+    poles = np.real(poles) + 1j * np.abs(np.imag(poles))
+    return poles[select], is_conjugate[select], non_paired
