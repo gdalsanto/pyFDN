@@ -9,7 +9,6 @@ from pyFDN.translate.dss_to_flamo import dss_to_flamo
 from pyFDN.translate.dss_to_pr_direct import dss_to_pr_direct
 from pyFDN.translate.dss_to_pr_flamo import (
     dss_to_pr_flamo,
-    flamo_extract_pr_decomposition,
     flamo_to_pr,
 )
 
@@ -36,8 +35,6 @@ def test_dss_to_pr_flamo_matches_direct_backend():
         b,
         c,
         d,
-        feedback_delay_units=0,
-        absorption_delay_units=0,
         Fs=1.0,
         nfft=1024,
         verbose=False,
@@ -66,19 +63,9 @@ def test_flamo_to_pr_matches_dss_to_pr_flamo_wrapper():
         nfft=1024,
         shell=False,
     )
-    core = model.get_core() if callable(getattr(model, "get_core", None)) else model
-    recursion_module = list(core.branchA)[1]
 
-    decomposition = flamo_extract_pr_decomposition(
-        model,
-        delays,
-        recursion_module=recursion_module,
-    )
     res_model, pol_model, direct_model, pair_model, meta_model = flamo_to_pr(
-        delays=delays,
-        decomposition=decomposition,
-        feedback_delay_units=0,
-        absorption_delay_units=0,
+        model,
         verbose=False,
     )
     res_wrap, pol_wrap, direct_wrap, pair_wrap, _ = dss_to_pr_flamo(
@@ -87,8 +74,6 @@ def test_flamo_to_pr_matches_dss_to_pr_flamo_wrapper():
         b,
         c,
         d,
-        feedback_delay_units=0,
-        absorption_delay_units=0,
         Fs=1.0,
         nfft=1024,
         verbose=False,

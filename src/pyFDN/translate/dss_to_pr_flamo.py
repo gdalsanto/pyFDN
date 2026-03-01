@@ -218,6 +218,53 @@ def _probe_from_modules(modules: list[Any], *, identity_dim: int | None = None) 
     return _FlamoGraphProbe(_build_flamo_series(modules))
 
 
+def _get_recursion_from_model(model: Any) -> Any:
+    """Return the unique Recursion module in the model's branchA."""
+    core = model.get_core() if callable(getattr(model, "get_core", None)) else model
+    if not hasattr(core, "branchA"):
+        raise ValueError(
+            "flamo_to_pr expects a FLAMO core with branchA "
+            "(e.g., produced by dss_to_flamo)."
+        )
+    fdn_modules = _as_module_list(core.branchA)
+    recs = [
+        m
+        for m in fdn_modules
+        if hasattr(m, "feedforward") and hasattr(m, "feedback")
+    ]
+    if len(recs) != 1:
+        raise ValueError(
+            "Model must contain exactly one Recursion in branchA."
+        )
+    return recs[0]
+
+
+def _delays_from_recursion(recursion_module: Any) -> np.ndarray:
+    """
+    Return 1D array of delay lengths in samples from the recursion's feedforward.
+    Looks at the delay module in the recursion and sums the number of delays (per line).
+    """
+    ff = recursion_module.feedforward
+    delay_mod = getattr(ff, "delay", ff)
+    param = delay_mod.param
+    if callable(getattr(delay_mod, "map", None)):
+        sec = delay_mod.map(param)
+    else:
+        sec = param
+    samples = delay_mod.s2sample(sec)
+    out = np.asarray(samples.detach().cpu().numpy(), dtype=np.float64).ravel()
+    return np.asarray(np.round(out), dtype=int)
+
+
+def _get_recursion_and_delays_from_model(model: Any) -> tuple[Any, np.ndarray]:
+    """Return (recursion_module, delays_arr) from a FLAMO model."""
+    rec = _get_recursion_from_model(model)
+    delays = _delays_from_recursion(rec)
+    if delays.size == 0:
+        raise ValueError("Recursion has no delays (empty delay module).")
+    return rec, delays
+
+
 def _extract_flamo_recursion_probes(
     model: Any,
     recursion_module: Any,
@@ -277,8 +324,7 @@ def flamo_extract_pr_decomposition(
     Extract the H(z)=C P(z)^{-1}B+D probes from a FLAMO model.
 
     Returns a dict with keys ``"P"``, ``"B"``, ``"C"``, ``"D"`` (probe objects).
-    Pass it to :func:`flamo_to_pr` as ``decomposition=...``, or use
-    :func:`flamo_to_pr` with ``model`` and ``recursion_module`` to do both in one call.
+    For poles/residues use :func:`flamo_to_pr`(model), which does extraction internally.
     """
     delays_arr = np.asarray(delays, dtype=int).ravel()
     if delays_arr.ndim != 1 or delays_arr.size == 0:
@@ -300,7 +346,6 @@ def _rcond(mat: np.ndarray) -> float:
 @dataclass
 class _FDNLoopFlamo:
     characteristic_probe: Any
-    number_of_delay_units: int
 
     def __post_init__(self):
         out_ch = int(getattr(self.characteristic_probe, "output_channels"))
@@ -433,8 +478,9 @@ def _compute_deflation(
     if deflation_type != "neighborDeflation":
         raise ValueError(f"Unknown deflation type: {deflation_type}")
 
+    # Compute neighbor deflation.
     n_poles = poles.size
-    if steps == 1:
+    if steps == 1: # First iteration, no neighbors.
         neighbor_deflation = 0.0 + 0.0j
         factor_nonneighbor = (n_poles - 1) / 2.0
     else:
@@ -481,7 +527,7 @@ def _refine_pole_positions_w(
     roots_w, _ = _sort_by(roots_w, np.angle(roots_w))
     n_poles = roots_w.size
 
-    step_counter = 0
+    newton_step_counter = 0
     exact_counter = 0
     record_roots_w: list[np.ndarray] = [roots_w.copy()]
 
@@ -498,8 +544,8 @@ def _refine_pole_positions_w(
             f"{maximum_iterations} iterations"
         )
 
-    steps = 0
-    for steps in range(1, maximum_iterations + 1):
+
+    for iteration_counter in range(1, maximum_iterations + 1):
         if current_deflation == "neighborDeflation":
             roots_w, sort_ind = _sort_by(roots_w, np.angle(roots_w))
             quality = quality[sort_ind]
@@ -507,13 +553,24 @@ def _refine_pole_positions_w(
 
         roots_w_old = roots_w.copy()
         non_converged = np.where(quality > quality_threshold)[0]
+
+        # If fewer than 10% of poles are non-converged, switch to full deflation.
         if non_converged.size < n_poles / 10.0:
             current_deflation = "fullDeflation"
 
+        # Iterate over non-converged poles.
         for it in non_converged:
             if quality[it] <= quality_threshold:
                 continue
-            step_counter += 1
+            if quality[it] > 10000.0:
+                # If pole quality is too bad, set it to a random value on the unit circle.
+                roots_w[it] = np.exp(1j * np.random.uniform(0, 2 * np.pi))
+                quality[it] = _pole_quality_w(np.array([roots_w[it]]), loop)[0]
+                if verbose:
+                    print(f"Pole {it} was at {roots_w_old[it]:.3f} and set to random value on unit circle: {roots_w[it]:.3f}")
+            
+            # Compute Newton step and deflation.
+            newton_step_counter += 1
             w_i = roots_w[it]
             inv_newton_w = loop.inverse_newton_step_w(w_i)
             deflation, is_exact = _compute_deflation(
@@ -523,7 +580,7 @@ def _refine_pole_positions_w(
                 deflation_type=current_deflation,
                 number_of_neighbors=number_of_neighbors,
                 deflation_max_error=deflation_max_error,
-                steps=steps,
+                steps=iteration_counter,
             )
             denom = inv_newton_w - deflation
             if not np.isfinite(denom) or np.abs(denom) < 1e-20:
@@ -550,8 +607,9 @@ def _refine_pole_positions_w(
         if verbose:
             max_improvement = float(np.abs(np.max(quality_last - quality)))
             print(
-                f"Iteration: {steps}, Maximum Improvement: {max_improvement}, "
-                f"Worst Pole Quality: {np.max(quality)}, "
+                f"Iter: {iteration_counter}, "
+                f"Max Improvement: {max_improvement:.3e}, "
+                f"Worst Pole Quality: {np.max(quality):.3e}, "
                 f"Number of Non-converged Poles: {non_converged.size}"
             )
         quality_last = quality.copy()
@@ -560,8 +618,8 @@ def _refine_pole_positions_w(
         print(f"Number of Exact Deflations: {exact_counter}")
 
     meta = {
-        "stepCounter": int(step_counter),
-        "iterations": int(steps),
+        "newtonStepCounter": int(newton_step_counter),
+        "iterations": int(iteration_counter),
         "exactCounter": int(exact_counter),
         "recordNeighborDeflation": [],
         "recordNewton": [],
@@ -627,72 +685,33 @@ def _dss_to_res_flamo(
 
 
 def flamo_to_pr(
-    model: Any | None = None,
-    delays: ArrayLike | None = None,
+    model: Any,
     *,
-    recursion_module: Any | None = None,
-    decomposition: Any | None = None,
     deflation_type: str = "fullDeflation",
     reject_unstable_poles: bool = False,
-    quality_threshold: float | None = None,
+    quality_threshold: float = 1e-7,
     maximum_iterations: int = 50,
+    refinement_tol: float = 1e-12,
     verbose: bool = True,
-    feedback_delay_units: int | None = 0,
-    absorption_delay_units: int | None = 0,
-    refinement_tol: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
     """
     Poles/residues from a FLAMO transfer H(z)=C(z)P(z)^{-1}B(z)+D(z).
 
-    Two ways to call:
-
-    1. **From a decomposition dict** (e.g. from :func:`flamo_extract_pr_decomposition`):
-       ``flamo_to_pr(delays=delays, decomposition={"P": p_probe, "B": b_probe, "C": c_probe, "D": d_probe}, ...)``
-
-    2. **From a FLAMO model**: ``flamo_to_pr(model=model, delays=delays, recursion_module=recursion_module, ...)``
-       The recursion module is the closed-loop block in the FLAMO core (e.g. ``core.branchA[1]`` for a model built with :func:`dss_to_flamo`).
+    Extracts the recursion and delay lengths from the model, builds the characteristic
+    decomposition internally, then refines poles in the w-domain (w = 1/z) and
+    converts back to z for residues.
 
     For DSS matrices (A,B,C,D) use :func:`dss_to_pr_flamo` instead, which does
     DSS -> FLAMO -> PR in one call.
-
-    Refinement is done in the w-domain (w = 1/z) and converted back to z for residues.
     """
-    if delays is None:
-        raise ValueError("delays is required.")
-    delays_arr = np.asarray(delays, dtype=int).ravel()
-    if delays_arr.ndim != 1 or delays_arr.size == 0:
-        raise ValueError("delays must be a non-empty 1-D array")
-
-    if decomposition is None:
-        if model is None or recursion_module is None:
-            raise ValueError(
-                "Either provide decomposition={P,B,C,D} or pass model and recursion_module."
-            )
-        decomposition_obj = _extract_flamo_recursion_probes(model, recursion_module, delays_arr)
-    else:
-        decomposition_obj = _coerce_decomposition(decomposition)
-
-    fb_delay_units_i = int(feedback_delay_units or 0)
-    fwd_delay_units_i = int(absorption_delay_units or 0)
-    p_out = int(getattr(decomposition_obj.p_probe, "output_channels"))
-    p_in = int(getattr(decomposition_obj.p_probe, "input_channels"))
-    if p_out != delays_arr.size or p_in != delays_arr.size:
-        raise ValueError(
-            "Characteristic probe dimensions must match delay count: "
-            f"expected ({delays_arr.size},{delays_arr.size}), got ({p_out},{p_in})."
-        )
-
-    if quality_threshold is None:
-        quality_threshold = 1e-7
-
-    loop = _FDNLoopFlamo(
-        characteristic_probe=decomposition_obj.p_probe,
-        number_of_delay_units=int(np.sum(delays_arr) + fwd_delay_units_i + fb_delay_units_i),
+    recursion_module, delays_arr = _get_recursion_and_delays_from_model(model)
+    decomposition_obj = _extract_flamo_recursion_probes(
+        model, recursion_module, delays_arr
     )
 
-    n_poles = int(loop.number_of_delay_units)
-    if n_poles <= 0:
-        raise ValueError("Computed number_of_poles must be positive.")
+    loop = _FDNLoopFlamo(characteristic_probe=decomposition_obj.p_probe)
+
+    n_poles = int(np.sum(delays_arr))
 
     # Initialize on unit circle in w-domain and refine there.
     root_angles = np.linspace(0.0, 2.0 * np.pi, n_poles, endpoint=False)
@@ -727,38 +746,20 @@ def flamo_to_pr(
     roots_w = roots_w[is_converged]
     meta_data["convergedRootsW"] = roots_w.copy()
 
-    if roots_w.size != n_poles:
-        warnings.warn(
-            f"Some poles did not converge: {roots_w.size} instead of {n_poles}",
-            stacklevel=2,
-        )
-
-    valid_conv = np.abs(roots_w) > 1e-14
-    poles = np.full_like(roots_w, np.inf + 0j)
-    poles[valid_conv] = 1.0 / roots_w[valid_conv]
-    finite_mask = np.isfinite(poles)
-    if not np.all(finite_mask):
-        warnings.warn(
-            f"Dropping {np.sum(~finite_mask)} non-finite poles from converged w roots.",
-            stacklevel=2,
-        )
-        poles = poles[finite_mask]
+    valid = np.abs(roots_w) > 1e-14
+    poles = np.where(valid, 1.0 / roots_w, np.inf + 0j)
+    poles = poles[np.isfinite(poles)]
     if poles.size == 0:
-        fallback = refined_poles[np.isfinite(refined_poles)]
-        if fallback.size == 0:
+        poles = refined_poles[np.isfinite(refined_poles)]
+        if poles.size == 0:
             raise ValueError("No finite poles available after w->z conversion.")
-        warnings.warn(
-            "No converged finite poles remained after filtering; using refined finite poles.",
-            stacklevel=2,
-        )
-        poles = fallback
     meta_data["convergedPoles"] = poles.copy()
 
     poles, is_conjugate, non_paired = reduce_conjugate_pairs(poles)
     meta_data["nonPairedPoles"] = non_paired
     if verbose:
         final_count = int(np.sum(is_conjugate.astype(int) + 1))
-        print(f"Final number of poles are: {final_count} of possible {n_poles}")
+        print(f"Final number of poles: {final_count} of {n_poles}")
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(
         poles, loop, decomposition_obj
@@ -781,12 +782,10 @@ def dss_to_pr_flamo(
     inverse_matrix: Any | None = None,
     absorption_filters: Any | None = None,
     reject_unstable_poles: bool = False,
-    quality_threshold: float | None = None,
+    quality_threshold: float = 1e-7,
     maximum_iterations: int = 50,
+    refinement_tol: float = 1e-12,
     verbose: bool = True,
-    feedback_delay_units: int | None = 0,
-    absorption_delay_units: int | None = 0,
-    refinement_tol: float | None = None,
     dtype: Any = None,
     Fs: float = 1.0,
     nfft: int = 2**16,
@@ -802,7 +801,7 @@ def dss_to_pr_flamo(
         raise ValueError(
             "dss_to_pr_flamo no longer accepts absorption_filters directly. "
             "Build a FLAMO model with dss_to_flamo(post_delay_module=...) and "
-            "use flamo_to_pr(model, delays, recursion_module=...)."
+            "use flamo_to_pr(model)."
         )
 
     if inverse_matrix is not None:
@@ -818,8 +817,7 @@ def dss_to_pr_flamo(
     if not all(isinstance(v, (np.ndarray, list, tuple)) for v in (A, B, C, D)):
         raise TypeError(
             "dss_to_pr_flamo expects numeric DSS matrices (A,B,C,D). "
-            "For existing FLAMO graph models, use "
-            "flamo_to_pr(model, delays, recursion_module=...)."
+            "For existing FLAMO graph models, use flamo_to_pr(model)."
         )
 
     model = dss_to_flamo(
@@ -835,26 +833,13 @@ def dss_to_pr_flamo(
         dtype=dtype,
     )
 
-    core = model.get_core() if callable(getattr(model, "get_core", None)) else model
-    branch_a = getattr(core, "branchA", None)
-    branch_modules = _as_module_list(branch_a)
-    if len(branch_modules) < 2:
-        raise ValueError("dss_to_flamo core branchA layout unexpected for recursion extraction.")
-    recursion_module = branch_modules[1]
-    if not (hasattr(recursion_module, "feedforward") and hasattr(recursion_module, "feedback")):
-        raise ValueError("Expected recursion module at branchA index 1 in dss_to_flamo core.")
-
     return flamo_to_pr(
         model,
-        delays_arr,
-        recursion_module=recursion_module,
         deflation_type=deflation_type,
         reject_unstable_poles=reject_unstable_poles,
         quality_threshold=quality_threshold,
         maximum_iterations=maximum_iterations,
-        verbose=verbose,
-        feedback_delay_units=feedback_delay_units,
-        absorption_delay_units=absorption_delay_units,
         refinement_tol=refinement_tol,
+        verbose=verbose,
     )
 
