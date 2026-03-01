@@ -1,14 +1,12 @@
 """FLAMO-only modal decomposition entry point (no ZFilter dependency here).
 
-What FLAMO must provide (no derivative APIs)
---------------------------------------------
-- P(z): _eval_characteristic(z). Used for quality and for building dP/dz in pyFDN.
-- P(w): _eval_characteristic_w(w). Used for quality and for building d/dw log det P in pyFDN.
+What FLAMO must provide
+----------------------
+- P(z): Recursion.probe_recursion(z).
+- P(w): Recursion.probe_recursion_w(w).
 
-All derivatives are built in pyFDN once at the start of flamo_to_pr (grad for
-d/dw log det P(w), JVP for dP/dz(z)) and only those callables are used afterwards.
-FLAMO does not need probe_recursion_with_derivative, log_det_derivative_w, or
-any other derivative methods for this path.
+All derivatives are built in _FDNLoopFlamo (grad for d/dw log det P(w), JVP for
+dP/dz(z)) and stored on the loop. No derivative APIs required from FLAMO.
 """
 
 from __future__ import annotations
@@ -85,24 +83,17 @@ def _to_numpy(t: torch.Tensor | np.ndarray) -> np.ndarray:
 
 
 def _device_dtype_from_decomposition(decomposition: Any) -> tuple[torch.device, torch.dtype]:
-    """Infer device and complex dtype from decomposition's P probe (recursion)."""
-    rec = getattr(decomposition.p_probe, "recursion", None)
-    if rec is None:
-        return torch.device("cpu"), torch.complex128
+    """Infer device and complex dtype from decomposition's P (recursion)."""
+    rec = decomposition.p_probe
     return _infer_model_device(rec), _infer_model_complex_dtype(rec)
 
 
 def _make_log_det_derivative_w(recursion: Any):
-    """
-    Build (d/dw) log det P(w) once using grad; returns a callable.
-
-    Uses only recursion._eval_characteristic_w(w) (i.e. P(w)) from FLAMO — no
-    derivative APIs. The derivative is computed entirely in pyFDN with grad.
-    """
+    """Build (d/dw) log det P(w) once using grad; uses recursion.probe_recursion_w(w)."""
     def d_log_det_w(w):
         w_var = _as_torch_complex_scalar(w, model=recursion)
         w_var = w_var.detach().clone().requires_grad_(True)
-        P_w = recursion._eval_characteristic_w(w_var)
+        P_w = recursion.probe_recursion_w(w_var)
         y = torch.logdet(P_w)
         (g,) = torch.autograd.grad(y, w_var, torch.ones_like(y))
         return g.conj().detach()
@@ -110,38 +101,26 @@ def _make_log_det_derivative_w(recursion: Any):
 
 
 def _make_P_and_dP_dz(recursion: Any):
-    """
-    Build (P(z), dP/dz(z)) once using JVP; returns a callable.
-
-    Uses only recursion._eval_characteristic(z) (i.e. P(z)) from FLAMO — no
-    derivative APIs. The matrix derivative is computed entirely in pyFDN with JVP.
-    """
+    """Build (P(z), dP/dz(z)) once using JVP; uses recursion.probe_recursion(z)."""
     def get_P_and_dP_dz(z):
         z_var = _as_torch_complex_scalar(z, model=recursion)
         dz = torch.ones_like(z_var)
         P, dP_dz = torch.autograd.functional.jvp(
-            recursion._eval_characteristic, (z_var,), (dz,)
+            recursion.probe_recursion, (z_var,), (dz,)
         )
         return P.detach(), dP_dz.detach()
     return get_P_and_dP_dz
 
 
-def _build_derivative_callables(decomposition_obj: Any) -> dict[str, Any]:
-    """
-    Build derivative callables once (grad/JVP) at the start of flamo_to_pr.
-
-    FLAMO only needs to expose P(z) and P(w) (_eval_characteristic, _eval_characteristic_w).
-    No derivative methods required from FLAMO. Returns a dict of callables (and
-    None for any that could not be built).
-    """
-    rec = getattr(decomposition_obj.p_probe, "recursion", None)
-    out = {"d_log_det_w": None, "get_P_and_dP_dz": None}
-    if rec is not None:
-        if hasattr(rec, "_eval_characteristic_w"):
-            out["d_log_det_w"] = _make_log_det_derivative_w(rec)
-        if hasattr(rec, "_eval_characteristic"):
-            out["get_P_and_dP_dz"] = _make_P_and_dP_dz(rec)
-    return out
+def _make_log_det_derivative_z(recursion: Any):
+    """Build (d/dz) log det P(z) once using grad; uses recursion.probe_recursion(z)."""
+    def d_log_det_z(z):
+        z_var = _as_torch_complex_scalar(z, model=recursion).detach().clone().requires_grad_(True)
+        P_z = recursion.probe_recursion(z_var)
+        y = torch.logdet(P_z)
+        (g,) = torch.autograd.grad(y, z_var, torch.ones_like(y))
+        return g.conj().detach()
+    return d_log_det_z
 
 
 def _sort_by_torch(a: torch.Tensor, key: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -199,65 +178,6 @@ class _FlamoGraphProbe:
 
         _, dH_dz = torch.autograd.functional.jvp(_eval, (z_t,), (dz,))
         return dH_dz.detach()
-
-
-class _FlamoRecursionCharacteristicProbe:
-    """Probe adapter for Recursion.probe_recursion(z) / probe_recursion_w(w) = P. Returns torch."""
-
-    def __init__(self, recursion: Any):
-        self.recursion = recursion
-        p0 = self.at_z(1.0 + 0j)
-        if p0.ndim != 2:
-            raise ValueError(f"Recursion characteristic probe must be 2-D, got {p0.shape}")
-        self.output_channels, self.input_channels = p0.shape
-
-    def at_z(self, z: complex) -> torch.Tensor:
-        """P(z) via FLAMO Recursion.probe_recursion(z)."""
-        z_t = _as_torch_complex_scalar(z, model=self.recursion)
-        out = self.recursion.probe_recursion(z_t)
-        if isinstance(out, tuple):
-            if len(out) == 0:
-                raise RuntimeError("probe_recursion returned empty tuple")
-            out = out[0]
-        return out.detach()
-
-    def at_w(self, w: complex) -> torch.Tensor:
-        """P(w) = P(1/z) via FLAMO Recursion.probe_recursion_w(w)."""
-        if np.abs(w) < 1e-14:
-            n = self.output_channels
-            dev = _infer_model_device(self.recursion)
-            dtype = _infer_model_complex_dtype(self.recursion)
-            return torch.full((n, n), float("inf"), device=dev, dtype=dtype)
-        w_t = _as_torch_complex_scalar(w, model=self.recursion)
-        out = self.recursion.probe_recursion_w(w_t)
-        return out.detach()
-
-    def at(self, z: complex) -> torch.Tensor:
-        """Backward-compatible alias for at_z(z)."""
-        return self.at_z(z)
-
-    def der(self, z: complex) -> torch.Tensor:
-        """dP/dz(z) via JVP in pyFDN; FLAMO only provides P(z)."""
-        z_t = _as_torch_complex_scalar(z, model=self.recursion)
-        dz = torch.ones_like(z_t)
-        _, dP_dz = torch.autograd.functional.jvp(
-            self.recursion._eval_characteristic, (z_t,), (dz,)
-        )
-        return dP_dz.detach()
-
-    def log_det_derivative(self, z: complex) -> torch.Tensor:
-        """(d/dz) log det P(z) via grad in pyFDN; FLAMO only provides P(z)."""
-        z_var = _as_torch_complex_scalar(z, model=self.recursion).detach().clone().requires_grad_(True)
-        y = torch.logdet(self.recursion._eval_characteristic(z_var))
-        (g,) = torch.autograd.grad(y, z_var, torch.ones_like(y))
-        return g.conj().detach()
-
-    def log_det_derivative_w(self, w: complex) -> torch.Tensor:
-        """(d/dw) log det P(w) via grad in pyFDN; FLAMO only provides P(w)."""
-        w_var = _as_torch_complex_scalar(w, model=self.recursion).detach().clone().requires_grad_(True)
-        y = torch.logdet(self.recursion._eval_characteristic_w(w_var))
-        (g,) = torch.autograd.grad(y, w_var, torch.ones_like(y))
-        return g.conj().detach()
 
 
 @dataclass
@@ -421,9 +341,8 @@ def _extract_flamo_recursion_probes(
     )
     direct_probe = _FlamoGraphProbe(decomposition.direct_subgraph)
 
-    characteristic_probe = _FlamoRecursionCharacteristicProbe(rec)
     return _CharacteristicDecomposition(
-        p_probe=characteristic_probe,
+        p_probe=rec,
         f_probe=f_probe,
         in_probe=in_probe,
         out_probe=out_probe,
@@ -470,44 +389,62 @@ def _rcond_torch(mat: torch.Tensor) -> float:
 
 @dataclass
 class _FDNLoopFlamo:
-    characteristic_probe: Any
+    """Loop built from Recursion; P(z)/P(w) via probe_recursion/probe_recursion_w; derivatives built once here."""
+
+    recursion: Any
 
     def __post_init__(self):
-        out_ch = int(getattr(self.characteristic_probe, "output_channels"))
-        in_ch = int(getattr(self.characteristic_probe, "input_channels"))
-        if out_ch != in_ch:
-            raise ValueError(
-                "Characteristic probe must be square, "
-                f"got ({out_ch},{in_ch})."
-            )
-        self.n = out_ch
+        rec = self.recursion
+        z0 = _as_torch_complex_scalar(1.0 + 0j, model=rec)
+        p0 = rec.probe_recursion(z0)
+        if isinstance(p0, tuple):
+            p0 = p0[0]
+        if p0.ndim != 2 or p0.shape[0] != p0.shape[1]:
+            raise ValueError(f"Recursion P(z) must be square 2-D, got {p0.shape}")
+        self.n = p0.shape[0]
+        self._device = _infer_model_device(rec)
+        self._dtype = _infer_model_complex_dtype(rec)
+        self._inverse_newton_step_w_fn = _make_log_det_derivative_w(rec)
+        self._get_P_and_dP_dz = _make_P_and_dP_dz(rec)
+        self._log_det_derivative_z_fn = _make_log_det_derivative_z(rec)
 
     def at_z(self, z: complex) -> torch.Tensor:
-        """P(z) via FLAMO characteristic probe (Recursion.probe_recursion(z))."""
-        return self.characteristic_probe.at_z(z)
+        """P(z) via Recursion.probe_recursion(z)."""
+        z_t = _as_torch_complex_scalar(z, model=self.recursion)
+        out = self.recursion.probe_recursion(z_t)
+        out = out[0] if isinstance(out, tuple) else out
+        return out.detach()
 
     def at_w(self, w: complex) -> torch.Tensor:
-        """P(w) = P(1/z) via FLAMO probe_recursion_w(w)."""
-        return self.characteristic_probe.at_w(w)
+        """P(w) via Recursion.probe_recursion_w(w)."""
+        if np.abs(w) < 1e-14:
+            return torch.full(
+                (self.n, self.n), float("inf"),
+                device=self._device, dtype=self._dtype,
+            )
+        w_t = _as_torch_complex_scalar(w, model=self.recursion)
+        out = self.recursion.probe_recursion_w(w_t)
+        return out.detach()
 
     def der(self, z: complex) -> torch.Tensor:
-        return self.characteristic_probe.der(z)
+        """dP/dz(z) from built-once JVP callable."""
+        return self._get_P_and_dP_dz(z)[1]
 
-    def log_det_derivative_z(self, z: complex) -> torch.Tensor:
-        """Return (d/dz) log det P(z) via FLAMO log_det_derivative(z)."""
-        return self.characteristic_probe.log_det_derivative(z)
-
-    def log_det_derivative_w(self, w: complex) -> torch.Tensor:
-        """Return (d/dw) log det P(1/w) via FLAMO log_det_derivative_w(w)."""
-        return self.characteristic_probe.log_det_derivative_w(w)
-
-    def inverse_newton_step(self, z: complex, *, use_w_plane_for_small_z: bool = True) -> torch.Tensor:
-        """Backwards-compatible alias for z-domain Newton term."""
-        return self.log_det_derivative_z(z)
+    def get_P_and_dP_dz(self, z: complex) -> tuple[torch.Tensor, torch.Tensor]:
+        """(P(z), dP/dz(z)) from built-once JVP callable."""
+        return self._get_P_and_dP_dz(z)
 
     def inverse_newton_step_w(self, w: complex) -> torch.Tensor:
-        """Newton term directly in w-domain."""
-        return self.log_det_derivative_w(w)
+        """(d/dw) log det P(w) for Newton refinement."""
+        return self._inverse_newton_step_w_fn(w)
+
+    def log_det_derivative_z(self, z: complex) -> torch.Tensor:
+        """(d/dz) log det P(z)."""
+        return self._log_det_derivative_z_fn(z)
+
+    def log_det_derivative_w(self, w: complex) -> torch.Tensor:
+        """(d/dw) log det P(w)."""
+        return self._inverse_newton_step_w_fn(w)
 
 
 def _pole_quality_z(
@@ -642,9 +579,8 @@ def _refine_pole_positions_w(
     deflation_type: str,
     verbose: bool,
     refinement_tol: float | None = None,
-    inverse_newton_step_w_fn: Any = None,
 ) -> tuple[torch.Tensor, torch.Tensor, dict[str, Any]]:
-    """Refine roots in w-domain. Uses inverse_newton_step_w_fn when provided (built once with grad)."""
+    """Refine roots in w-domain. Newton step uses loop.inverse_newton_step_w (built once in loop)."""
     roots_w = roots_w.ravel().clone()
     roots_w, _ = _sort_by_torch(roots_w, torch.angle(roots_w))
     n_poles = roots_w.shape[0]
@@ -702,10 +638,7 @@ def _refine_pole_positions_w(
 
             newton_step_counter += 1
             w_i = roots_w[it].item()
-            if inverse_newton_step_w_fn is not None:
-                inv_newton_w = inverse_newton_step_w_fn(w_i).resolve_conj()
-            else:
-                inv_newton_w = loop.inverse_newton_step_w(w_i).resolve_conj()
+            inv_newton_w = loop.inverse_newton_step_w(w_i).resolve_conj()
             deflation, is_exact = _compute_deflation(
                 it,
                 roots_w,
@@ -775,24 +708,16 @@ def _dss_to_res_flamo(
     poles: np.ndarray,
     loop: _FDNLoopFlamo,
     decomposition: Any,
-    get_P_and_dP_dz: Any = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, np.ndarray]]:
-    """Residues from poles; internal math in torch, convert to numpy at end.
-    When get_P_and_dP_dz is provided (built with JVP in pyFDN), FLAMO is not used for dP/dz.
-    """
+    """Residues from poles; P and dP/dz from loop (built once in _FDNLoopFlamo)."""
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     n_poles = poles.size
     n_in = int(getattr(decomposition.in_probe, "input_channels"))
     n_out = int(getattr(decomposition.out_probe, "output_channels"))
     n = loop.n
 
-    # Infer device/dtype from first probe call
-    if get_P_and_dP_dz is not None:
-        p0, _ = get_P_and_dP_dz(poles[0])
-    else:
-        p0 = decomposition.p_probe.at(poles[0])
-    device = p0.device
-    dtype = p0.dtype
+    p0, _ = loop.get_P_and_dP_dz(poles[0])
+    device, dtype = p0.device, p0.dtype
 
     r_den = torch.zeros(n_poles, device=device, dtype=dtype)
     r_nom = torch.zeros((n_poles, n_out, n_in), device=device, dtype=dtype)
@@ -800,11 +725,7 @@ def _dss_to_res_flamo(
     eig_left = torch.zeros((n, n_poles), device=device, dtype=dtype)
 
     for it, pole in enumerate(poles):
-        if get_P_and_dP_dz is not None:
-            p, dp = get_P_and_dP_dz(pole)
-        else:
-            p = decomposition.p_probe.at(pole)
-            dp = decomposition.p_probe.der(pole)
+        p, dp = loop.get_P_and_dP_dz(pole)
         f_at = decomposition.f_probe.at(pole)
         in_at = decomposition.in_probe.at(pole)
         b = f_at @ in_at
@@ -870,13 +791,8 @@ def flamo_to_pr(
     delays_arr = decomposition.delays
     decomposition_obj = _extract_flamo_recursion_probes(decomposition)
 
-    loop = _FDNLoopFlamo(characteristic_probe=decomposition_obj.p_probe)
+    loop = _FDNLoopFlamo(recursion=decomposition_obj.p_probe)
     device, dtype = _device_dtype_from_decomposition(decomposition_obj)
-
-    # Build derivative callables once (grad/JVP); only these are used afterwards
-    derivatives = _build_derivative_callables(decomposition_obj)
-    d_log_det_w = derivatives["d_log_det_w"]
-    get_P_and_dP_dz = derivatives["get_P_and_dP_dz"]
 
     n_poles = int(np.sum(delays_arr))
 
@@ -898,7 +814,6 @@ def flamo_to_pr(
         deflation_type=str(deflation_type),
         verbose=bool(verbose),
         refinement_tol=refinement_tol,
-        inverse_newton_step_w_fn=d_log_det_w,
     )
 
     meta_data: dict[str, Any] = dict(meta_refine)
@@ -925,11 +840,12 @@ def flamo_to_pr(
     meta_data["nonPairedPoles"] = non_paired
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(
-        poles, loop, decomposition_obj, get_P_and_dP_dz=get_P_and_dP_dz
+        poles, loop, decomposition_obj
     )
     meta_data["undrivenResidues"] = undriven
     meta_data["eigenvectors"] = eigenvectors
     meta_data["decomposition"] = _decomposition_to_public_dict(decomposition_obj)
+    meta_data["loop"] = loop
 
     return residues, poles, direct, is_conjugate, meta_data
 
