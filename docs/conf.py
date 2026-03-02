@@ -47,7 +47,7 @@ napoleon_numpy_docstring = True
 
 # nbsphinx settings
 nbsphinx_execute = "auto"   # Execute notebooks that have no stored outputs
-nbsphinx_allow_errors = True
+nbsphinx_allow_errors = False
 nbsphinx_prolog = """
 {% set docname = env.doc2path(env.docname, base=None) %}
 

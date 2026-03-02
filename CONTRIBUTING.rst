@@ -80,6 +80,47 @@ Development Installation
       $ pytest tests/ -v
 
 
+Building the Documentation
+--------------------------
+
+1. **Install docs dependencies** (if not already):
+
+   .. code-block:: console
+
+      $ pip install -e ".[docs]"
+
+2. **Install pandoc** (system dependency required by ``nbsphinx``):
+
+   .. code-block:: console
+
+      $ brew install pandoc          # macOS
+      $ sudo apt install pandoc      # Ubuntu / Debian
+
+3. **Build the HTML docs**:
+
+   .. code-block:: console
+
+      $ make docs
+
+   This runs ``sphinx-apidoc``, builds all pages (including executing the
+   example notebooks), and opens the result in your browser.
+
+   Alternatively, build only the HTML without opening a browser:
+
+   .. code-block:: console
+
+      $ cd docs
+      $ make html
+
+4. **Preview**: Open ``docs/_build/html/index.html`` in your browser.
+
+.. note::
+
+   The example notebooks are executed at build time by ``nbsphinx``. The
+   first build may take a few minutes. Subsequent builds are faster because
+   Sphinx caches the executed notebooks.
+
+
 Repository Index
 ----------------
 

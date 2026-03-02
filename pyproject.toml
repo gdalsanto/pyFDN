@@ -67,7 +67,6 @@ docs = [
     "ipykernel>=6.0.0",
     "pandoc>=2.0",
     "plotly>=5.0.0",
-    "kaleido",
     "matplotlib>=3.5.0",
 ]
 
