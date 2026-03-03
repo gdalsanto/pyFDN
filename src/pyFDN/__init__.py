@@ -23,6 +23,7 @@ __all__ = [
     "rt_to_gain_per_sample",
     "rt_to_slope",
     "slope_to_rt",
+    "sos_gain_per_sample_curves",
     # delay utilities
     "matrix_delay_approximation",
     "mgrpdelay",
@@ -39,6 +40,7 @@ __all__ = [
     "vanilla_FDN",
     # polynomial and matrix maths
     "det_polynomial",
+    "general_char_poly",
     "interpolate_orthogonal",
     "is_orthogonal",
     "matrix_convolution",
@@ -55,6 +57,8 @@ __all__ = [
     "db_to_sq",
     "ensure_3d",
     "hertz_to_unit",
+    "hertz_to_rad",
+    "rad_to_hertz",
     "is_bounding_curve",
     "last_nonzero_indices",
     "lin_to_db",
@@ -65,15 +69,56 @@ __all__ = [
     "pole_boundaries",
     "skew",
     # state-space translators
+    "dss_to_flamo",
     "dss_to_impz",
+    "dss_to_pr_direct",
+    "flamo_to_pr",
+    "flamo_decompose_for_pr",
+    "flamo_extract_pr_decomposition",
+    "FlamoDecompositionForPR",
+    "dss_to_pr_flamo",
     "dss_to_ss",
+    "dss_to_tf",
+    "impz_to_res",
+    "mtf_to_impz",
+    "pr_to_impz",
     # fdn processing
     "process_fdn",
     # plotting
     "plot_impulse_response_matrix",
     "plot_system_matrix",
+    "plot_spectrogram",
+    # FLAMO graph
+    "flamo_model_to_nodes",
+    "flamo_nodes_flat",
+    "draw_flamo_graph",
     # SDN (scattering delay network)
     "SDN",
+    # allpass FDN
+    "allpass",
+    "allpass_completion",
+    "apply_diagonal_similarity",
+    "block_matrix",
+    "check_completion",
+    "complete_fdn",
+    "complete_full_mimo_halmos",
+    "complete_general_mimo_svd",
+    "diagonal_similarity_from_abs2_lyapunov",
+    "diag_inv_sqrt",
+    "diag_sqrt",
+    "eig_sqrt_psd",
+    "hermitize",
+    "homogeneous_allpass_fdn",
+    "map_back_from_similarity",
+    "rand_admissible_homogeneous_allpass",
+    "orth_error",
+    "sqrtm_psd",
+    "poletti_allpass",
+    "series_allpass",
+    "nested_allpass",
+    "is_uniallpass",
+    "is_allpass",
+    "is_paraunitary",
 ]
 
 #acoustics and absorption
@@ -86,6 +131,7 @@ from .auxiliary.acoustics import (
     rt_to_gain_per_sample,
     rt_to_slope,
     slope_to_rt,
+    sos_gain_per_sample_curves,
 )
 
 #delay utilities
@@ -100,6 +146,7 @@ from .auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
 #polynomial and matrix maths
 from .auxiliary.math import (
     det_polynomial,
+    general_char_poly,
     interpolate_orthogonal,
     is_orthogonal,
     matrix_convolution,
@@ -119,6 +166,8 @@ from .auxiliary.utils import (
     db_to_sq,
     ensure_3d,
     hertz_to_unit,
+    hertz_to_rad,
+    rad_to_hertz,
     is_bounding_curve,
     last_nonzero_indices,
     lin_to_db,
@@ -134,6 +183,41 @@ from .auxiliary.utils import (
 from .auxiliary.plot import (
     plot_impulse_response_matrix,
     plot_system_matrix,
+    plot_spectrogram,
+)
+from .auxiliary.flamo_graph import (
+    flamo_model_to_nodes,
+    flamo_nodes_flat,
+    draw_flamo_graph,
+)
+
+from .auxiliary.allpass import (
+    is_uniallpass,
+    is_allpass,
+    is_paraunitary,
+    poletti_allpass,
+    series_allpass,
+    nested_allpass,
+)
+
+from .generate.allpass_FDN import allpass_completion
+from .generate.allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fdn
+from .generate.allpass_FDN.rand_admissible_homogeneous_allpass import rand_admissible_homogeneous_allpass
+from .generate.allpass_FDN.allpass_completion import (
+    apply_diagonal_similarity,
+    block_matrix,
+    check_completion,
+    complete_fdn,
+    complete_full_mimo_halmos,
+    complete_general_mimo_svd,
+    diagonal_similarity_from_abs2_lyapunov,
+    diag_inv_sqrt,
+    diag_sqrt,
+    eig_sqrt_psd,
+    hermitize,
+    map_back_from_similarity,
+    orth_error,
+    sqrtm_psd,
 )
 
 
@@ -151,8 +235,21 @@ from .generate.vanilla_FDN import vanilla_FDN
 from .generate.SDN import SDN
 
 #state-space translators
+from .translate.dss_to_flamo import dss_to_flamo
 from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_impz import dss_to_impz
+from .translate.dss_to_pr_direct import dss_to_pr_direct
+from .translate.dss_to_pr_flamo import (
+    dss_to_pr_flamo,
+    flamo_decompose_for_pr,
+    flamo_extract_pr_decomposition,
+    flamo_to_pr,
+    FlamoDecompositionForPR,
+)
+from .translate.dss_to_tf import dss_to_tf
+from .translate.impz_to_res import impz_to_res
+from .translate.mtf_to_impz import mtf_to_impz
+from .translate.pr_to_impz import pr_to_impz
 
 #fdn processing
 from .process import process_fdn
@@ -162,3 +259,7 @@ from .process import process_fdn
 from .dsp.filter_matrix import FilterMatrix
 from .dsp.feedback_delay import FeedbackDelay
 from .dsp.dfiltmatrix import DFiltMatrix
+
+# Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
+from . import auxiliary
+allpass = auxiliary.allpass
