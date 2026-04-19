@@ -181,41 +181,48 @@ def matrix_polyder(B: np.ndarray, A: np.ndarray, var: str = 'z^1') -> tuple[np.n
 def det_polynomial(polynomial_matrix: np.ndarray, var: str) -> np.ndarray:
     """
     Determinant of a polynomial matrix.
-    
+
     Args:
         polynomial_matrix: numpy array of shape (N, N, degree) containing the polynomial coefficients
-        var: 'z^1' or 'z^-1'    Returns:
+        var: 'z^1' or 'z^-1'
+    Returns:
         determinant: Determinant polynomial
     """
-    tol_db = -200
     N = polynomial_matrix.shape[1]
     length = polynomial_matrix.shape[2]
     fft_size = length * N
-    
-    # Computation
+    is_real = np.isrealobj(polynomial_matrix)
+
     if var == 'z^-1':
-        freq_mat = np.fft.fft(polynomial_matrix, fft_size, axis=2)
+        data = polynomial_matrix
     elif var == 'z^1':
-        freq_mat = np.fft.fft(np.flip(polynomial_matrix, axis=2), fft_size, axis=2)
+        data = np.flip(polynomial_matrix, axis=2)
     else:
         raise ValueError('Variable type not defined')
-    
-    freq_det = np.zeros(fft_size, dtype=complex)
-    for it in range(fft_size):
-        freq_det[it] = np.linalg.det(freq_mat[:, :, it])
-    
-    determinant = np.fft.ifft(freq_det, fft_size).real
-    determinant = determinant[:-(N-1)]
-    
-    # Shorten the determinant numerically
-    if var == 'z^-1':
-        degree = poly_degree(determinant, var, tol_db)
-        determinant = determinant[:degree+1]
-    elif var == 'z^1':
+
+    if is_real:
+        freq_mat = np.fft.rfft(data, fft_size, axis=2)
+        n_freq = fft_size // 2 + 1
+        freq_det = np.array([np.linalg.det(freq_mat[:, :, k]) for k in range(n_freq)])
+        determinant = np.fft.irfft(freq_det, fft_size)
+    else:
+        freq_mat = np.fft.fft(data, fft_size, axis=2)
+        freq_det = np.array([np.linalg.det(freq_mat[:, :, k]) for k in range(fft_size)])
+        determinant = np.fft.ifft(freq_det).real
+
+    # Hard trim to theoretical degree bound: deg(det) <= N*(L-1)
+    determinant = determinant[:fft_size - (N - 1)]
+
+    # Data-driven trim of trailing numerical noise
+    abs_max = np.max(np.abs(determinant))
+    if abs_max > 0:
+        tol = np.finfo(float).eps * N * abs_max
+        nz = np.flatnonzero(np.abs(determinant) > tol)
+        determinant = determinant[:nz[-1] + 1] if nz.size > 0 else determinant[:1]
+
+    if var == 'z^1':
         determinant = np.flip(determinant)
-        degree = poly_degree(determinant, var, tol_db)
-        determinant = determinant[-degree-1:] if degree >= 0 else determinant
-    
+
     return determinant
 
 
@@ -260,7 +267,7 @@ def general_char_poly(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
 
     # Polyphase: A is (N, N, L); m = degree of det(A)
     det_A = det_polynomial(A, "z^-1")
-    m = poly_degree(det_A, "z^-1")
+    m = len(det_A) - 1
     p_len = int(delays.sum()) + 1 + m
     p = np.zeros(p_len)
     p[0] = 1.0
