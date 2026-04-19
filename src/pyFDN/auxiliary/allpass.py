@@ -130,8 +130,7 @@ def is_allpass(
     C = np.asarray(C, dtype=float)
     D = np.asarray(D, dtype=float)
     delays = np.asarray(delays, dtype=int).ravel()
-    D_inv = np.linalg.inv(D)
-    A_eff = A - B @ D_inv @ C
+    A_eff = A - B @ np.linalg.solve(D, C)
     den = general_char_poly(delays, A)
     num = general_char_poly(delays, A_eff) * np.linalg.det(D)
     # Allpass: numerator equals reversed(denominator) up to sign
