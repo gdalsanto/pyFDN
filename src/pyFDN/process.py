@@ -1,7 +1,10 @@
 """FDN processing functions."""
+
 from __future__ import annotations
+
 import numpy as np
 from numpy.typing import ArrayLike
+
 from pyFDN.dsp.feedback_delay import FeedbackDelay
 
 
@@ -35,7 +38,7 @@ def process_fdn(
     if np.any(delays_arr <= 0):
         raise ValueError("Delays must be positive integers")
 
-    max_block_size = min(int(2 ** 12), int(np.min(delays_arr)))
+    max_block_size = min(int(2**12), int(np.min(delays_arr)))
     delay_bank = FeedbackDelay(delays_arr, max_block_size)
 
     num_samples = x.shape[0]
@@ -45,12 +48,12 @@ def process_fdn(
     start = 0
     while start < num_samples:
         block_size = min(max_block_size, num_samples - start)
-        block_in = x[start:start + block_size, :]
+        block_in = x[start : start + block_size, :]
 
-        delay_out = delay_bank.get_values(block_size)           # (block, N)
+        delay_out = delay_bank.get_values(block_size)  # (block, N)
         delay_bank.set_values(block_in @ B_mat.T + delay_out @ A_mat.T)
 
-        output[start:start + block_size] = delay_out @ C_mat.T + block_in @ D_mat.T
+        output[start : start + block_size] = delay_out @ C_mat.T + block_in @ D_mat.T
         delay_bank.advance(block_size)
         start += block_size
 

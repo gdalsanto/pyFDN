@@ -1,20 +1,21 @@
 """Delay related functions."""
+
 from __future__ import annotations
-from typing import Tuple
+
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.signal import group_delay
 
-from pyFDN.auxiliary.utils import ensure_3d
 from pyFDN.auxiliary.math import outer_sum_approximation
+from pyFDN.auxiliary.utils import ensure_3d
 
 
-def ms_to_smp(ms, fs):
+def ms_to_smp(ms: float | np.ndarray, fs: float) -> np.ndarray:
     """Convert milliseconds to samples."""
     return np.round(np.array(ms) * fs / 1000).astype(int)
 
 
-def mgrpdelay(matrix: ArrayLike) -> Tuple[np.ndarray, np.ndarray]:
+def mgrpdelay(matrix: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
     """Group delay for each entry of an FIR matrix."""
 
     mat = ensure_3d(matrix)
@@ -42,7 +43,7 @@ def mgrpdelay(matrix: ArrayLike) -> Tuple[np.ndarray, np.ndarray]:
     return np.asarray(delays), freq_ref
 
 
-def matrix_delay_approximation(matrix: ArrayLike) -> Tuple[np.ndarray, np.ndarray]:
+def matrix_delay_approximation(matrix: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
     """Rank-1 approximation of matrix group delay."""
 
     GD, _ = mgrpdelay(matrix)

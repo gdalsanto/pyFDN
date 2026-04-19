@@ -40,7 +40,9 @@ def pr_to_impz(
     num_poles = poles.size
     num_outputs = residues.shape[1]
     num_inputs = residues.shape[2]
-    response = np.zeros((impulse_response_length, num_outputs, num_inputs), dtype=np.float64)
+    response = np.zeros(
+        (impulse_response_length, num_outputs, num_inputs), dtype=np.float64
+    )
 
     t = np.arange(-1, impulse_response_length - 1, dtype=np.float64).reshape(-1, 1)
     angle = np.angle(poles).reshape(1, -1)
@@ -66,4 +68,3 @@ def pr_to_impz(
 
     response[0, :, :] = np.real_if_close(direct)
     return response
-

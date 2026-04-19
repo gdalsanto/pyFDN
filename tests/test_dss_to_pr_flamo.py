@@ -102,4 +102,3 @@ def test_dss_to_pr_flamo_rejects_absorption_filters():
             d,
             absorption_filters=np.eye(2),
         )
-

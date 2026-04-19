@@ -89,16 +89,81 @@ where = ["src"]
 # ----
 
 [tool.mypy]
-files = "."
+files = "src"
+mypy_path = "src"
 
 # Use strict defaults
 strict = true
 warn_unreachable = true
 warn_no_return = true
+# numpy stubs legitimately return Any for many ufunc/indexing operations
+disable_error_code = ["no-any-return"]
 
 [[tool.mypy.overrides]]
-# Don't require test functions to include types
+# Tests: relaxed — focus on source correctness, not test annotation coverage
 module = "tests.*"
 allow_untyped_defs = true
-disable_error_code = "attr-defined"
+disable_error_code = [
+    "attr-defined",
+    "no-untyped-call",
+    "unused-ignore",
+    "call-arg",      # test API mismatches caught here are tracked as issues
+    "arg-type",
+    "override",
+    "return-value",
+    "no-untyped-def",
+]
+
+[[tool.mypy.overrides]]
+# Examples: demo scripts, not library code
+module = "examples.*"
+allow_untyped_defs = true
+disable_error_code = ["no-untyped-call", "no-untyped-def", "attr-defined"]
+
+[[tool.mypy.overrides]]
+# Docs: Sphinx config
+module = "docs.*"
+allow_untyped_defs = true
+disable_error_code = ["no-untyped-call", "no-untyped-def"]
+
+[[tool.mypy.overrides]]
+# SDN: complex geometry/simulation research code, annotation work in progress
+module = "pyFDN.generate.SDN"
+allow_untyped_defs = true
+disable_error_code = ["no-untyped-call", "no-untyped-def", "attr-defined", "type-var"]
+
+[[tool.mypy.overrides]]
+# Allpass completion: complex optimisation code, annotation work in progress
+module = "pyFDN.generate.allpass_FDN.allpass_completion"
+allow_untyped_defs = true
+disable_error_code = ["no-untyped-call", "no-untyped-def"]
+
+[[tool.mypy.overrides]]
+# FLAMO integration helpers: depends on untyped external library
+module = "pyFDN.auxiliary.flamo"
+allow_untyped_defs = true
+disable_error_code = ["no-untyped-call", "no-untyped-def"]
+
+[[tool.mypy.overrides]]
+# FLAMO-based PR translation: annotation work in progress
+module = "pyFDN.translate.dss_to_pr_flamo"
+allow_untyped_defs = true
+disable_error_code = ["no-untyped-call", "no-untyped-def", "unused-ignore"]
+
+[[tool.mypy.overrides]]
+# Coupled rooms: research code, annotation work in progress
+module = "pyFDN.auxiliary.coupled_rooms"
+allow_untyped_defs = true
+disable_error_code = ["no-untyped-call", "no-untyped-def", "attr-defined"]
+
+[[tool.mypy.overrides]]
+# Recursive module: PyTorch-heavy, annotation work in progress
+module = "pyFDN.recursive.*"
+allow_untyped_defs = true
+disable_error_code = ["no-untyped-call", "no-untyped-def", "override", "arg-type", "call-arg"]
+
+[[tool.mypy.overrides]]
+# Acoustics helpers: ArrayLike-heavy DSP code
+module = "pyFDN.auxiliary.acoustics"
+disable_error_code = ["operator", "index", "arg-type"]
 

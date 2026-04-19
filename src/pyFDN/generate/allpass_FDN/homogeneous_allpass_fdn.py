@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.typing import ArrayLike
 
+
 def homogeneous_allpass_fdn(
     G: ArrayLike,
     X: ArrayLike,
@@ -33,7 +34,12 @@ def homogeneous_allpass_fdn(
     G = np.asarray(G, dtype=float)
     X = np.asarray(X, dtype=float)
 
-    if G.ndim != 2 or X.ndim != 2 or G.shape[0] != G.shape[1] or X.shape[0] != X.shape[1]:
+    if (
+        G.ndim != 2
+        or X.ndim != 2
+        or G.shape[0] != G.shape[1]
+        or X.shape[0] != X.shape[1]
+    ):
         raise ValueError("G and X must be square matrices.")
     if G.shape != X.shape:
         raise ValueError("G and X must have the same shape.")
@@ -48,12 +54,14 @@ def homogeneous_allpass_fdn(
         raise ValueError("X must be positive diagonal.")
 
     xx = np.diag(X).copy()
-    rr = np.diag((G @ G @ X)).copy()   # = diag(G^2 X)
+    rr = np.diag(G @ G @ X).copy()  # = diag(G^2 X)
 
     # Cauchy-like orthogonal U: K_ij = 1/(p_i - r_j)
     denom = xx.reshape(-1, 1) - rr.reshape(1, -1)
     if np.min(np.abs(denom)) < tol:
-        raise ValueError("Cauchy denominator p_i - r_j too small; construction ill-conditioned.")
+        raise ValueError(
+            "Cauchy denominator p_i - r_j too small; construction ill-conditioned."
+        )
     K = 1.0 / denom
 
     # beta_alpha should be rank-1: beta_alpha = inv(K) ./ K.T  (elementwise division)
@@ -64,8 +72,8 @@ def homogeneous_allpass_fdn(
     # beta_alpha ≈ (sqrt(sigma) * u) (sqrt(sigma) * v)^T
     U_svd, s_svd, Vh_svd = np.linalg.svd(beta_alpha, full_matrices=False)
     sigma = s_svd[0]
-    alpha = np.sqrt(sigma) * U_svd[:, 0]       # (N,)
-    beta = np.sqrt(sigma) * Vh_svd[0, :]     # (N,) since Vh row is v^T
+    alpha = np.sqrt(sigma) * U_svd[:, 0]  # (N,)
+    beta = np.sqrt(sigma) * Vh_svd[0, :]  # (N,) since Vh row is v^T
 
     # Fix global sign ambiguity for consistency
     alpha = np.abs(alpha)
@@ -92,9 +100,13 @@ def homogeneous_allpass_fdn(
     c = (-np.linalg.inv(X) @ np.linalg.inv(A) @ b * d).T
 
     if verbose:
-        from pyFDN.auxiliary.allpass import is_uniallpass, is_allpass
+        from pyFDN.auxiliary.allpass import is_allpass, is_uniallpass
+
         print("||U U^T - I||_F =", np.linalg.norm(U @ U.T - np.eye(N)))
-        print("||X U - U R - b b^T U||_F =", np.linalg.norm(X @ U - U @ (G @ G @ X) - b @ b.T @ U))
+        print(
+            "||X U - U R - b b^T U||_F =",
+            np.linalg.norm(X @ U - U @ (G @ G @ X) - b @ b.T @ U),
+        )
         is_a1, XX = is_uniallpass(A, b, c, d)
         print("isUniallpass:", is_a1, "XX=\n", XX)
         delays = 2 ** np.arange(N)

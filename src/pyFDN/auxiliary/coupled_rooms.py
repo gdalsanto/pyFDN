@@ -8,9 +8,7 @@ Python translation: Facundo Franchino, 2025
 
 from collections import OrderedDict
 
-import numpy as np
 import torch
-
 from flamo.processor import dsp, system
 
 from pyFDN.auxiliary.acoustics import rt_to_gain_per_sample
@@ -179,9 +177,7 @@ def create_coupled_rooms_fdn():
     input_layer = dsp.FFT(nfft)
     output_layer = dsp.iFFT(nfft)
 
-    model = system.Shell(
-        core=fdn, input_layer=input_layer, output_layer=output_layer
-    )
+    model = system.Shell(core=fdn, input_layer=input_layer, output_layer=output_layer)
 
     # Generate impulse response
     with torch.no_grad():

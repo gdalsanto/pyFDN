@@ -1,10 +1,14 @@
 from __future__ import annotations
-from numpy.typing import ArrayLike
+
 import numpy as np
+from numpy.typing import ArrayLike
 
 from pyFDN.auxiliary.utils import ensure_3d, last_nonzero_indices
 
-def shift_matrix_distribute(mat: ArrayLike, sparsity: float, *, pulse_size: int | None = None) -> np.ndarray:
+
+def shift_matrix_distribute(
+    mat: ArrayLike, sparsity: float, *, pulse_size: int | None = None
+) -> np.ndarray:
     """Randomly distribute time shifts for a polynomial matrix."""
 
     mat_arr = ensure_3d(mat)

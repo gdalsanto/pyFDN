@@ -5,6 +5,7 @@ Matrix transfer function to impulse response.
 Given numerator matrix tfB and common denominator tfA (z^{-1} convention),
 compute the MIMO impulse response by filtering a unit impulse for each input channel.
 """
+
 from __future__ import annotations
 
 import numpy as np

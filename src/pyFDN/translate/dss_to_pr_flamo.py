@@ -11,14 +11,14 @@ dP/dz(z)) and stored on the loop. No derivative APIs required from FLAMO.
 
 from __future__ import annotations
 
-from collections import OrderedDict
 import warnings
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from numpy.typing import ArrayLike
 import torch
+from numpy.typing import ArrayLike
 
 from pyFDN.auxiliary.poles import reduce_conjugate_pairs
 from pyFDN.translate.dss_to_flamo import dss_to_flamo
@@ -27,14 +27,22 @@ from pyFDN.translate.dss_to_flamo import dss_to_flamo
 class _IdentityProbe:
     """Constant identity matrix probe used for empty module chains. Returns torch."""
 
-    def __init__(self, size: int, *, device: torch.device | None = None, dtype: torch.dtype | None = None):
+    def __init__(
+        self,
+        size: int,
+        *,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
         self.size = int(size)
         self.output_channels = self.size
         self.input_channels = self.size
         self._device = device or torch.device("cpu")
         self._dtype = dtype or torch.complex128
         self._eye = torch.eye(self.size, device=self._device, dtype=self._dtype)
-        self._zero = torch.zeros(self.size, self.size, device=self._device, dtype=self._dtype)
+        self._zero = torch.zeros(
+            self.size, self.size, device=self._device, dtype=self._dtype
+        )
 
     def at_z(self, z: complex) -> torch.Tensor:
         return self._eye
@@ -82,7 +90,9 @@ def _to_numpy(t: torch.Tensor | np.ndarray) -> np.ndarray:
     return t.detach().cpu().resolve_conj().numpy()
 
 
-def _device_dtype_from_decomposition(decomposition: Any) -> tuple[torch.device, torch.dtype]:
+def _device_dtype_from_decomposition(
+    decomposition: Any,
+) -> tuple[torch.device, torch.dtype]:
     """Infer device and complex dtype from decomposition's P (recursion)."""
     rec = decomposition.p_probe
     return _infer_model_device(rec), _infer_model_complex_dtype(rec)
@@ -90,6 +100,7 @@ def _device_dtype_from_decomposition(decomposition: Any) -> tuple[torch.device, 
 
 def _make_log_det_derivative_w(recursion: Any):
     """Build (d/dw) log det P(w) once using grad; uses recursion.probe_recursion_w(w)."""
+
     def d_log_det_w(w):
         w_var = _as_torch_complex_scalar(w, model=recursion)
         w_var = w_var.detach().clone().requires_grad_(True)
@@ -97,11 +108,13 @@ def _make_log_det_derivative_w(recursion: Any):
         y = torch.logdet(P_w)
         (g,) = torch.autograd.grad(y, w_var, torch.ones_like(y))
         return g.conj().detach()
+
     return d_log_det_w
 
 
 def _make_P_and_dP_dz(recursion: Any):
     """Build (P(z), dP/dz(z)) once using JVP; uses recursion.probe_recursion(z)."""
+
     def get_P_and_dP_dz(z):
         z_var = _as_torch_complex_scalar(z, model=recursion)
         dz = torch.ones_like(z_var)
@@ -109,26 +122,37 @@ def _make_P_and_dP_dz(recursion: Any):
             recursion.probe_recursion, (z_var,), (dz,)
         )
         return P.detach(), dP_dz.detach()
+
     return get_P_and_dP_dz
 
 
 def _make_log_det_derivative_z(recursion: Any):
     """Build (d/dz) log det P(z) once using grad; uses recursion.probe_recursion(z)."""
+
     def d_log_det_z(z):
-        z_var = _as_torch_complex_scalar(z, model=recursion).detach().clone().requires_grad_(True)
+        z_var = (
+            _as_torch_complex_scalar(z, model=recursion)
+            .detach()
+            .clone()
+            .requires_grad_(True)
+        )
         P_z = recursion.probe_recursion(z_var)
         y = torch.logdet(P_z)
         (g,) = torch.autograd.grad(y, z_var, torch.ones_like(y))
         return g.conj().detach()
+
     return d_log_det_z
 
 
-def _sort_by_torch(a: torch.Tensor, key: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def _sort_by_torch(
+    a: torch.Tensor, key: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Sort tensor a by key (by angle for complex); return (a_sorted, indices)."""
     key_np = _to_numpy(key)
     ind = np.argsort(key_np)
     ind_t = torch.as_tensor(ind, device=a.device, dtype=torch.long)
     return a[ind_t], ind_t
+
 
 @dataclass
 class _CharacteristicDecomposition:
@@ -211,16 +235,13 @@ def flamo_decompose_for_pr(model: Any) -> FlamoDecompositionForPR:
     core = model.get_core() if callable(getattr(model, "get_core", None)) else model
     if not hasattr(core, "branchA") or not hasattr(core, "branchB"):
         raise ValueError(
-            "Model core must have branchA and branchB "
-            "(e.g., from dss_to_flamo)."
+            "Model core must have branchA and branchB (e.g., from dss_to_flamo)."
         )
     fdn_branch = core.branchA
     direct_branch = core.branchB
     fdn_modules = _as_module_list(fdn_branch)
     recs = [
-        m
-        for m in fdn_modules
-        if hasattr(m, "feedforward") and hasattr(m, "feedback")
+        m for m in fdn_modules if hasattr(m, "feedforward") and hasattr(m, "feedback")
     ]
     if len(recs) != 1:
         raise ValueError("branchA must contain exactly one Recursion.")
@@ -608,14 +629,18 @@ def _refine_pole_positions_w(
         print(f"Number of Exact Deflations: {exact_counter}")
         print(f"Number of Newton Steps: {newton_step_counter}")
         print(f"Number of Poles: {n_poles}")
-        print(f"Number of Non-converged Poles: {(quality > quality_threshold).sum().item()}")
+        print(
+            f"Number of Non-converged Poles: {(quality > quality_threshold).sum().item()}"
+        )
     meta = {
         "newtonStepCounter": int(newton_step_counter),
         "iterations": int(iteration_counter),
         "exactCounter": int(exact_counter),
         "recordNeighborDeflation": [],
         "recordNewton": [],
-        "recordRootsW": np.asarray([_to_numpy(r) for r in record_roots_w], dtype=np.complex128),
+        "recordRootsW": np.asarray(
+            [_to_numpy(r) for r in record_roots_w], dtype=np.complex128
+        ),
     }
     return roots_w, quality, meta
 
@@ -628,8 +653,8 @@ def _dss_to_res_flamo(
     """Residues from poles; P and dP/dz from loop (built once in _FDNLoopFlamo)."""
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     n_poles = poles.size
-    n_in = int(getattr(decomposition.in_probe, "input_channels"))
-    n_out = int(getattr(decomposition.out_probe, "output_channels"))
+    n_in = int(decomposition.in_probe.input_channels)
+    n_out = int(decomposition.out_probe.output_channels)
     n = loop.n
 
     p0, _ = loop.get_P_and_dP_dz(poles[0])
@@ -664,7 +689,9 @@ def _dss_to_res_flamo(
         undriven = 1.0 / r_den
     is_multiple = ~torch.isfinite(undriven)
     if is_multiple.any():
-        warnings.warn("There are multipoles. The residues are set to zero.", stacklevel=2)
+        warnings.warn(
+            "There are multipoles. The residues are set to zero.", stacklevel=2
+        )
         undriven = torch.where(is_multiple, torch.zeros_like(undriven), undriven)
 
     residues = r_nom / r_den[:, None, None]
@@ -814,4 +841,3 @@ def dss_to_pr_flamo(
         refinement_tol=refinement_tol,
         verbose=verbose,
     )
-

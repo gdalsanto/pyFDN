@@ -5,15 +5,17 @@ import os
 import sys
 
 # -- Path setup ---------------------------------------------------------------
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+)
 
 import pyFDN  # noqa: E402
 
 # -- Symlink examples into docs so nbsphinx can find them --------------------
 # Use real dir + per-notebook symlinks to avoid nbsphinx image path issues (GH#49)
 _docs_dir = os.path.dirname(os.path.abspath(__file__))
-_examples_src = os.path.join(os.path.dirname(_docs_dir), 'examples')
-_examples_dst = os.path.join(_docs_dir, 'examples')
+_examples_src = os.path.join(os.path.dirname(_docs_dir), "examples")
+_examples_dst = os.path.join(_docs_dir, "examples")
 if os.path.islink(_examples_dst):
     os.unlink(_examples_dst)
 if not os.path.exists(_examples_dst):
@@ -26,7 +28,11 @@ for root, _dirs, files in os.walk(_examples_src):
     for f in files:
         if f.endswith(".ipynb"):
             src_file = os.path.join(root, f)
-            dst_file = os.path.join(_examples_dst, rel, f) if rel != "." else os.path.join(_examples_dst, f)
+            dst_file = (
+                os.path.join(_examples_dst, rel, f)
+                if rel != "."
+                else os.path.join(_examples_dst, f)
+            )
             if os.path.exists(dst_file):
                 os.unlink(dst_file)
             os.symlink(os.path.relpath(src_file, os.path.dirname(dst_file)), dst_file)
@@ -62,7 +68,7 @@ napoleon_google_docstring = True
 napoleon_numpy_docstring = True
 
 # nbsphinx settings
-nbsphinx_execute = "auto"   # Execute notebooks that have no stored outputs
+nbsphinx_execute = "auto"  # Execute notebooks that have no stored outputs
 nbsphinx_allow_errors = False
 nbsphinx_prolog = """
 {% set docname = env.doc2path(env.docname, base=None) %}

@@ -1,13 +1,16 @@
 """Matrix polynomial and math operations."""
+
 from __future__ import annotations
+
 import math
 from itertools import combinations
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING
+
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.linalg import expm, logm
 
-from pyFDN.auxiliary.utils import lin_to_db, ensure_3d
+from pyFDN.auxiliary.utils import ensure_3d, lin_to_db
 
 if TYPE_CHECKING:
     import torch
@@ -26,6 +29,7 @@ def is_orthogonal(Q: np.ndarray, tol: float = 1e-10) -> bool:
     """Check if Q is orthogonal (Q.T @ Q ≈ I)."""
     return np.allclose(Q.T @ Q, np.eye(Q.shape[0]), atol=tol)
 
+
 def poly_degree(polynomial: ArrayLike, tol: float | None = None) -> int:
     """Return the polynomial degree in the z^{-1} convention.
 
@@ -40,7 +44,7 @@ def poly_degree(polynomial: ArrayLike, tol: float | None = None) -> int:
         return 0
 
     if tol is None:
-        tol = lin_to_db(np.finfo(float).eps)
+        tol = float(lin_to_db(np.finfo(float).eps))
 
     coeff_db = lin_to_db(coeffs)
     max_coeff = np.max(coeff_db)
@@ -55,58 +59,60 @@ def poly_degree(polynomial: ArrayLike, tol: float | None = None) -> int:
 def polyder_rational(b: np.ndarray, a: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Derivative of rational polynomial using quotient rule."""
     # Remove leading zeros
-    b = np.trim_zeros(b, 'f')
-    a = np.trim_zeros(a, 'f')
-    
+    b = np.trim_zeros(b, "f")
+    a = np.trim_zeros(a, "f")
+
     if len(b) == 0:
         b = np.array([0.0])
     if len(a) == 0:
         a = np.array([1.0])
-    
+
     # Compute derivatives of numerator and denominator
     db = np.polyder(b) if len(b) > 1 else np.array([0.0])
     da = np.polyder(a) if len(a) > 1 else np.array([0.0])
-    
+
     # Apply quotient rule: (b/a)' = (b'*a - b*a') / a^2
     if len(db) == 0:
         db = np.array([0.0])
     if len(da) == 0:
         da = np.array([0.0])
-        
+
     num1 = np.convolve(db, a)
     num2 = np.convolve(b, da)
-    
+
     # Pad to same length
     max_len = max(len(num1), len(num2))
     if len(num1) < max_len:
         num1 = np.pad(num1, (max_len - len(num1), 0))
     if len(num2) < max_len:
         num2 = np.pad(num2, (max_len - len(num2), 0))
-    
+
     q = num1 - num2
     p = np.convolve(a, a)
-    
+
     # Remove leading zeros from result
-    q = np.trim_zeros(q, 'f')
-    p = np.trim_zeros(p, 'f')
-    
+    q = np.trim_zeros(q, "f")
+    p = np.trim_zeros(p, "f")
+
     if len(q) == 0:
         q = np.array([0.0])
     if len(p) == 0:
         p = np.array([1.0])
-    
+
     return q, p
 
 
-def negpolyder(b: np.ndarray, a: np.ndarray, dont_truncate: bool = False) -> tuple[np.ndarray, np.ndarray]:
+def negpolyder(
+    b: np.ndarray, a: np.ndarray, dont_truncate: bool = False
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Derivative of rational polynomial with negative exponents.
-    
+
     Args:
         b: Numerator coefficients
         a: Denominator coefficients
         dont_truncate: Leading zeros are not truncated
-        
+
     Returns:
         q: Numerator coefficients of derivative
         p: Denominator coefficients of derivative
@@ -114,26 +120,26 @@ def negpolyder(b: np.ndarray, a: np.ndarray, dont_truncate: bool = False) -> tup
     # Flip for substitution x = z^-1
     b_flip = np.flip(b)
     a_flip = np.flip(a)
-    
+
     # Compute derivative
     q, p = polyder_rational(b_flip, a_flip)
-    
+
     # Flip for back substitution x^-1 = z
     q = np.flip(q)
     p = np.flip(p)
-    
+
     # Multiply with -1/z^2
     q = np.convolve(q, np.array([0, 0, -1]))
-    
+
     # Restore full length if truncation is not desired
     if dont_truncate:
         qq = np.zeros(len(a) + len(b) - 1)
         pp = np.zeros(len(a) + len(a) - 1)
-        qq[:len(q)] = q
-        pp[:len(p)] = p
+        qq[: len(q)] = q
+        pp[: len(p)] = p
         q = qq
         p = pp
-    
+
     return q, p
 
 
@@ -201,14 +207,14 @@ def det_polynomial(polynomial_matrix: np.ndarray) -> np.ndarray:
         determinant = np.fft.ifft(freq_det).real
 
     # Hard trim to theoretical degree bound: deg(det) <= N*(L-1)
-    determinant = determinant[:fft_size - (N - 1)]
+    determinant = determinant[: fft_size - (N - 1)]
 
     # Data-driven trim of trailing numerical noise
     abs_max = np.max(np.abs(determinant))
     if abs_max > 0:
         tol = np.finfo(float).eps * N * abs_max
         nz = np.flatnonzero(np.abs(determinant) > tol)
-        determinant = determinant[:nz[-1] + 1] if nz.size > 0 else determinant[:1]
+        determinant = determinant[: nz[-1] + 1] if nz.size > 0 else determinant[:1]
 
     return determinant
 
@@ -246,8 +252,8 @@ def general_char_poly(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
         p = np.zeros(p_len)
         p[0] = 1.0
         for nn in range(1, N + 1):
-            for ind in combinations(range(ND), nn):
-                ind = np.array(ind)
+            for ind_tup in combinations(range(ND), nn):
+                ind = np.array(ind_tup)
                 p_ind = int(delays[ind].sum())
                 p[p_ind] += ((-1) ** nn) * np.linalg.det(A[np.ix_(ind, ind)])
         return p
@@ -259,10 +265,10 @@ def general_char_poly(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
     p = np.zeros(p_len)
     p[0] = 1.0
     for nn in range(1, N + 1):
-        for ind in combinations(range(ND), nn):
-            ind = np.array(ind)
+        for ind_tup in combinations(range(ND), nn):
+            ind = np.array(ind_tup)
             p_ind = int(delays[ind].sum())
-            sub = A[np.ix_(ind, ind, list(range(A.shape[2])))]
+            sub = A[np.ix_(ind, ind, np.arange(A.shape[2]))]
             dd = det_polynomial(sub)
             for j, c in enumerate(dd):
                 idx = p_ind - j
@@ -279,7 +285,7 @@ def matrix_polyval(P: ArrayLike, z: complex) -> np.ndarray:
         raise ValueError("matrix_polyval expects a 3-D array")
     order = P_arr.shape[2]
     exponents = np.arange(order - 1, -1, -1, dtype=int)
-    z_powers = (z ** exponents).reshape((1, 1, order))
+    z_powers = (z**exponents).reshape((1, 1, order))
     return np.sum(P_arr * z_powers, axis=2)
 
 
@@ -317,7 +323,7 @@ def matrix_convolution(A: ArrayLike, B: ArrayLike) -> np.ndarray:
     return result
 
 
-def outer_sum_approximation(matrix: ArrayLike) -> Tuple[np.ndarray, np.ndarray]:
+def outer_sum_approximation(matrix: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
     """Rank-1 approximation minimizing ``||u + v^T - matrix||_F``."""
 
     mat = np.asarray(matrix, dtype=float)

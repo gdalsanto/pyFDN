@@ -12,6 +12,7 @@ import numpy as np
 
 try:
     from flamo.processor import dsp
+
     _HAS_FLAMO = True
 except ImportError:
     _HAS_FLAMO = False
@@ -20,6 +21,7 @@ except ImportError:
 def _get_device(device):
     if device is None and _HAS_FLAMO:
         import torch
+
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return device
 

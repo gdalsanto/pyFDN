@@ -3,6 +3,7 @@ Allpass FDN helpers (Poletti MIMO reverberator, uniallpass test, etc.).
 
 Based on Poletti (1995) and "Allpass Feedback Delay Networks" by Sebastian J. Schlecht.
 """
+
 from __future__ import annotations
 
 import warnings
@@ -15,7 +16,9 @@ from pyFDN.auxiliary.math import general_char_poly
 from pyFDN.generate.is_almost_zero import is_almost_zero
 
 
-def poletti_allpass(g: float, U: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def poletti_allpass(
+    g: float, U: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Create Poletti's MIMO unitary reverberator (allpass FDN).
 
@@ -79,7 +82,7 @@ def is_uniallpass(
     # Check P is diagonal
     off_diag = P - np.diag(np.diag(P))
     if not is_almost_zero(off_diag, tol=tol):
-        warnings.warn("P is not diagonal; system is not uniallpass.")
+        warnings.warn("P is not diagonal; system is not uniallpass.", stacklevel=2)
         return False, P
     # Test: PP - U @ PP @ U' ≈ 0 with PP = blkdiag(P, I)
     U = np.block([[A, B], [C, D]])
@@ -147,7 +150,9 @@ def is_allpass(
     return is_a, den, num
 
 
-def series_allpass(g: ArrayLike) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def series_allpass(
+    g: ArrayLike,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Create Schroeder's series allpass FDN (SISO).
 
@@ -182,10 +187,12 @@ def series_allpass(g: ArrayLike) -> tuple[np.ndarray, np.ndarray, np.ndarray, np
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Series connection of an FDN with a feedforward/back allpass (seriesFDNinAllpass.m)."""
         g2 = 1 - allpass_gain**2
-        s_matrix = np.block([
-            [matrix, np.zeros((matrix.shape[0], 1))],
-            [output_gain * g2, np.array([[allpass_gain]])],
-        ])
+        s_matrix = np.block(
+            [
+                [matrix, np.zeros((matrix.shape[0], 1))],
+                [output_gain * g2, np.array([[allpass_gain]])],
+            ]
+        )
         s_input_gain = np.vstack([input_gain, direct * g2])
         s_output_gain = np.hstack([-allpass_gain * output_gain, np.array([[1.0]])])
         s_direct = -allpass_gain * direct
@@ -206,7 +213,9 @@ def series_allpass(g: ArrayLike) -> tuple[np.ndarray, np.ndarray, np.ndarray, np
     return matrix, input_gain, output_gain, direct
 
 
-def nested_allpass(g: ArrayLike) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def nested_allpass(
+    g: ArrayLike,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Create Gardner's nested allpass FDN (SISO).
 
@@ -242,10 +251,12 @@ def nested_allpass(g: ArrayLike) -> tuple[np.ndarray, np.ndarray, np.ndarray, np
     for it in range(1, N):
         ga = g[it]
         # [matrix, input_gain; output_gain*ga, direct*ga]
-        n_matrix = np.block([
-            [matrix, input_gain],
-            [output_gain * ga, direct * ga],
-        ])
+        n_matrix = np.block(
+            [
+                [matrix, input_gain],
+                [output_gain * ga, direct * ga],
+            ]
+        )
         n_input_gain = np.vstack([np.zeros_like(input_gain), np.array([[1 - ga**2]])])
         n_output_gain = np.hstack([output_gain, direct])
         n_direct = np.array([[-ga]])
@@ -294,5 +305,7 @@ def is_paraunitary(
     off_out = R_out - np.diag(np.diag(R_out))
     off_in = R_in - np.diag(np.diag(R_in))
     max_off = float(max(np.max(np.abs(off_out)), np.max(np.abs(off_in))))
-    is_p = is_almost_zero(R_out - I_out, tol=tol) and is_almost_zero(R_in - I_in, tol=tol)
+    is_p = is_almost_zero(R_out - I_out, tol=tol) and is_almost_zero(
+        R_in - I_in, tol=tol
+    )
     return is_p, R_out, max_off

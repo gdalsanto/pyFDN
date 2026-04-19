@@ -1,20 +1,25 @@
 from __future__ import annotations
+
 import warnings
-from typing import Any, Dict, Set
+from typing import Any
+
 import numpy as np
 
 # Optional deps
 try:
     import scipy.io as sio
+
     _HAVE_SCIPY = True
 except Exception:
     _HAVE_SCIPY = False
 
 try:
     import scipy.sparse as sp
+
     _HAVE_SPARSE = True
 except Exception:
     _HAVE_SPARSE = False
+
 
 def _is_matv73(path: str) -> bool:
     """Detect v7.3 (HDF5) MAT files via magic bytes."""
@@ -22,17 +27,31 @@ def _is_matv73(path: str) -> bool:
         sig = f.read(8)
     return sig == b"\x89HDF\r\n\x1a\n"
 
+
 # -------------------- v5/v7 helpers (SciPy) --------------------
 
 _KNOWN_NONCLASS_TYPES = {
-    "double","single",
-    "int8","uint8","int16","uint16","int32","uint32","int64","uint64",
-    "logical","char","cell","struct","sparse"
+    "double",
+    "single",
+    "int8",
+    "uint8",
+    "int16",
+    "uint16",
+    "int32",
+    "uint32",
+    "int64",
+    "uint64",
+    "logical",
+    "char",
+    "cell",
+    "struct",
+    "sparse",
 }
 
-def _scan_v5v7_classdef_vars(path: str) -> Set[str]:
+
+def _scan_v5v7_classdef_vars(path: str) -> set[str]:
     """Use scipy.io.whosmat to find variables that are custom MATLAB classes."""
-    class_vars: Set[str] = set()
+    class_vars: set[str] = set()
     try:
         entries = sio.whosmat(path)  # [(name, shape, class)]
     except Exception:
@@ -43,6 +62,7 @@ def _scan_v5v7_classdef_vars(path: str) -> Set[str]:
             class_vars.add(name)
     return class_vars
 
+
 def _convert_cell_array_inplace(arr: np.ndarray) -> np.ndarray:
     """
     MATLAB cell arrays arrive as object ndarrays. Recursively convert elements
@@ -50,20 +70,20 @@ def _convert_cell_array_inplace(arr: np.ndarray) -> np.ndarray:
     """
     it = np.nditer(arr, flags=["refs_ok", "multi_index"], op_flags=["readwrite"])
     for x in it:
-        x[...] = _convert_elem(x.item())
+        x[...] = _convert_elem(x.item())  # type: ignore[index]
     return arr
 
-def _matstruct_to_dict(mobj: Any) -> Dict[str, Any]:
+
+def _matstruct_to_dict(mobj: Any) -> dict[str, Any]:
     """Convert scipy.io 'mat_struct' to a nested Python dict (values converted)."""
-    d: Dict[str, Any] = {}
+    d: dict[str, Any] = {}
     for fn in getattr(mobj, "_fieldnames", []):
         d[fn] = _convert_elem(getattr(mobj, fn))
     return d
 
+
 def _char_to_str(a: np.ndarray) -> str | list[str]:
     """1-D char → str; 2-D char matrix → list[str]."""
-    if not isinstance(a, np.ndarray):
-        return str(a)
     if a.dtype.kind in ("U", "S"):
         if a.ndim == 1:
             return "".join(a.tolist())
@@ -71,11 +91,13 @@ def _char_to_str(a: np.ndarray) -> str | list[str]:
             return ["".join(row.tolist()) for row in a]
     return str(a)
 
+
 def _is_mat_struct(elem: Any) -> bool:
     if not _HAVE_SCIPY:
         return False
     mat_struct_type = getattr(sio.matlab.mio5_params, "mat_struct", None)
     return mat_struct_type is not None and isinstance(elem, mat_struct_type)
+
 
 def _convert_struct_ndarray(arr: np.ndarray) -> Any:
     """
@@ -90,6 +112,7 @@ def _convert_struct_ndarray(arr: np.ndarray) -> Any:
     if arr.shape == (1, 1):
         return out.item()
     return out
+
 
 def _convert_elem(elem: Any) -> Any:
     """
@@ -138,6 +161,7 @@ def _convert_elem(elem: Any) -> Any:
     # everything else: leave numpy arrays (including 0-d scalars) as-is
     return elem
 
+
 def _upcast_int_like(elem: Any) -> Any:
     """
     Recursively upcast integer scalars and arrays to float64.
@@ -169,11 +193,15 @@ def _upcast_int_like(elem: Any) -> Any:
     if isinstance(elem, np.ndarray):
         if elem.dtype == object:
             out = np.empty(elem.shape, dtype=object)
-            it = np.nditer(elem, flags=["multi_index", "refs_ok"], op_flags=["readonly"])
+            it = np.nditer(
+                elem, flags=["multi_index", "refs_ok"], op_flags=["readonly"]
+            )
             for x in it:
                 out[it.multi_index] = _upcast_int_like(x.item())
             return out
-        if np.issubdtype(elem.dtype, np.integer) and not np.issubdtype(elem.dtype, np.bool_):
+        if np.issubdtype(elem.dtype, np.integer) and not np.issubdtype(
+            elem.dtype, np.bool_
+        ):
             return elem.astype(np.float64)
         return elem
 
@@ -185,25 +213,29 @@ def _upcast_int_like(elem: Any) -> Any:
 
     return elem
 
-def _clean_top_level(d: Dict[str, Any]) -> Dict[str, Any]:
+
+def _clean_top_level(d: dict[str, Any]) -> dict[str, Any]:
     drop = {"__header__", "__version__", "__globals__"}
     return {k: v for k, v in d.items() if k not in drop}
 
+
 # -------------------- v7.3 helpers (HDF5) --------------------
 
-def _scan_v73_classdef_vars_with_h5py(path: str) -> Set[str]:
+
+def _scan_v73_classdef_vars_with_h5py(path: str) -> set[str]:
     """
     Inspect top-level HDF5 nodes and record those with MATLAB_class == 'object'.
     This requires h5py; if unavailable we can't reliably detect custom classes.
     """
-    class_vars: Set[str] = set()
+    class_vars: set[str] = set()
     try:
-        import h5py  # type: ignore
+        import h5py
     except Exception:
         warnings.warn(
             "Detected v7.3 MAT but 'h5py' is not installed; "
             "cannot pre-detect classdef objects. They may still load oddly.",
             RuntimeWarning,
+            stacklevel=2,
         )
         return class_vars
 
@@ -220,7 +252,9 @@ def _scan_v73_classdef_vars_with_h5py(path: str) -> Set[str]:
                 pass
     return class_vars
 
+
 # -------------------- Public API --------------------
+
 
 def load_mat_workspace(
     path: str,
@@ -228,7 +262,7 @@ def load_mat_workspace(
     simplify_chars: bool = True,
     allow_v73_with_mat73: bool = True,
     upcast: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Load a MATLAB .mat workspace dump into Python/Numpy while:
       • Skipping MATLAB classdef objects (warns and omits those variables)
@@ -262,7 +296,7 @@ def load_mat_workspace(
                 "and install 'mat73', or re-save as v7 in MATLAB."
             )
         try:
-            import mat73  # type: ignore
+            import mat73
         except Exception as e:
             raise RuntimeError(
                 "Detected v7.3 MAT file but 'mat73' is not installed. "
@@ -274,14 +308,18 @@ def load_mat_workspace(
         # Drop classdef vars and warn
         for v in sorted(class_vars):
             if v in raw:
-                warnings.warn(f"Skipping MATLAB class object '{v}' (classdef).", RuntimeWarning)
+                warnings.warn(
+                    f"Skipping MATLAB class object '{v}' (classdef).",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
                 raw.pop(v, None)
 
         if not simplify_chars:
             result = raw
         else:
             # Normalize char arrays inside the structure returned by mat73 and unbox 0-d scalars
-            def fix_nodes(x):
+            def fix_nodes(x: Any) -> Any:
                 if isinstance(x, np.ndarray) and x.dtype.kind in ("U", "S"):
                     return _char_to_str(x)
                 if isinstance(x, np.ndarray) and x.ndim == 0:
@@ -307,7 +345,9 @@ def load_mat_workspace(
 
     # ----- v5/v7 path (SciPy) -----
     if not _HAVE_SCIPY:
-        raise RuntimeError("SciPy is required to read non-v7.3 MAT files. Please install scipy.")
+        raise RuntimeError(
+            "SciPy is required to read non-v7.3 MAT files. Please install scipy."
+        )
 
     # Identify classdef variables up front
     class_vars = _scan_v5v7_classdef_vars(path)
@@ -316,18 +356,25 @@ def load_mat_workspace(
     data = sio.loadmat(path, struct_as_record=False, squeeze_me=False)
     data = _clean_top_level(data)
 
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     for k, v in data.items():
         if k in class_vars:
-            warnings.warn(f"Skipping MATLAB class object '{k}' (classdef).", RuntimeWarning)
+            warnings.warn(
+                f"Skipping MATLAB class object '{k}' (classdef).",
+                RuntimeWarning,
+                stacklevel=2,
+            )
             continue
 
         cv = _convert_elem(v)
 
         # Optionally normalize top-level char arrays
-        if simplify_chars and isinstance(cv, np.ndarray) and cv.dtype.kind in ("U", "S"):
+        if (
+            simplify_chars
+            and isinstance(cv, np.ndarray)
+            and cv.dtype.kind in ("U", "S")
+        ):
             cv = _char_to_str(cv)
-
 
         out[k] = cv
 

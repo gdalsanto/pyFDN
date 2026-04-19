@@ -29,27 +29,35 @@ Notes:
 from __future__ import annotations
 
 import warnings
+from typing import Any
 
 import numpy as np
 
 try:
     import scipy.linalg as sla
+    from scipy.optimize import minimize
+
     _HAVE_SCIPY = True
 except Exception:
     _HAVE_SCIPY = False
 
 import pyFDN
+
 # ---------------------------- Utilities -------------------------------------
+
 
 def _I(n: int, dtype) -> np.ndarray:
     return np.eye(n, dtype=dtype)
+
 
 def _adj(A: np.ndarray) -> np.ndarray:
     # conjugate-transpose
     return A.conj().T
 
+
 def hermitize(M: np.ndarray) -> np.ndarray:
     return 0.5 * (M + _adj(M))
+
 
 def eig_sqrt_psd(M: np.ndarray, eps: float = 0.0) -> np.ndarray:
     """
@@ -60,6 +68,7 @@ def eig_sqrt_psd(M: np.ndarray, eps: float = 0.0) -> np.ndarray:
     w, V = np.linalg.eigh(M)
     w = np.maximum(w, eps)
     return (V * np.sqrt(w)) @ _adj(V)
+
 
 def sqrtm_psd(M: np.ndarray, eps: float = 0.0) -> np.ndarray:
     """
@@ -78,11 +87,14 @@ def sqrtm_psd(M: np.ndarray, eps: float = 0.0) -> np.ndarray:
     else:
         return eig_sqrt_psd(M, eps=eps)
 
+
 def diag_sqrt(x: np.ndarray) -> np.ndarray:
     return np.diag(np.sqrt(x))
 
+
 def diag_inv_sqrt(x: np.ndarray, eps: float = 0.0) -> np.ndarray:
     return np.diag(1.0 / np.sqrt(np.maximum(x, eps)))
+
 
 def orth_error(V: np.ndarray) -> float:
     """|| V^* V - I ||_F"""
@@ -90,12 +102,13 @@ def orth_error(V: np.ndarray) -> float:
     E = _adj(V) @ V - _I(n, V.dtype)
     return float(np.linalg.norm(E, ord="fro"))
 
+
 def block_matrix(A, B, C, D) -> np.ndarray:
-    return np.block([[A, B],
-                     [C, D]])
+    return np.block([[A, B], [C, D]])
 
 
 # ------------------ Diagonal similarity preprocessing ------------------------
+
 
 def diagonal_similarity_from_abs2_lyapunov(
     A: np.ndarray,
@@ -120,16 +133,22 @@ def diagonal_similarity_from_abs2_lyapunov(
         raise ValueError("A must be square.")
 
     M = np.abs(A) ** 2  # elementwise
-    rhs = np.full(N, float(q), dtype=float) if np.isscalar(q) else np.asarray(q, dtype=float)
+    rhs = (
+        np.full(N, q, dtype=np.float64)
+        if np.isscalar(q)
+        else np.asarray(q, dtype=float)
+    )
     if rhs.shape != (N,):
         raise ValueError("q must be scalar or shape (N,)")
 
     K = np.eye(N) - M
     # Solve (I - M) x = q
     try:
-        x = np.linalg.solve(K, rhs)
+        x = np.linalg.solve(K, rhs.astype(float))
     except np.linalg.LinAlgError as e:
-        raise RuntimeError("Failed to solve (I - |A|^2) x = q; matrix may be singular.") from e
+        raise RuntimeError(
+            "Failed to solve (I - |A|^2) x = q; matrix may be singular."
+        ) from e
 
     if np.any(~np.isfinite(x)):
         raise RuntimeError("Non-finite entries in x from diagonal similarity solve.")
@@ -152,7 +171,9 @@ def apply_diagonal_similarity(A: np.ndarray, x: np.ndarray) -> np.ndarray:
     return Dm @ A @ Dp
 
 
-def map_back_from_similarity(Bt: np.ndarray, Ct: np.ndarray, Dt: np.ndarray, x: np.ndarray):
+def map_back_from_similarity(
+    Bt: np.ndarray, Ct: np.ndarray, Dt: np.ndarray, x: np.ndarray
+):
     """
     Map balanced completion (A_tilde, Bt, Ct, Dt) back to original coordinates:
         B = X^{1/2} Bt
@@ -169,6 +190,7 @@ def map_back_from_similarity(Bt: np.ndarray, Ct: np.ndarray, Dt: np.ndarray, x: 
 
 
 # ------------------------ Completion methods ---------------------------------
+
 
 def complete_full_mimo_halmos(A: np.ndarray, psd_clip: float = 0.0):
     """
@@ -198,7 +220,9 @@ def complete_full_mimo_halmos(A: np.ndarray, psd_clip: float = 0.0):
     return B, C, D
 
 
-def complete_general_mimo_svd(A: np.ndarray, k: int, tol_one: float = 1e-8, choose_smallest_if_needed: bool = True):
+def complete_general_mimo_svd(
+    A: np.ndarray, k: int, tol_one: float = 1e-8, choose_smallest_if_needed: bool = True
+):
     """
     General MIMO completion via defect subspace (CS/SVD-based).
 
@@ -246,26 +270,26 @@ def complete_general_mimo_svd(A: np.ndarray, k: int, tol_one: float = 1e-8, choo
     #         raise RuntimeError(
     #             f"Singular values do not provide enough defect directions: found {defect.size}, need {k}."
     #         )
-    
+
     # fall back to k smallest singular values
     idx = np.argsort(s)[:k]
 
     # Build U1,V1 for selected singular values
-    U1 = U[:, idx]               # Nxk
-    V1 = V[:, idx]               # Nxk
-    S = np.diag(s[idx])          # kxk
+    U1 = U[:, idx]  # Nxk
+    V1 = V[:, idx]  # Nxk
+    S = np.diag(s[idx])  # kxk
     # sqrt(I - S^2)
     G = np.diag(np.sqrt(np.maximum(1.0 - (s[idx] ** 2), 0.0)))  # kxk, real nonnegative
 
-    B = U1 @ G                   # Nxk
-    C = G @ _adj(V1)             # kxN
-    D = -S                       # kxk
+    B = U1 @ G  # Nxk
+    C = G @ _adj(V1)  # kxN
+    D = -S  # kxk
 
     return B, C, D
 
 
-
 # ------------------ Diagonal similarity parameterization ---------------------
+
 
 def scaled_A_from_u(A: np.ndarray, u: np.ndarray) -> np.ndarray:
     """
@@ -275,6 +299,7 @@ def scaled_A_from_u(A: np.ndarray, u: np.ndarray) -> np.ndarray:
     d = np.exp(u)
     # Right-multiply columns by d, left-multiply rows by 1/d:
     return (A * d[None, :]) / d[:, None]
+
 
 def G_from_u(A: np.ndarray, u: np.ndarray) -> np.ndarray:
     """
@@ -288,6 +313,7 @@ def G_from_u(A: np.ndarray, u: np.ndarray) -> np.ndarray:
 
 # ------------------ Objective: PSD + rank-defect k ---------------------------
 
+
 def softplus(x: np.ndarray, tau: float) -> np.ndarray:
     """
     Smooth approximation of max(0, x) for vector x.
@@ -298,6 +324,7 @@ def softplus(x: np.ndarray, tau: float) -> np.ndarray:
     # avoid overflow
     z = np.clip(z, -60.0, 60.0)
     return tau * np.log1p(np.exp(z))
+
 
 def objective_rank_defect(
     u: np.ndarray,
@@ -329,20 +356,24 @@ def objective_rank_defect(
     # Tail-to-zero penalty: for rank k, we want N-k eigenvalues near 0.
     # Since lam ascending, the "near-zero" ones are lam[0 : N-k]
     tail = lam[: max(N - k, 0)]
-    tail_pen = np.sum(tail ** 2)
+    tail_pen = np.sum(tail**2)
 
     # Top-k away-from-zero: enforce lam[N-k:] >= delta_top
-    top = lam[max(N - k, 0):]
+    top = lam[max(N - k, 0) :]
     top_barrier = np.sum(softplus(delta_top - top, tau=tau) ** 2)
 
     # Regularize u (and remove gauge by centering)
     u0 = u - np.mean(u)
     reg = reg_u * float(np.dot(u0, u0))
     reg = 0
-    
-    return float(alpha_tail * tail_pen + beta_psd * neg_pen + gamma_top * top_barrier + reg)
+
+    return float(
+        alpha_tail * tail_pen + beta_psd * neg_pen + gamma_top * top_barrier + reg
+    )
+
 
 # ------------------ Initialization helpers -----------------------------------
+
 
 def init_u_abs2_heuristic(A: np.ndarray, q: float = 1.0) -> np.ndarray:
     """
@@ -363,8 +394,6 @@ def init_u_abs2_heuristic(A: np.ndarray, q: float = 1.0) -> np.ndarray:
 
 # ------------------ Main optimizer -------------------------------------------
 
-import scipy.linalg as sla
-from scipy.optimize import minimize
 
 def optimize_diagonal_similarity_rank_defect_scipy(
     A: np.ndarray,
@@ -409,7 +438,9 @@ def optimize_diagonal_similarity_rank_defect_scipy(
         # enforce gauge (scale invariance) by centering u inside objective
         uc = u - np.mean(u)
         return objective_rank_defect(
-            uc, A, k,
+            uc,
+            A,
+            k,
             tau=tau,
             alpha_tail=alpha_tail,
             beta_psd=beta_psd,
@@ -453,18 +484,21 @@ def optimize_diagonal_similarity_rank_defect_scipy(
         "eig_min": float(lam[0]),
         "eig_max": float(lam[-1]),
         "eig_tail_norm": float(np.linalg.norm(lam[: max(N - k, 0)])),
-        "eig_top_min": float(np.min(lam[max(N - k, 0):])) if k > 0 else None,
+        "eig_top_min": float(np.min(lam[max(N - k, 0) :])) if k > 0 else None,
         "eigvals": lam,
     }
     if verbose:
         print("Optimization:", info["success"], info["message"])
         print(f"  objective={info['fun']:.3e}, nit={info['nit']}")
-        print(f"  eig_min={info['eig_min']:.3e}, eig_top_min={info['eig_top_min']:.3e}, tail_norm={info['eig_tail_norm']:.3e}")
+        print(
+            f"  eig_min={info['eig_min']:.3e}, eig_top_min={info['eig_top_min']:.3e}, tail_norm={info['eig_tail_norm']:.3e}"
+        )
 
     return u_opt, info
 
 
 # ------------------------------ High-level API -------------------------------
+
 
 def complete_fdn(
     A: np.ndarray,
@@ -511,7 +545,9 @@ def complete_fdn(
         for attempt in range(max_retries):
             u = np.random.rand(N)
             u, info = optimize_diagonal_similarity_rank_defect_scipy(
-                A, k=k, u0=u,
+                A,
+                k=k,
+                u0=u,
                 verbose=True,
                 maxiter=2000,
                 tau=1e-10,
@@ -521,10 +557,13 @@ def complete_fdn(
                 delta_top=1e-10,
                 reg_u=1e-6,
             )
-            if info.get('eig_tail_norm', np.inf) < tail_norm_threshold:
+            if info.get("eig_tail_norm", np.inf) < tail_norm_threshold:
                 break
             if attempt == max_retries - 1:
-                warnings.warn("eig_tail_norm did not go under threshold after max retries.")
+                warnings.warn(
+                    "eig_tail_norm did not go under threshold after max retries.",
+                    stacklevel=2,
+                )
         x = np.exp(u) ** 2
         At = apply_diagonal_similarity(A, x)
     else:
@@ -536,7 +575,6 @@ def complete_fdn(
     else:
         Bt, Ct, Dt = complete_general_mimo_svd(At, k=k, tol_one=tol_one)
 
-    
     # Random orthogonal transformation to mix B, C, and D
     UU = pyFDN.random_orthogonal(k)
     Bt = Bt @ UU
@@ -556,7 +594,9 @@ def complete_fdn(
     return B, C, D
 
 
-def check_completion(A: np.ndarray, B: np.ndarray, C: np.ndarray, D: np.ndarray) -> dict:
+def check_completion(
+    A: np.ndarray, B: np.ndarray, C: np.ndarray, D: np.ndarray
+) -> dict[str, Any]:
     """
     Check balanced orthogonality/unitarity of V = [[A,B],[C,D]]:
       V^* V should be identity.

@@ -1,9 +1,12 @@
 """Plot utilities (matrix heatmap, system matrix layout, impulse response grid)."""
+
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
-from numpy.typing import ArrayLike
 from matplotlib import pyplot as plt
+from numpy.typing import ArrayLike
 
 
 def plot_system_matrix(
@@ -13,7 +16,7 @@ def plot_system_matrix(
     d: ArrayLike,
     zmin: float | None = None,
     zmax: float | None = None,
-):
+) -> Any:
     """Plot system matrix [A b; c d] as 2x2 Plotly heatmaps via px.imshow, shared color scale.
 
     Subplot sizes are proportional to block dimensions so that each matrix element
@@ -42,7 +45,7 @@ def plot_system_matrix(
     if zmin is None and zmax is None:
         zmin, zmax = -1.0, 1.0
     elif zmin is None:
-        zmin = -np.abs(zmax) if zmax != 0 else -1.0
+        zmin = -float(np.abs(zmax)) if zmax is not None and zmax != 0 else -1.0
     elif zmax is None:
         zmax = np.abs(zmin) if zmin != 0 else 1.0
 
@@ -72,7 +75,7 @@ def plot_system_matrix(
 
     blocks = [A, b, c, d]
     positions = [(1, 1), (1, 2), (2, 1), (2, 2)]
-    for (row, col), blk in zip(positions, blocks):
+    for (row, col), blk in zip(positions, blocks, strict=False):
         sub = px.imshow(
             blk,
             range_color=[zmin, zmax],
@@ -83,7 +86,7 @@ def plot_system_matrix(
             binary_string=False,  # force Heatmap so RdBu is used (not grayscale)
         )
         trace = sub.data[0]
-        trace.showscale = (row == 2 and col == 2)
+        trace.showscale = row == 2 and col == 2
         # Ensure colorscale is RdBu (in case layout overwrites)
         trace.update(colorscale="RdBu", zmin=zmin, zmax=zmax, zmid=0)
         fig.add_trace(trace, row=row, col=col)
@@ -109,7 +112,7 @@ def plot_impulse_response_matrix(
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
     fig: plt.Figure | None = None,
-    **plot_kwargs,
+    **plot_kwargs: Any,
 ) -> tuple[plt.Figure, np.ndarray, np.ndarray]:
     """Plot matrix of impulse responses in a subplot grid (out x in).
 
@@ -145,10 +148,14 @@ def plot_impulse_response_matrix(
     t = np.asarray(t).ravel()
 
     if fig is None:
-        fig, plot_axes = plt.subplots(n_out, n_in, sharex=True, sharey=True, squeeze=False)
+        fig, plot_axes = plt.subplots(
+            n_out, n_in, sharex=True, sharey=True, squeeze=False
+        )
     else:
         if len(fig.axes) != n_out * n_in:
-            fig, plot_axes = plt.subplots(n_out, n_in, sharex=True, sharey=True, squeeze=False, figure=fig)
+            fig, plot_axes = plt.subplots(
+                n_out, n_in, sharex=True, sharey=True, squeeze=False, figure=fig
+            )
         else:
             plot_axes = np.array(fig.axes).reshape(n_out, n_in)
 
@@ -186,7 +193,7 @@ def plot_spectrogram(
     *,
     nperseg: int = 1024,
     noverlap: int | None = None,
-    window: str | tuple = "blackman",
+    window: str | tuple[Any, ...] = "blackman",
     xlim: tuple[float | None, float | None] = (None, None),
     ylim: tuple[float | None, float | None] = (None, None),
     clim: tuple[float | None, float | None] = (None, None),
@@ -195,7 +202,7 @@ def plot_spectrogram(
     ylabel: str = "Frequency [Hz]",
     height: int = 500,
     colorscale: str = "Viridis",
-):
+) -> Any:
     """Plot spectrogram of a 1-D signal as a Plotly heatmap.
 
     Uses the same default parameters as the Poletti example: Blackman window,
@@ -232,13 +239,15 @@ def plot_spectrogram(
     -------
     fig : plotly.graph_objects.Figure
     """
-    from scipy.signal import spectrogram
     import plotly.graph_objects as go
+    from scipy.signal import spectrogram
 
     ir = np.asarray(ir, dtype=float).ravel()
     if noverlap is None:
         noverlap = nperseg // 4 * 3
-    f, t, Sxx = spectrogram(ir, fs=fs, nperseg=nperseg, noverlap=noverlap, window=window)
+    f, t, Sxx = spectrogram(
+        ir, fs=fs, nperseg=nperseg, noverlap=noverlap, window=window
+    )
     Sxx_db = 10 * np.log10(Sxx + np.finfo(float).tiny)
 
     ymin, ymax = ylim
@@ -260,13 +269,13 @@ def plot_spectrogram(
     xlim = (xmin, xmax)
 
     zmin, zmax = clim
-    heatmap_kw = dict(
-        x=t,
-        y=f_plot,
-        z=Sxx_plot,
-        colorscale=colorscale,
-        colorbar=dict(title="dB"),
-    )
+    heatmap_kw = {
+        "x": t,
+        "y": f_plot,
+        "z": Sxx_plot,
+        "colorscale": colorscale,
+        "colorbar": {"title": "dB"},
+    }
     if zmin is not None:
         heatmap_kw["zmin"] = zmin
     if zmax is not None:
@@ -277,8 +286,8 @@ def plot_spectrogram(
         title=title,
         xaxis_title=xlabel,
         yaxis_title=ylabel,
-        xaxis=dict(range=[xmin, xmax]),
-        yaxis=dict(type="log", range=[np.log10(ymin), np.log10(ymax)]),
+        xaxis={"range": [xmin, xmax]},
+        yaxis={"type": "log", "range": [np.log10(ymin), np.log10(ymax)]},
         height=height,
         template="plotly_white",
     )

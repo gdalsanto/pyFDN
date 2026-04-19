@@ -29,13 +29,13 @@ Example usage:
     >>> output = core.process(input_signal)
 """
 
-from .stage import Stage
-from .core import RecursionCore
-from .delay_lines import DelayRead, DelayWrite, Delay
 from .biquads import Biquads
+from .core import RecursionCore
+from .delay_lines import Delay, DelayRead, DelayWrite
 from .feedback_mix import FeedbackMix
 from .input_tap import InputTap
 from .output_tap import OutputTap
+from .stage import Stage
 
 __all__ = [
     "Stage",

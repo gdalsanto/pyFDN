@@ -70,7 +70,9 @@ def _dss_to_res_direct(
         undriven = 1.0 / r_den
     is_multiple = ~np.isfinite(undriven)
     if np.any(is_multiple):
-        warnings.warn("There are multipoles. The residues are set to zero.", stacklevel=2)
+        warnings.warn(
+            "There are multipoles. The residues are set to zero.", stacklevel=2
+        )
         undriven[is_multiple] = 0.0
         r_den[is_multiple] = np.inf
 
@@ -132,7 +134,9 @@ def dss_to_pr_direct(
         # GCP p has p[k] = coef of z^{-k}; polynomial in w = z^{-1} is sum_k p[k] w^k
         p = general_char_poly(delays_arr, a_poly)
         w_roots = np.roots(p[::-1])  # np.roots expects high-to-low coefficient order
-        poles = np.array([1.0 / w for w in w_roots if np.abs(w) > 1e-14], dtype=np.complex128)
+        poles = np.array(
+            [1.0 / w for w in w_roots if np.abs(w) > 1e-14], dtype=np.complex128
+        )
     else:
         raise ValueError("mode must be 'eig', 'roots', or 'polyeig'")
 

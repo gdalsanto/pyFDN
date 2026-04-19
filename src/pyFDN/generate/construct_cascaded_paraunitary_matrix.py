@@ -1,14 +1,16 @@
 from __future__ import annotations
-from typing import Tuple
-import numpy as np
-from scipy.linalg import hadamard
+
 import math
 
+import numpy as np
+from scipy.linalg import hadamard
+
 from pyFDN.auxiliary.math import matrix_convolution
+from pyFDN.auxiliary.utils import ensure_3d
 from pyFDN.generate.random_orthogonal import random_orthogonal
 from pyFDN.generate.shift_matrix import shift_matrix
 from pyFDN.generate.shift_matrix_distribute import shift_matrix_distribute
-from pyFDN.auxiliary.utils import ensure_3d
+
 
 def construct_cascaded_paraunitary_matrix(
     n: int,
@@ -17,16 +19,18 @@ def construct_cascaded_paraunitary_matrix(
     sparsity: float = 1.0,
     matrix_type: str = "Hadamard",
     gain_per_sample: float = 1.0,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """Construct a paraunitary matrix and its reverse response."""
 
     matrix_type_lower = matrix_type.lower()
     if matrix_type_lower == "hadamard":
         if n & (n - 1) != 0:
             raise ValueError("Hadamard construction requires n to be a power of two")
-        generate_matrix = lambda size: hadamard(size) / math.sqrt(size)
+
+        def generate_matrix(size: int) -> np.ndarray:
+            return hadamard(size) / math.sqrt(size)
     elif matrix_type_lower == "random":
-        generate_matrix = random_orthogonal
+        generate_matrix = random_orthogonal  # type: ignore[assignment]
     else:
         raise ValueError("matrix_type must be 'Hadamard' or 'random'")
 
@@ -36,7 +40,9 @@ def construct_cascaded_paraunitary_matrix(
 
     pulse_size = 1
     for stage in range(k):
-        shift_left = shift_matrix_distribute(matrix, sparsity_vector[stage], pulse_size=pulse_size)
+        shift_left = shift_matrix_distribute(
+            matrix, sparsity_vector[stage], pulse_size=pulse_size
+        )
         gain_diag = np.diag(np.power(gain_per_sample, shift_left))
         R1 = ensure_3d(generate_matrix(n) @ gain_diag)
 

@@ -27,7 +27,7 @@ def _series_children(module: Any) -> list[tuple[str, Any]]:
         return []
     if hasattr(modules, "items"):
         return list(modules.items())
-    if hasattr(modules, "__iter__") and not isinstance(modules, (str, bytes)):
+    if hasattr(modules, "__iter__") and not isinstance(modules, str | bytes):
         return [(str(i), m) for i, m in enumerate(modules)]
     return []
 
@@ -90,8 +90,6 @@ def flamo_model_to_nodes(
         node["input_channels"] = in_ch
     if out_ch is not None:
         node["output_channels"] = out_ch
-    tname = _get_typename(model)
-
     if _is_shell(model):
         node["type"] = "Shell"
         # FLAMO Shell stores core as __core; use get_core() if available
@@ -103,22 +101,40 @@ def flamo_model_to_nodes(
         if core is None:
             core = getattr(model, "_Shell__core", None)
         if core is not None:
-            node["children"] = [flamo_model_to_nodes(core, name="core", include_shell_io=include_shell_io)]
+            node["children"] = [
+                flamo_model_to_nodes(
+                    core, name="core", include_shell_io=include_shell_io
+                )
+            ]
         # Always attach input/output layers for Shell so draw can use them as model I/O
         il = None
         if callable(getattr(model, "get_inputLayer", None)):
             il = model.get_inputLayer()
         if il is None:
-            il = getattr(model, "input_layer", None) or getattr(model, "_Shell__input_layer", None)
+            il = getattr(model, "input_layer", None) or getattr(
+                model, "_Shell__input_layer", None
+            )
         ol = None
         if callable(getattr(model, "get_outputLayer", None)):
             ol = model.get_outputLayer()
         if ol is None:
-            ol = getattr(model, "output_layer", None) or getattr(model, "_Shell__output_layer", None)
+            ol = getattr(model, "output_layer", None) or getattr(
+                model, "_Shell__output_layer", None
+            )
         if il is not None:
-            node.setdefault("input_layer", flamo_model_to_nodes(il, name="input_layer", include_shell_io=include_shell_io))
+            node.setdefault(
+                "input_layer",
+                flamo_model_to_nodes(
+                    il, name="input_layer", include_shell_io=include_shell_io
+                ),
+            )
         if ol is not None:
-            node.setdefault("output_layer", flamo_model_to_nodes(ol, name="output_layer", include_shell_io=include_shell_io))
+            node.setdefault(
+                "output_layer",
+                flamo_model_to_nodes(
+                    ol, name="output_layer", include_shell_io=include_shell_io
+                ),
+            )
         return node
 
     if _is_series(model):
@@ -136,9 +152,13 @@ def flamo_model_to_nodes(
         brB = getattr(model, "brB", None) or getattr(model, "branchB", None)
         children = []
         if brA is not None:
-            children.append(flamo_model_to_nodes(brA, name="brA", include_shell_io=include_shell_io))
+            children.append(
+                flamo_model_to_nodes(brA, name="brA", include_shell_io=include_shell_io)
+            )
         if brB is not None:
-            children.append(flamo_model_to_nodes(brB, name="brB", include_shell_io=include_shell_io))
+            children.append(
+                flamo_model_to_nodes(brB, name="brB", include_shell_io=include_shell_io)
+            )
         node["children"] = children
         return node
 
@@ -146,8 +166,16 @@ def flamo_model_to_nodes(
         node["type"] = "Recursion"
         fF = getattr(model, "fF", None) or getattr(model, "feedforward", None)
         fB = getattr(model, "fB", None) or getattr(model, "feedback", None)
-        node["fF"] = flamo_model_to_nodes(fF, name="fF", include_shell_io=include_shell_io) if fF is not None else None
-        node["fB"] = flamo_model_to_nodes(fB, name="fB", include_shell_io=include_shell_io) if fB is not None else None
+        node["fF"] = (
+            flamo_model_to_nodes(fF, name="fF", include_shell_io=include_shell_io)
+            if fF is not None
+            else None
+        )
+        node["fB"] = (
+            flamo_model_to_nodes(fB, name="fB", include_shell_io=include_shell_io)
+            if fB is not None
+            else None
+        )
         node["children"] = []  # Recursion uses fF/fB, not children
         return node
 
@@ -179,7 +207,7 @@ def flamo_nodes_flat(
     node["path"] = path
     out.append(node)
 
-    for i, ch in enumerate(root.get("children") or []):
+    for _i, ch in enumerate(root.get("children") or []):
         subpath = f"{path}/{ch['name']}"
         out.extend(flamo_nodes_flat(ch, path=subpath))
 
@@ -240,7 +268,7 @@ def draw_flamo_graph(
     except ImportError:
         raise ImportError(
             "draw_flamo_graph requires the Python package graphviz (pip install graphviz)."
-        )
+        ) from None
 
     try:
         graphviz.Digraph().pipe(format="png")  # probe for dot executable
@@ -307,7 +335,9 @@ def draw_flamo_graph(
         if ntype == "Shell":
             cid = next_id()
             with dg.subgraph(name=f"cluster_{cid}") as sub:
-                sub.attr(label=f"Shell: {nname}", style="rounded", margin="5", fontsize="8")
+                sub.attr(
+                    label=f"Shell: {nname}", style="rounded", margin="5", fontsize="8"
+                )
                 first_id = last_id = None
                 prev = None
                 prev_ch = None
@@ -331,13 +361,20 @@ def draw_flamo_graph(
                 if last_id is None:
                     last_id = first_id
             if parent_id is not None:
-                dg.edge(parent_id, first_id, label=edge_label_with_ch(edge_label, parent_out_ch), fontsize="7")
+                dg.edge(
+                    parent_id,
+                    first_id,
+                    label=edge_label_with_ch(edge_label, parent_out_ch),
+                    fontsize="7",
+                )
             return first_id, last_id, out_ch
 
         if ntype == "Series":
             cid = next_id()
             with dg.subgraph(name=f"cluster_{cid}") as sub:
-                sub.attr(label=f"Series: {nname}", style="rounded", margin="5", fontsize="8")
+                sub.attr(
+                    label=f"Series: {nname}", style="rounded", margin="5", fontsize="8"
+                )
                 first_id = last_id = None
                 prev = parent_id
                 prev_ch = parent_out_ch
@@ -352,7 +389,12 @@ def draw_flamo_graph(
                     first_id = next_id()
                     add_node(sub, first_id, "", shape="point")
                     if parent_id is not None:
-                        dg.edge(parent_id, first_id, label=edge_label_with_ch(edge_label, parent_out_ch), fontsize="7")
+                        dg.edge(
+                            parent_id,
+                            first_id,
+                            label=edge_label_with_ch(edge_label, parent_out_ch),
+                            fontsize="7",
+                        )
                 if last_id is None:
                     last_id = first_id
             return first_id, last_id, out_ch
@@ -360,33 +402,66 @@ def draw_flamo_graph(
         if ntype == "Parallel":
             cid = next_id()
             with dg.subgraph(name=f"cluster_{cid}") as sub:
-                sub.attr(label=f"Parallel: {nname}", style="rounded", margin="5", fontsize="8")
+                sub.attr(
+                    label=f"Parallel: {nname}",
+                    style="rounded",
+                    margin="5",
+                    fontsize="8",
+                )
                 merge_id = next_id()
                 add_node(sub, merge_id, "Σ", shape="circle")
                 for ch in node.get("children") or []:
-                    ch_first, ch_last, ch_out = build_graph(sub, ch, parent_id, ch.get("name", ""), parent_out_ch)
-                    sub.edge(ch_last, merge_id, label=edge_label_with_ch("", ch_out), fontsize="7")
+                    ch_first, ch_last, ch_out = build_graph(
+                        sub, ch, parent_id, ch.get("name", ""), parent_out_ch
+                    )
+                    sub.edge(
+                        ch_last,
+                        merge_id,
+                        label=edge_label_with_ch("", ch_out),
+                        fontsize="7",
+                    )
             return merge_id, merge_id, out_ch
 
         if ntype == "Recursion":
             cid = next_id()
             with dg.subgraph(name=f"cluster_{cid}") as sub:
-                sub.attr(label=f"Recursion: {nname}", style="rounded,dashed", margin="5", fontsize="8")
+                sub.attr(
+                    label=f"Recursion: {nname}",
+                    style="rounded,dashed",
+                    margin="5",
+                    fontsize="8",
+                )
                 fF_node = node.get("fF")
                 fB_node = node.get("fB")
                 fF_first = fF_last = None
                 fF_out_ch = None
                 if fF_node is not None:
-                    fF_first, fF_last, fF_out_ch = build_graph(sub, fF_node, parent_id, edge_label, parent_out_ch)
+                    fF_first, fF_last, fF_out_ch = build_graph(
+                        sub, fF_node, parent_id, edge_label, parent_out_ch
+                    )
                 if fB_node is not None:
-                    _, fB_last, _ = build_graph(sub, fB_node, fF_last or parent_id, "fB", fF_out_ch)
+                    _, fB_last, _ = build_graph(
+                        sub, fB_node, fF_last or parent_id, "fB", fF_out_ch
+                    )
                     if fF_first is not None:
-                        sub.edge(fB_last, fF_first, label=edge_label_with_ch("feedback", fF_out_ch), style="dashed", color="gray", fontsize="7")
+                        sub.edge(
+                            fB_last,
+                            fF_first,
+                            label=edge_label_with_ch("feedback", fF_out_ch),
+                            style="dashed",
+                            color="gray",
+                            fontsize="7",
+                        )
                 first_id = fF_first if fF_first is not None else next_id()
                 last_id = fF_last if fF_last is not None else first_id
                 if fF_first is None and parent_id is not None:
                     add_node(sub, first_id, "", shape="point")
-                    dg.edge(parent_id, first_id, label=edge_label_with_ch(edge_label, parent_out_ch), fontsize="7")
+                    dg.edge(
+                        parent_id,
+                        first_id,
+                        label=edge_label_with_ch(edge_label, parent_out_ch),
+                        fontsize="7",
+                    )
             return first_id, last_id, out_ch
 
         # Leaf
@@ -396,7 +471,12 @@ def draw_flamo_graph(
         label = f"{nname}\n({mod_type})"
         add_node(dg, nid, label, shape="box")
         if parent_id is not None:
-            dg.edge(parent_id, nid, label=edge_label_with_ch(edge_label, parent_out_ch), fontsize="7")
+            dg.edge(
+                parent_id,
+                nid,
+                label=edge_label_with_ch(edge_label, parent_out_ch),
+                fontsize="7",
+            )
         return nid, nid, out_ch
 
     build_graph(digraph, root, None, "", None)

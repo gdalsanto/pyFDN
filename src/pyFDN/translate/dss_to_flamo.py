@@ -16,6 +16,7 @@ from pyFDN.auxiliary.flamo import delay_module, gain_module
 
 try:
     from flamo.processor import dsp, system
+
     _HAS_FLAMO = True
 except ImportError:
     _HAS_FLAMO = False
@@ -82,6 +83,7 @@ def dss_to_flamo(
         raise ImportError("dss_to_flamo requires flamo (pip install flamo)")
 
     import torch
+
     from pyFDN.auxiliary.flamo import sos_filter_module
 
     A = np.asarray(A, dtype=np.float64)
@@ -119,11 +121,13 @@ def dss_to_flamo(
 
     feedback_loop = system.Recursion(fF=delay_chain, fB=gain_A)
     fdn_branch = system.Series(
-        OrderedDict({
-            "input_gain": gain_B,
-            "feedback_loop": feedback_loop,
-            "output_gain": gain_C,
-        })
+        OrderedDict(
+            {
+                "input_gain": gain_B,
+                "feedback_loop": feedback_loop,
+                "output_gain": gain_C,
+            }
+        )
     )
     core = system.Parallel(brA=fdn_branch, brB=gain_D, sum_output=True)
 

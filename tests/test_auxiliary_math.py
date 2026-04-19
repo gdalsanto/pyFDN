@@ -3,20 +3,22 @@
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.math import det_polynomial
-from pyFDN.auxiliary.math import general_char_poly
-from pyFDN.auxiliary.math import matrix_convolution
-from pyFDN.auxiliary.math import matrix_polyval
-from pyFDN.auxiliary.math import negpolyder
-from pyFDN.auxiliary.math import outer_sum_approximation
-from pyFDN.auxiliary.math import poly_degree
-from pyFDN.auxiliary.math import polyder_rational
-from pyFDN.auxiliary.math import polydiag
-
+from pyFDN.auxiliary.math import (
+    det_polynomial,
+    general_char_poly,
+    matrix_convolution,
+    matrix_polyval,
+    negpolyder,
+    outer_sum_approximation,
+    poly_degree,
+    polyder_rational,
+    polydiag,
+)
 
 # ============================================================================
 # Matrix Convolution Tests
 # ============================================================================
+
 
 def test_matrix_convolution_basic():
     A = np.ones((2, 2, 2))
@@ -29,6 +31,7 @@ def test_matrix_convolution_basic():
 # Matrix Polyval Tests
 # ============================================================================
 
+
 def test_matrix_polyval_basic():
     P = np.ones((2, 2, 3))
     z = 2
@@ -39,6 +42,7 @@ def test_matrix_polyval_basic():
 # ============================================================================
 # Poly Degree Tests
 # ============================================================================
+
 
 def test_poly_degree_zm1():
     # [1, 0, 0] in z^{-1} ordering: only z^0 term is nonzero, degree = 0
@@ -58,6 +62,7 @@ def test_poly_degree_zm1_nonzero_last():
 # Polydiag Tests
 # ============================================================================
 
+
 def test_polydiag_basic():
     p = np.array([[1, 2], [3, 4]])
     d = polydiag(p)
@@ -70,6 +75,7 @@ def test_polydiag_basic():
 # Outer Sum Approximation Tests
 # ============================================================================
 
+
 def test_outer_sum_approximation_handles_zero_matrix():
     u, v = outer_sum_approximation(np.zeros((3, 4)))
     assert np.array_equal(u, np.zeros(3))
@@ -79,6 +85,7 @@ def test_outer_sum_approximation_handles_zero_matrix():
 # ============================================================================
 # Polyder Rational Tests
 # ============================================================================
+
 
 def test_polyder_rational_matches_finite_difference():
     b = np.array([1.0, -0.5, 0.25])
@@ -109,6 +116,7 @@ def test_negpolyder_preserves_length_when_requested():
 # ============================================================================
 # det_polynomial Tests
 # ============================================================================
+
 
 def test_det_polynomial_scalar_matrix():
     # Constant scalar matrix: det of 2x2 identity as polynomial matrix
@@ -149,10 +157,10 @@ def test_det_polynomial_agrees_with_linalg_det_for_constant():
     np.testing.assert_allclose(result[0], np.linalg.det(M), rtol=1e-10)
 
 
-
 # ============================================================================
 # general_char_poly Tests
 # ============================================================================
+
 
 def test_general_char_poly_scalar_identity_single_delay():
     # A=0 (no feedback), single delay d: GCP = 1 - 0 = 1 (constant)

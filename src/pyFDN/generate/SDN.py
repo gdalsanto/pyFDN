@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Minimal SDN (Scattering Delay Network) coefficient generator.
 
@@ -9,10 +8,12 @@ No simulation, interpolation, or time-domain processing.
 """
 
 import math
+
 import numpy as np
 
 try:
     import plotly.graph_objects as go
+
     _HAS_PLOTLY = True
 except ImportError:
     go = None
@@ -21,6 +22,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Minimal geometry (no dependency on Geometry.py)
 # ---------------------------------------------------------------------------
+
 
 def _point_reflect_plane(px, py, pz, a, b, c, d):
     """Reflect point (px,py,pz) in plane ax+by+cz+d=0."""
@@ -31,6 +33,7 @@ def _point_reflect_plane(px, py, pz, a, b, c, d):
         2 * (c * k + pz) - pz,
     )
 
+
 def _line_plane_intersection(x1, y1, z1, x2, y2, z2, a, b, c, d):
     """Line (x1,y1,z1)->(x2,y2,z2) with plane ax+by+cz+d=0."""
     l, m, n = x2 - x1, y2 - y1, z2 - z1
@@ -40,12 +43,13 @@ def _line_plane_intersection(x1, y1, z1, x2, y2, z2, a, b, c, d):
     k = -(a * x1 + b * y1 + c * z1 + d) / den
     return (k * l + x1, k * m + y1, k * n + z1)
 
+
 def _dist(p, q):
     """Euclidean distance between 3-tuples p and q."""
     return math.sqrt((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2)
 
 
-def _cuboid_walls(Lx, Ly, Lz): # TODO: fix naming of the walls, see also visualization
+def _cuboid_walls(Lx, Ly, Lz):  # TODO: fix naming of the walls, see also visualization
     """
     Return list of 6 walls as plane coeffs (a,b,c,d) for ax+by+cz+d=0.
     Order and planes must match Geometry.Cuboid.setWallPosition():
@@ -56,12 +60,12 @@ def _cuboid_walls(Lx, Ly, Lz): # TODO: fix naming of the walls, see also visuali
     - back:   (0,0,0), (0,Ly,0), (Lx,Ly,0) -> z=0
     """
     return [
-        (0, 1, 0, 0),      # floor:  y=0
-        (0, 1, 0, -Ly),    # ceiling: y=Ly  (y - Ly = 0)
-        (1, 0, 0, 0),      # left:   x=0
-        (-1, 0, 0, Lx),    # right:  x=Lx
-        (0, 0, -1, Lz),    # front:  z=Lz
-        (0, 0, 1, 0),      # back:   z=0
+        (0, 1, 0, 0),  # floor:  y=0
+        (0, 1, 0, -Ly),  # ceiling: y=Ly  (y - Ly = 0)
+        (1, 0, 0, 0),  # left:   x=0
+        (-1, 0, 0, Lx),  # right:  x=Lx
+        (0, 0, -1, Lz),  # front:  z=Lz
+        (0, 0, 1, 0),  # back:   z=0
     ]
 
 
@@ -92,6 +96,7 @@ def _isotropic_scattering_matrix(N):
 # ---------------------------------------------------------------------------
 # SDN coefficient generator
 # ---------------------------------------------------------------------------
+
 
 class SDN:
     """
@@ -188,7 +193,9 @@ class SDN:
         """
         Lx, Ly, Lz = self.room_size
         walls = _cuboid_walls(Lx, Ly, Lz)
-        nodes = [_wall_node_position(self.source_pos, self.receiver_pos, w) for w in walls]
+        nodes = [
+            _wall_node_position(self.source_pos, self.receiver_pos, w) for w in walls
+        ]
         self._node_positions = nodes
 
         sp = self.source_pos
@@ -208,26 +215,48 @@ class SDN:
                 delay_lengths[i, j] = round(self.Fs * d / self.c)
 
         # Order of delay lines: (0,1),(0,2),...,(0,5),(1,0),(1,2),...,(5,4)
-        routing = [(i, j) for i in range(self.N_WALLS) for j in range(self.N_WALLS) if i != j]
+        routing = [
+            (i, j) for i in range(self.N_WALLS) for j in range(self.N_WALLS) if i != j
+        ]
         # All delays in seconds for FLAMO (no conversion in delay_module)
         delay_lengths_s = delay_lengths.astype(float) / self.Fs
-        delay_lengths_flat = np.array([delay_lengths_s[i, j] for (i, j) in routing], dtype=float)
+        delay_lengths_flat = np.array(
+            [delay_lengths_s[i, j] for (i, j) in routing], dtype=float
+        )
 
         # Scattering: 5x5 isotropic per node
-        scattering_matrices = [_isotropic_scattering_matrix(5) for _ in range(self.N_WALLS)]
+        scattering_matrices = [
+            _isotropic_scattering_matrix(5) for _ in range(self.N_WALLS)
+        ]
 
         # Wall filters: list of 6 lists of 5; each element is either (b, a) or SOS array (n_sec, 6)
         # (handled below when building wall_filters_sos)
 
         # Source to wall (delays in seconds)
-        source_to_wall_delays = np.array([_dist(sp, nodes[i]) / self.c for i in range(self.N_WALLS)], dtype=float)
-        source_to_wall_gains = np.array([(self.c / self.Fs) / max(_dist(sp, nodes[i]), _eps) for i in range(self.N_WALLS)], dtype=float)
+        source_to_wall_delays = np.array(
+            [_dist(sp, nodes[i]) / self.c for i in range(self.N_WALLS)], dtype=float
+        )
+        source_to_wall_gains = np.array(
+            [
+                (self.c / self.Fs) / max(_dist(sp, nodes[i]), _eps)
+                for i in range(self.N_WALLS)
+            ],
+            dtype=float,
+        )
 
         # Wall to receiver (delays in seconds; gain 1/(1 + d_node_mic/d_source_node) as in Simulation)
-        dist_source_node = np.array([_dist(sp, nodes[i]) for i in range(self.N_WALLS)], dtype=float)
-        dist_node_mic = np.array([_dist(nodes[i], rp) for i in range(self.N_WALLS)], dtype=float)
-        wall_to_receiver_delays = np.array([dist_node_mic[i] / self.c for i in range(self.N_WALLS)], dtype=float)
-        wall_to_receiver_gains = 1.0 / (1.0 + dist_node_mic / np.maximum(dist_source_node, _eps))
+        dist_source_node = np.array(
+            [_dist(sp, nodes[i]) for i in range(self.N_WALLS)], dtype=float
+        )
+        dist_node_mic = np.array(
+            [_dist(nodes[i], rp) for i in range(self.N_WALLS)], dtype=float
+        )
+        wall_to_receiver_delays = np.array(
+            [dist_node_mic[i] / self.c for i in range(self.N_WALLS)], dtype=float
+        )
+        wall_to_receiver_gains = 1.0 / (
+            1.0 + dist_node_mic / np.maximum(dist_source_node, _eps)
+        )
 
         # Direct path (delay in seconds)
         direct_path_delay = _dist(sp, rp) / self.c
@@ -238,14 +267,20 @@ class SDN:
 
         # ---- Input routing for FDN: 6 delays -> 6 gains -> 6-to-30 matrix (0.5 in matrix) ----
         input_delays = source_to_wall_delays  # (6,) seconds
-        input_gains = np.asarray(source_to_wall_gains, dtype=float)  # (6,) gain per node (1/r, no 0.5 here)
-        input_matrix = np.zeros((30, 6), dtype=float)  # 6-to-30: input_matrix[k, j] = 0.5 if delay k leaves node j
+        input_gains = np.asarray(
+            source_to_wall_gains, dtype=float
+        )  # (6,) gain per node (1/r, no 0.5 here)
+        input_matrix = np.zeros(
+            (30, 6), dtype=float
+        )  # 6-to-30: input_matrix[k, j] = 0.5 if delay k leaves node j
         for k, (j, _) in enumerate(routing):  # delay k leaves node j
             input_matrix[k, j] = 0.5
         # Flow: input -> 6 delays -> 6 gains -> (30,6) @ (6,) = 30 injection
 
         # ---- Output routing for FDN: 30-to-6 matrix -> 6 gains -> 6 delays -> sum ----
-        output_matrix = np.zeros((6, 30), dtype=float)  # 30-to-6: output_matrix[j, k] = (2/5) if delay k leaves node j
+        output_matrix = np.zeros(
+            (6, 30), dtype=float
+        )  # 30-to-6: output_matrix[j, k] = (2/5) if delay k leaves node j
         for k, (j, _) in enumerate(routing):
             output_matrix[j, k] = 2.0 / 5.0
         output_gains = np.asarray(wall_to_receiver_gains, dtype=float)  # (6,)
@@ -253,7 +288,7 @@ class SDN:
         # Flow: 30 state -> (6,30) @ (30,) = 6 -> 6 gains -> 6 delays -> sum
 
         # Which delay indices leave each node (for per-node aggregation if preferred)
-        node_to_delay_indices = [[] for _ in range(self.N_WALLS)]
+        node_to_delay_indices: list[list[int]] = [[] for _ in range(self.N_WALLS)]
         for k, (j, _) in enumerate(routing):
             node_to_delay_indices[j].append(k)
         for j in range(self.N_WALLS):
@@ -343,17 +378,39 @@ class SDN:
         if self._result is None:
             self.compute()
         r = self._result
+        assert r is not None
         Lx, Ly, Lz = self.room_size
         nodes = r["node_positions"]
         sp = self.source_pos
         rp = self.receiver_pos
         wall_labels = ("floor", "ceiling", "left", "right", "front", "back")
 
-        corners = np.array([
-            [0, 0, 0], [Lx, 0, 0], [Lx, Ly, 0], [0, Ly, 0],
-            [0, 0, Lz], [Lx, 0, Lz], [Lx, Ly, Lz], [0, Ly, Lz],
-        ])
-        edges = [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4), (0, 4), (1, 5), (2, 6), (3, 7)]
+        corners = np.array(
+            [
+                [0, 0, 0],
+                [Lx, 0, 0],
+                [Lx, Ly, 0],
+                [0, Ly, 0],
+                [0, 0, Lz],
+                [Lx, 0, Lz],
+                [Lx, Ly, Lz],
+                [0, Ly, Lz],
+            ]
+        )
+        edges = [
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (3, 0),
+            (4, 5),
+            (5, 6),
+            (6, 7),
+            (7, 4),
+            (0, 4),
+            (1, 5),
+            (2, 6),
+            (3, 7),
+        ]
         xe, ye, ze = [], [], []
         for i, j in edges:
             xe.extend([corners[i, 0], corners[j, 0], None])
@@ -366,37 +423,61 @@ class SDN:
         tri_k = [2, 3, 7, 6, 7, 4, 6, 5, 2, 3, 6, 7]
 
         node_colors = [
-            "rgb(31, 119, 180)", "rgb(255, 127, 14)", "rgb(44, 160, 44)",
-            "rgb(214, 39, 40)", "rgb(148, 103, 189)", "rgb(140, 86, 75)",
+            "rgb(31, 119, 180)",
+            "rgb(255, 127, 14)",
+            "rgb(44, 160, 44)",
+            "rgb(214, 39, 40)",
+            "rgb(148, 103, 189)",
+            "rgb(140, 86, 75)",
         ]
         data = [
             go.Scatter3d(
-                x=xe, y=ye, z=ze, mode="lines",
-                line=dict(color=room_edge_color, width=2), name="Room",
+                x=xe,
+                y=ye,
+                z=ze,
+                mode="lines",
+                line={"color": room_edge_color, "width": 2},
+                name="Room",
             ),
             go.Mesh3d(
-                x=corners[:, 0], y=corners[:, 1], z=corners[:, 2],
-                i=tri_i, j=tri_j, k=tri_k,
-                opacity=room_alpha, color="lightgray", name="Room",
+                x=corners[:, 0],
+                y=corners[:, 1],
+                z=corners[:, 2],
+                i=tri_i,
+                j=tri_j,
+                k=tri_k,
+                opacity=room_alpha,
+                color="lightgray",
+                name="Room",
             ),
             go.Scatter3d(
-                x=[sp[0]], y=[sp[1]], z=[sp[2]],
-                mode="markers+text", text=["Source"], textposition="top center",
-                marker=dict(size=10, color="red", symbol="circle"),
+                x=[sp[0]],
+                y=[sp[1]],
+                z=[sp[2]],
+                mode="markers+text",
+                text=["Source"],
+                textposition="top center",
+                marker={"size": 10, "color": "red", "symbol": "circle"},
                 name="Source",
             ),
             go.Scatter3d(
-                x=[rp[0]], y=[rp[1]], z=[rp[2]],
-                mode="markers+text", text=["Receiver"], textposition="top center",
-                marker=dict(size=10, color="lime", symbol="square"),
+                x=[rp[0]],
+                y=[rp[1]],
+                z=[rp[2]],
+                mode="markers+text",
+                text=["Receiver"],
+                textposition="top center",
+                marker={"size": 10, "color": "lime", "symbol": "square"},
                 name="Receiver",
             ),
             go.Scatter3d(
                 x=[p[0] for p in nodes],
                 y=[p[1] for p in nodes],
                 z=[p[2] for p in nodes],
-                mode="markers+text", text=wall_labels, textposition="top center",
-                marker=dict(size=8, color=node_colors, symbol="diamond"),
+                mode="markers+text",
+                text=wall_labels,
+                textposition="top center",
+                marker={"size": 8, "color": node_colors, "symbol": "diamond"},
                 name="Walls",
             ),
         ]
@@ -404,12 +485,12 @@ class SDN:
             data=data,
             layout=go.Layout(
                 title="SDN room",
-                scene=dict(
-                    xaxis=dict(title="x (m)", range=[0, Lx]),
-                    yaxis=dict(title="y (m)", range=[0, Ly]),
-                    zaxis=dict(title="z (m)", range=[0, Lz]),
-                    aspectmode="data",
-                ),
+                scene={
+                    "xaxis": {"title": "x (m)", "range": [0, Lx]},
+                    "yaxis": {"title": "y (m)", "range": [0, Ly]},
+                    "zaxis": {"title": "z (m)", "range": [0, Lz]},
+                    "aspectmode": "data",
+                },
                 template="plotly_white",
                 height=500,
             ),
@@ -422,7 +503,6 @@ class SDN:
     def result(self):
         """Return last result from compute(); None if compute() not called yet."""
         return self._result
-
 
     def sdn_to_flamo(self, nfft=2**17, device=None):
         """
@@ -452,6 +532,7 @@ class SDN:
 # Permutation matrix helper (used by SDN.build_fdn_permutation_from_routing)
 # ---------------------------------------------------------------------------
 
+
 def _build_fdn_permutation_from_routing(routing):
     """
     From SDN routing list of (from_node, to_node), build the 30x30 gather
@@ -461,13 +542,13 @@ def _build_fdn_permutation_from_routing(routing):
     """
     N = len(routing)
     n_nodes = 6
-    arrivals_at = [[] for _ in range(n_nodes)]
-    for k, (i, j) in enumerate(routing):
+    arrivals_at: list[list[int]] = [[] for _ in range(n_nodes)]
+    for k, (_i, j) in enumerate(routing):
         arrivals_at[j].append(k)
     for n in range(n_nodes):
         arrivals_at[n].sort()
-    departures_from = [[] for _ in range(n_nodes)]
-    for k, (i, j) in enumerate(routing):
+    departures_from: list[list[int]] = [[] for _ in range(n_nodes)]
+    for k, (i, _j) in enumerate(routing):
         departures_from[i].append(k)
     for n in range(n_nodes):
         departures_from[n].sort()
@@ -484,6 +565,7 @@ def _build_fdn_permutation_from_routing(routing):
 # ---------------------------------------------------------------------------
 # SDN result to FLAMO (used by SDN.sdn_to_flamo)
 # ---------------------------------------------------------------------------
+
 
 def _result_to_flamo(r, nfft, device):
     """Build FLAMO model from SDN result dict."""
@@ -504,7 +586,9 @@ def _result_to_flamo(r, nfft, device):
     n_nodes = 6
     S_block = np.zeros((N, N))
     for node in range(n_nodes):
-        S_block[5 * node : 5 * node + 5, 5 * node : 5 * node + 5] = r["scattering_matrices"][node]
+        S_block[5 * node : 5 * node + 5, 5 * node : 5 * node + 5] = r[
+            "scattering_matrices"
+        ][node]
     feedback_matrix = S_block @ r["permutation_matrix"]
     Fs = float(r["Fs"])
     delays = delay_module(
@@ -527,10 +611,14 @@ def _result_to_flamo(r, nfft, device):
         device=device,
     )
 
-    feedback = system.Series(OrderedDict({
-        "delays": delays,
-        "mixing_matrix": mixing_matrix,
-    }))
+    feedback = system.Series(
+        OrderedDict(
+            {
+                "delays": delays,
+                "mixing_matrix": mixing_matrix,
+            }
+        )
+    )
     feedback_loop = system.Recursion(fF=wall_filters_30, fB=feedback)
 
     # ---- Input path: gain (1→6) -> delays (6) -> routing (6→30) ----
@@ -554,11 +642,13 @@ def _result_to_flamo(r, nfft, device):
     )
 
     input_block = system.Series(
-        OrderedDict({
-            "input_gain": input_gain_6,
-            "input_delays": input_delays_6,
-            "input_routing": input_matrix_30x6,
-        })
+        OrderedDict(
+            {
+                "input_gain": input_gain_6,
+                "input_delays": input_delays_6,
+                "input_routing": input_matrix_30x6,
+            }
+        )
     )
 
     # ---- Output path: routing (30→6) -> delays (6) -> gain (6→1) ----
@@ -582,19 +672,23 @@ def _result_to_flamo(r, nfft, device):
     )
 
     output_block = system.Series(
-        OrderedDict({
-            "output_routing": output_matrix_6x30,
-            "output_delays": output_delays_6,
-            "output_gain": output_gain_6to1,
-        })
+        OrderedDict(
+            {
+                "output_routing": output_matrix_6x30,
+                "output_delays": output_delays_6,
+                "output_gain": output_gain_6to1,
+            }
+        )
     )
 
     fdn = system.Series(
-        OrderedDict({
-            "input_block": input_block,
-            "feedback_loop": feedback_loop,
-            "output_block": output_block,
-        })
+        OrderedDict(
+            {
+                "input_block": input_block,
+                "feedback_loop": feedback_loop,
+                "output_block": output_block,
+            }
+        )
     )
 
     # ---- Direct path: delay -> gain (parallel with FDN) ----
