@@ -56,6 +56,7 @@ dev = [
     "build>=0.10.0",  # packaging
     "bump2version>=1.0.0",  # version management
     "watchdog>=3.0.0",  # development tools
+    "pre-commit>=3.0.0",  # git hooks
 ]
 docs = [
     "Sphinx>=6.0.0",

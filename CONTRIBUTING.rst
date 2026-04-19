@@ -60,7 +60,20 @@ Development Installation
 
       $ pip install -e ".[dev]"
 
-4. **Install FLAMO locally** (required for development):
+4. **Install and activate pre-commit hooks**:
+
+   .. code-block:: console
+
+      $ pre-commit install
+
+   This installs git hooks that automatically run Ruff (lint + format) and mypy
+   on every commit. To run them manually on all files:
+
+   .. code-block:: console
+
+      $ pre-commit run --all-files
+
+5. **Install FLAMO locally** (required for development):
 
    FLAMO is under active development alongside pyFDN. You are recommended to install it locally in editable mode:
 
@@ -73,7 +86,7 @@ Development Installation
    Then return to the pyFDN directory. The local FLAMO installation will be used
    by pyFDN during development and testing.
 
-5. **Verify installation**:
+6. **Verify installation**:
 
    .. code-block:: console
 
