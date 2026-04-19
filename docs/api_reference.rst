@@ -43,20 +43,6 @@ Acoustics & Absorption
    pyFDN.rt_to_slope
    pyFDN.slope_to_rt
 
-Filter Classes
---------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   pyFDN.ZFilter
-   pyFDN.ZFIR
-   pyFDN.ZSOS
-   pyFDN.ZTF
-   pyFDN.ZScalar
-   pyFDN.TFMatrix
-
 DSP Components
 --------------
 
@@ -64,9 +50,7 @@ DSP Components
    :toctree: generated/
    :nosignatures:
 
-   pyFDN.FilterMatrix
    pyFDN.FeedbackDelay
-   pyFDN.DFiltMatrix
 
 Delay Utilities
 ---------------

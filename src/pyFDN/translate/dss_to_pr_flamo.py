@@ -1,4 +1,4 @@
-"""FLAMO-only modal decomposition entry point (no ZFilter dependency here).
+"""FLAMO-only modal decomposition entry point.
 
 What FLAMO must provide
 ----------------------
