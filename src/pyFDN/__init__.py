@@ -4,16 +4,8 @@ __author__ = "Facundo Franchino"
 __version__ = "0.1.0"
 
 __all__ = [
-    # filter classes
-    "DFiltMatrix",
+    # dsp
     "FeedbackDelay",
-    "FilterMatrix",
-    "TFMatrix",
-    "ZFIR",
-    "ZFilter",
-    "ZSOS",
-    "ZScalar",
-    "ZTF",
     # acoustics
     "absorption_filters",
     "echo_density",
@@ -137,9 +129,6 @@ from .auxiliary.acoustics import (
 #delay utilities
 from .auxiliary.delay import matrix_delay_approximation, mgrpdelay, ms_to_smp
 
-# filter classes
-from .auxiliary.filters import TFMatrix, ZFIR, ZFilter, ZScalar, ZSOS, ZTF
-
 #tiny rotation matrix
 from .auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
 
@@ -256,9 +245,7 @@ from .process import process_fdn
 
 
 #dsp components
-from .dsp.filter_matrix import FilterMatrix
 from .dsp.feedback_delay import FeedbackDelay
-from .dsp.dfiltmatrix import DFiltMatrix
 
 # Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
 from . import auxiliary
