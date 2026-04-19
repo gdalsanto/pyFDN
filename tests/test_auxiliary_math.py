@@ -3,6 +3,8 @@
 import numpy as np
 import pytest
 
+from pyFDN.auxiliary.math import det_polynomial
+from pyFDN.auxiliary.math import general_char_poly
 from pyFDN.auxiliary.math import matrix_convolution
 from pyFDN.auxiliary.math import matrix_polyval
 from pyFDN.auxiliary.math import negpolyder
@@ -100,3 +102,97 @@ def test_negpolyder_preserves_length_when_requested():
     a = np.array([1.0, -0.2])
     with pytest.raises(ValueError):
         negpolyder(b, a, dont_truncate=True)
+
+
+# ============================================================================
+# det_polynomial Tests
+# ============================================================================
+
+def test_det_polynomial_scalar_matrix():
+    # Constant scalar matrix: det of 2x2 identity as polynomial matrix
+    A = np.zeros((2, 2, 1))
+    A[0, 0, 0] = 1.0
+    A[1, 1, 0] = 1.0
+    result = det_polynomial(A, "z^-1")
+    np.testing.assert_allclose(result, [1.0], atol=1e-10)
+
+
+def test_det_polynomial_diagonal_delay():
+    # diag([z^{-1}, z^{-2}]): det = z^{-3} => coefficients [0, 0, 0, 1]
+    A = np.zeros((2, 2, 3))
+    A[0, 0, 1] = 1.0  # z^{-1}
+    A[1, 1, 2] = 1.0  # z^{-2}
+    result = det_polynomial(A, "z^-1")
+    expected = np.array([0.0, 0.0, 0.0, 1.0])
+    np.testing.assert_allclose(result, expected, atol=1e-10)
+
+
+def test_det_polynomial_known_2x2():
+    # [[1 + z^{-1}, z^{-1}], [0, 1]]: det = 1 + z^{-1}
+    A = np.zeros((2, 2, 2))
+    A[0, 0, 0] = 1.0
+    A[0, 0, 1] = 1.0
+    A[0, 1, 1] = 1.0
+    A[1, 1, 0] = 1.0
+    result = det_polynomial(A, "z^-1")
+    np.testing.assert_allclose(result, [1.0, 1.0], atol=1e-10)
+
+
+def test_det_polynomial_agrees_with_linalg_det_for_constant():
+    # For a constant matrix (degree 0), det_polynomial must match np.linalg.det
+    rng = np.random.default_rng(0)
+    M = rng.standard_normal((3, 3))
+    A = M[:, :, np.newaxis]  # shape (3, 3, 1)
+    result = det_polynomial(A, "z^-1")
+    np.testing.assert_allclose(result[0], np.linalg.det(M), rtol=1e-10)
+
+
+def test_det_polynomial_z1_convention():
+    # diag([z, 1]) in z^1 convention: det = z => coefficients [1, 0] (high-to-low)
+    A = np.zeros((2, 2, 3))
+    A[0, 0, 1] = 1.0  # z^1 entry (second coefficient = z^1 term)
+    A[1, 1, 2] = 1.0  # constant entry (last coefficient = z^0 term)
+    result = det_polynomial(A, "z^1")
+    np.testing.assert_allclose(result, [1.0, 0.0], atol=1e-10)
+
+
+# ============================================================================
+# general_char_poly Tests
+# ============================================================================
+
+def test_general_char_poly_scalar_identity_single_delay():
+    # A=0 (no feedback), single delay d: GCP = 1 - 0 = 1 (constant)
+    delays = np.array([3])
+    A = np.array([[0.0]])
+    p = general_char_poly(delays, A)
+    expected = np.zeros(4)
+    expected[0] = 1.0
+    np.testing.assert_allclose(p, expected, atol=1e-12)
+
+
+def test_general_char_poly_scalar_two_delays():
+    # Known result: for N=2, A=diag(a1,a2), delays=[d1,d2]:
+    # GCP = 1 - a1*z^{-d1} - a2*z^{-d2} + (a1*a2 - a2*a1)*z^{-(d1+d2)}
+    #      = 1 - a1*z^{-d1} - a2*z^{-d2}  (off-diagonal det is zero for diagonal A)
+    delays = np.array([2, 3])
+    a1, a2 = 0.5, 0.3
+    A = np.diag([a1, a2])
+    p = general_char_poly(delays, A)
+    expected = np.zeros(6)
+    expected[0] = 1.0
+    expected[2] = -a1
+    expected[3] = -a2
+    expected[5] = a1 * a2  # det of full 2x2 diagonal submatrix
+    np.testing.assert_allclose(p, expected, atol=1e-12)
+
+
+def test_general_char_poly_polynomial_A_matches_scalar():
+    # A polynomial A with only a degree-0 term must match scalar A path
+    delays = np.array([2, 3])
+    rng = np.random.default_rng(1)
+    A_scalar = rng.standard_normal((2, 2)) * 0.3
+    A_poly = A_scalar[:, :, np.newaxis]  # shape (2, 2, 1)
+    p_scalar = general_char_poly(delays, A_scalar)
+    p_poly = general_char_poly(delays, A_poly)
+    min_len = min(len(p_scalar), len(p_poly))
+    np.testing.assert_allclose(p_poly[:min_len], p_scalar[:min_len], atol=1e-8)

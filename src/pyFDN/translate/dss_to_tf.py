@@ -79,19 +79,15 @@ def _numerator(
     tfA: np.ndarray,
 ) -> np.ndarray:
     """Single (output, input) channel numerator: (d+1)*tfA - GCP(delays, A + b*c)."""
-    if A.ndim == 2:
-        # scalar feedback: (d+1)*tfA - generalCharPoly(delays, A + b*c)
-        A_mod = A + np.outer(b, c)
-        gcp = general_char_poly(delays, A_mod)
-        n_len = max(len(tfA), len(gcp))
-        term1 = np.zeros(n_len)
-        term1[: len(tfA)] = (d + 1.0) * tfA
-        term2 = np.zeros(n_len)
-        term2[: len(gcp)] = gcp
-        return term1 - term2
-    # polyphase: modify first row of A then GCP
     A_mod = A.copy()
-    bc = np.outer(b, c)
-    A_mod[0, :, :] = A_mod[0, :, :] - bc[0, :][:, np.newaxis]
+    if A.ndim == 2:
+        A_mod += np.outer(b, c)
+    else:
+        # Polynomial A: rank-1 modification is a constant (degree-0) matrix
+        A_mod[:, :, 0] += np.outer(b, c)
     gcp = general_char_poly(delays, A_mod)
-    return gcp
+    n_len = max(len(tfA), len(gcp))
+    num = np.zeros(n_len)
+    num[: len(tfA)] = (d + 1.0) * tfA
+    num[: len(gcp)] -= gcp
+    return num
