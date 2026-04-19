@@ -9,7 +9,12 @@ Python translation: Facundo Franchino, 2025
 import torch
 
 
-def tiny_rotation_matrix(n, delta, spread=0.1, log_matrix=None):
+def tiny_rotation_matrix(
+    n: int,
+    delta: float,
+    spread: float = 0.1,
+    log_matrix: torch.Tensor | None = None,
+) -> torch.Tensor:
     """
     Generate orthogonal matrix with small eigenvalue angles.
 

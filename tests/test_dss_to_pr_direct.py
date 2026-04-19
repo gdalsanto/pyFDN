@@ -44,4 +44,3 @@ def test_dss_to_pr_direct_roots_mode_runs():
     assert direct.shape == (1, 1)
     assert is_pair.shape == poles.shape
     assert "undrivenResidues" in meta
-

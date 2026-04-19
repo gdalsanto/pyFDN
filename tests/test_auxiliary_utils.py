@@ -1,27 +1,26 @@
 """Tests for auxiliary.utils module."""
 
-import numpy as np
-import pytest
 from types import SimpleNamespace
 
-from pyFDN.auxiliary.acoustics import one_pole_absorption
-from pyFDN.auxiliary.acoustics import rt_to_slope
-from pyFDN.auxiliary.acoustics import slope_to_rt
-from pyFDN.auxiliary.delay import ms_to_smp
-from pyFDN.auxiliary.math import negpolyder
-from pyFDN.auxiliary.math import outer_sum_approximation
-from pyFDN.auxiliary.math import polyder_rational
-from pyFDN.auxiliary.utils import ensure_3d
-from pyFDN.auxiliary.utils import hertz_to_unit
-from pyFDN.auxiliary.utils import is_bounding_curve
-from pyFDN.auxiliary.utils import last_nonzero_indices
-from pyFDN.auxiliary.utils import lin_to_db
-from pyFDN.auxiliary.utils import pole_boundaries
+import numpy as np
+import pytest
 
+from pyFDN.auxiliary.acoustics import one_pole_absorption, rt_to_slope, slope_to_rt
+from pyFDN.auxiliary.delay import ms_to_smp
+from pyFDN.auxiliary.math import negpolyder, outer_sum_approximation, polyder_rational
+from pyFDN.auxiliary.utils import (
+    ensure_3d,
+    hertz_to_unit,
+    is_bounding_curve,
+    last_nonzero_indices,
+    lin_to_db,
+    pole_boundaries,
+)
 
 # ============================================================================
 # Conversion Utility Tests
 # ============================================================================
+
 
 def test_ms_to_smp_round_trip_simple_values():
     fs = 48_000
@@ -50,6 +49,7 @@ def test_rt_slope_inverse_relationship():
 # lin_to_db Tests
 # ============================================================================
 
+
 def test_lin_to_db_basic():
     arr = np.array([1, 10, 100])
     result = lin_to_db(arr)
@@ -74,6 +74,7 @@ def test_lin_to_db_from_poly_degree():
 # One-Pole Absorption Tests
 # ============================================================================
 
+
 def test_one_pole_absorption_shapes_are_correct():
     delays = np.array([10.0, 20.0, 30.0])
     sos = one_pole_absorption(1.2, 0.8, delays, 44100.0)
@@ -84,6 +85,7 @@ def test_one_pole_absorption_shapes_are_correct():
 # ============================================================================
 # Helper Utility Tests
 # ============================================================================
+
 
 def test_ensure_3d_promotes_2d_arrays():
     mat = np.array([[1.0, 2.0]])
@@ -115,6 +117,7 @@ def test_last_nonzero_indices_reports_positions():
 # Bounding Curve Tests
 # ============================================================================
 
+
 def test_is_bounding_curve_upper():
     x = np.linspace(0, 1, 5)
     y = np.array([1, 2, 3, 4, 5])
@@ -139,6 +142,7 @@ def test_is_bounding_curve_lower():
 # Pole Boundaries Tests
 # ============================================================================
 
+
 def test_pole_boundaries_basic():
     delays = np.array([1, 2])
     b = np.ones((2, 1, 4))
@@ -157,6 +161,7 @@ def test_pole_boundaries_basic():
 # ============================================================================
 # Math Utility Tests (from test_aux_utils.py)
 # ============================================================================
+
 
 def test_outer_sum_approximation_handles_zero_matrix():
     u, v = outer_sum_approximation(np.zeros((3, 4)))

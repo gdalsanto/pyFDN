@@ -1,16 +1,17 @@
 """Auxiliary modules (utils, acoustics, allpass, flamo wrappers, etc.)."""
-from .utils import skew
-from .flamo import gain_module, delay_module, sos_filter_module
+
 from .allpass import (
-    poletti_allpass,
-    series_allpass,
-    nested_allpass,
-    is_uniallpass,
     is_allpass,
     is_paraunitary,
+    is_uniallpass,
+    nested_allpass,
+    poletti_allpass,
+    series_allpass,
 )
-from .flamo_graph import flamo_model_to_nodes, flamo_nodes_flat, draw_flamo_graph
+from .flamo import delay_module, gain_module, sos_filter_module
+from .flamo_graph import draw_flamo_graph, flamo_model_to_nodes, flamo_nodes_flat
 from .poles import reduce_conjugate_pairs
+from .utils import skew
 
 __all__ = [
     "skew",

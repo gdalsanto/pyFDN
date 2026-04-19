@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.linalg import qr
 
 
 def random_orthogonal(n: int) -> np.ndarray:

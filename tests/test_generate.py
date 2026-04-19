@@ -4,8 +4,12 @@ import numpy as np
 import pytest
 
 from pyFDN.auxiliary.math import matrix_convolution
-from pyFDN.generate.construct_cascaded_paraunitary_matrix import construct_cascaded_paraunitary_matrix
-from pyFDN.generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
+from pyFDN.generate.construct_cascaded_paraunitary_matrix import (
+    construct_cascaded_paraunitary_matrix,
+)
+from pyFDN.generate.construct_velvet_feedback_matrix import (
+    construct_velvet_feedback_matrix,
+)
 from pyFDN.generate.is_almost_zero import is_almost_zero
 from pyFDN.generate.random_matrix_shift import random_matrix_shift
 from pyFDN.generate.random_orthogonal import random_orthogonal
@@ -34,7 +38,6 @@ def test_random_orthogonal():
     np.testing.assert_allclose(identity_matrix, np.eye(n), atol=1e-7)
 
 
-
 def test_shift_matrix_supports_left_and_right():
     tensor = np.arange(12).reshape(2, 2, 3)
     shifted_left = shift_matrix(tensor, np.array([1, 0]), "left")
@@ -42,8 +45,8 @@ def test_shift_matrix_supports_left_and_right():
 
     assert shifted_left.shape[-1] >= tensor.shape[-1]
     assert shifted_right.shape[-1] >= tensor.shape[-1]
-    np.testing.assert_allclose(shifted_left[1, :, :tensor.shape[2]], tensor[1, :, :])
-    np.testing.assert_allclose(shifted_right[:, 0, :tensor.shape[2]], tensor[:, 0, :])
+    np.testing.assert_allclose(shifted_left[1, :, : tensor.shape[2]], tensor[1, :, :])
+    np.testing.assert_allclose(shifted_right[:, 0, : tensor.shape[2]], tensor[:, 0, :])
 
 
 def test_shift_matrix_distribute_respects_pulse_size(deterministic_rng):
@@ -59,6 +62,7 @@ def test_random_matrix_shift_returns_consistent_lengths(deterministic_rng):
 
     np.testing.assert_equal(shifted.shape[0:2], tensor.shape[0:2])
     np.testing.assert_(shifted.shape[2] >= tensor.shape[2])
+    assert shifted_rev is not None
     np.testing.assert_(shifted_rev.shape[2] >= tensor.shape[2])
     np.testing.assert_equal(left.size, tensor.shape[0])
     np.testing.assert_equal(right.size, tensor.shape[0])

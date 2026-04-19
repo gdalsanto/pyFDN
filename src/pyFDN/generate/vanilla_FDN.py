@@ -1,15 +1,16 @@
 """Build a vanilla FDN (delays + feedback matrix + one-pole absorption) using FLAMO."""
+
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
-
-from pyFDN.generate.random_orthogonal import random_orthogonal
-from pyFDN.auxiliary.acoustics import one_pole_absorption
 from flamo.processor import dsp, system
+
+from pyFDN.auxiliary.acoustics import one_pole_absorption
+from pyFDN.generate.random_orthogonal import random_orthogonal
 
 if TYPE_CHECKING:
     pass  # FLAMO Shell type not annotated here
@@ -27,7 +28,7 @@ def vanilla_FDN(
     num_output: int = 1,
     delay_min: int = 400,
     delay_max: int = 1200,
-):
+) -> Any:
     """Build a vanilla FDN (delays + feedback matrix + one-pole absorption) in FLAMO.
 
     Delay lengths are drawn uniformly at random in [delay_min, delay_max) per channel.
@@ -56,7 +57,7 @@ def vanilla_FDN(
         Minimum delay length in samples (default 400).
     delay_max : int, optional
         Maximum delay length in samples, exclusive (default 1200).
-    
+
     Returns
     -------
     model
@@ -84,12 +85,18 @@ def vanilla_FDN(
     # Random orthogonal feedback matrix
     feedback_matrix = random_orthogonal(n).astype(np.float32)
     feedback_torch = torch.tensor(feedback_matrix, dtype=torch.float32, device=device)
-    mixing_matrix = dsp.Matrix(size=(n, n), nfft=n_fft, matrix_type="random", device=device)
+    mixing_matrix = dsp.Matrix(
+        size=(n, n), nfft=n_fft, matrix_type="random", device=device
+    )
     mixing_matrix.assign_value(feedback_torch)
 
     sos = one_pole_absorption(rt_dc, rt_ny, delays_arr, fs=float(fs))
-    absorption_coeff = torch.tensor(sos[np.newaxis, ...], dtype=torch.float32, device=device)
-    absorption = dsp.parallelSOSFilter(size=(n,), n_sections=1, nfft=n_fft, device=device)
+    absorption_coeff = torch.tensor(
+        sos[np.newaxis, ...], dtype=torch.float32, device=device
+    )
+    absorption = dsp.parallelSOSFilter(
+        size=(n,), n_sections=1, nfft=n_fft, device=device
+    )
     absorption.assign_value(absorption_coeff)
     delay_chain = system.Series(
         OrderedDict({"delay": delay_module, "absorption": absorption})
@@ -97,11 +104,13 @@ def vanilla_FDN(
 
     feedback_loop = system.Recursion(fF=delay_chain, fB=mixing_matrix)
     fdn = system.Series(
-        OrderedDict({
-            "input_gain": input_gain,
-            "feedback_loop": feedback_loop,
-            "output_gain": output_gain,
-        })
+        OrderedDict(
+            {
+                "input_gain": input_gain,
+                "feedback_loop": feedback_loop,
+                "output_gain": output_gain,
+            }
+        )
     )
 
     direct_gain = dsp.Gain(size=(num_output, num_input), nfft=n_fft, device=device)

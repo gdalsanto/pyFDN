@@ -1,14 +1,15 @@
 from __future__ import annotations
-from typing import Tuple
-from numpy.typing import ArrayLike
-import numpy as np
 
-from pyFDN.generate.shift_matrix import shift_matrix
+import numpy as np
+from numpy.typing import ArrayLike
+
 from pyFDN.auxiliary.utils import ensure_3d
+from pyFDN.generate.shift_matrix import shift_matrix
+
 
 def random_matrix_shift(
     max_shift: int, matrix: ArrayLike, matrix_rev: ArrayLike | None = None
-) -> Tuple[np.ndarray, np.ndarray | None, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray | None, np.ndarray, np.ndarray]:
     """Randomly shift polynomial matrices in time."""
 
     mat = ensure_3d(matrix)
@@ -23,8 +24,8 @@ def random_matrix_shift(
         rand_left = np.zeros(n, dtype=int)
         rand_right = np.zeros(n, dtype=int)
     else:
-        rand_left = rng.integers(0, max_shift, size=n)
-        rand_right = rng.integers(0, max_shift, size=n)
+        rand_left = rng.integers(0, max_shift, size=n)  # type: ignore[assignment]
+        rand_right = rng.integers(0, max_shift, size=n)  # type: ignore[assignment]
 
     rand_left -= rand_left.min()
     rand_right -= rand_right.min()

@@ -1,20 +1,18 @@
 """
-FLAMO import tests for one-pole absorption filters against MATLAB FDN Toolbox 
+FLAMO import tests for one-pole absorption filters against MATLAB FDN Toolbox
 
 tests to double check that the Python implementation matches the MATLAB reference.
 
 created by Facundo Franchino, early October 2025
 """
 
-import numpy as np
 import os
-import pytest
 from collections import OrderedDict
 
-from torch import jagged
+import numpy as np
+import pytest
 
 from pyFDN.auxiliary.acoustics import one_pole_absorption
-from pyFDN.generate.random_orthogonal import random_orthogonal
 
 
 @pytest.fixture(scope="module")
@@ -47,18 +45,20 @@ def one_pole_absorption_reference(loadmat):
 
     # Generate impulse response via FLAMO integration (if available)
     try:
-        from flamo.processor import dsp, system  # type: ignore
         import torch  # type: ignore
+        from flamo.processor import dsp, system  # type: ignore
     except ImportError:
         ir_python = None
     else:
-        nfft = 2 ** 16
+        nfft = 2**16
         device = "cpu"
 
         delays_torch = torch.tensor(delays, dtype=torch.float32)
         feedback_matrix_torch = torch.tensor(feedback_matrix, dtype=torch.float32)
 
-        absorption_coeff = torch.tensor(sos_python[np.newaxis, ...], dtype=torch.float32)
+        absorption_coeff = torch.tensor(
+            sos_python[np.newaxis, ...], dtype=torch.float32
+        )
 
         input_gain = dsp.Gain(size=(N, 1), nfft=nfft, device=device)
         input_gain.assign_value(torch.ones(N, 1))
@@ -85,10 +85,7 @@ def one_pole_absorption_reference(loadmat):
         mixing_matrix.assign_value(feedback_matrix_torch)
 
         absorption = dsp.parallelSOSFilter(
-            size=(N,),
-            n_sections=1,
-            nfft=nfft,
-            device=device
+            size=(N,), n_sections=1, nfft=nfft, device=device
         )
         absorption.assign_value(absorption_coeff)
 
@@ -97,7 +94,7 @@ def one_pole_absorption_reference(loadmat):
                 {
                     "delay": delay,
                     "absorption": absorption,
-                 }
+                }
             )
         )
 
@@ -142,6 +139,7 @@ def one_pole_absorption_reference(loadmat):
         "ir_python": ir_python,
     }
 
+
 def test_coefficients(one_pole_absorption_reference):
     """test that pyFDN generates same absorption coefficients as MATLAB."""
 
@@ -184,11 +182,8 @@ def test_impulse_response(one_pole_absorption_reference):
     ir_python = ir_python[:min_len]
     ir_matlab = ir_matlab[:min_len]
 
-    np.testing.assert_almost_equal(     # probably not exact match due to implementation differences
-        ir_python,
-        ir_matlab,
-        decimal=3,
-        err_msg="Impulse responses don't match"
+    np.testing.assert_almost_equal(  # probably not exact match due to implementation differences
+        ir_python, ir_matlab, decimal=3, err_msg="Impulse responses don't match"
     )
 
 

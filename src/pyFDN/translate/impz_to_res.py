@@ -51,4 +51,3 @@ def impz_to_res(
 
     residues = (b0 + b1 * np.real(poles)) + 1j * (np.imag(poles) * b1)
     return residues, b0, b1
-

@@ -3,6 +3,7 @@ Random admissible diagonal matrix for homogeneous uniallpass FDN.
 
 See "Allpass Feedback Delay Networks" by Sebastian J. Schlecht.
 """
+
 from __future__ import annotations
 
 import numpy as np

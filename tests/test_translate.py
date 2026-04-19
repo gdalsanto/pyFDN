@@ -42,6 +42,7 @@ def test_dss_to_impz_produces_delayed_impulse():
 # is_allpass Tests
 # ============================================================================
 
+
 def test_is_allpass_schroeder_siso():
     # Schroeder allpass: H(z) = (g + z^{-d}) / (1 + g*z^{-d}), |g| < 1
     # DSS parameterisation: A=-g, B=1, C=1-g^2, D=g
@@ -49,7 +50,7 @@ def test_is_allpass_schroeder_siso():
     delays = np.array([4])
     A = np.array([[-g]])
     B = np.array([[1.0]])
-    C = np.array([[1 - g ** 2]])
+    C = np.array([[1 - g**2]])
     D = np.array([[g]])
     result, den, num = is_allpass(A, B, C, D, delays)
     assert result
@@ -85,7 +86,7 @@ def test_is_allpass_near_singular_D_does_not_use_inv():
     delays = np.array([3])
     A = np.array([[-g]])
     B = np.array([[1.0]])
-    C = np.array([[1 - g ** 2]])
+    C = np.array([[1 - g**2]])
     D = np.array([[g]])
     result, den, num = is_allpass(A, B, C, D, delays)
     assert result
@@ -96,6 +97,7 @@ def test_is_allpass_near_singular_D_does_not_use_inv():
 # ============================================================================
 # dss_to_tf Tests
 # ============================================================================
+
 
 def test_dss_to_tf_scalar_A_tf_matches_impz():
     # TF poles/zeros must reproduce the impulse response via np.polyval
@@ -117,11 +119,13 @@ def test_dss_to_tf_scalar_A_tf_matches_impz():
     den_coeffs = tfA
 
     # z^{-k} convention: H(z) = sum_k num[k]*z^{-k} / sum_k den[k]*z^{-k}
-    H = np.array([
-        sum(num_coeffs[k] * zi**(-k) for k in range(len(num_coeffs))) /
-        sum(den_coeffs[k] * zi**(-k) for k in range(len(den_coeffs)))
-        for zi in z
-    ])
+    H = np.array(
+        [
+            sum(num_coeffs[k] * zi ** (-k) for k in range(len(num_coeffs)))
+            / sum(den_coeffs[k] * zi ** (-k) for k in range(len(den_coeffs)))
+            for zi in z
+        ]
+    )
     ir_from_tf = np.real(np.fft.ifft(H))[:ir_len]
     np.testing.assert_allclose(ir_from_tf, ir_tf, atol=1e-6)
 

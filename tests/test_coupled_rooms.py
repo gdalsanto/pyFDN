@@ -16,7 +16,7 @@ import numpy as np
 import torch
 
 # Add the src directory to Python path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 from pyFDN.auxiliary.coupled_rooms import create_coupled_rooms_fdn
 from pyFDN.auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
@@ -47,7 +47,9 @@ def test_tiny_rotation_matrix():
     max_deviation = torch.max(torch.abs(orthogonality_check - identity))
 
     print(f"  Max deviation from orthogonality: {max_deviation:.2e}")
-    assert max_deviation < 1e-5, f"Matrix not orthogonal, max deviation: {max_deviation}"
+    assert max_deviation < 1e-5, (
+        f"Matrix not orthogonal, max deviation: {max_deviation}"
+    )
 
     # third test, check determinant is ±1 (should be +1 for rotation matrix)
     det = torch.det(R)
@@ -104,8 +106,12 @@ def test_coupled_rooms_fdn():
     assert 0.001 < max_amp < 10, f"IR amplitude seems unreasonable: {max_amp}"
 
     # check feedback matrix is orthogonal
-    assert isinstance(feedback_matrix, np.ndarray), "Feedback matrix should be numpy array"
-    assert feedback_matrix.shape == (12, 12), f"Expected 12x12 feedback matrix, got {feedback_matrix.shape}"
+    assert isinstance(feedback_matrix, np.ndarray), (
+        "Feedback matrix should be numpy array"
+    )
+    assert feedback_matrix.shape == (12, 12), (
+        f"Expected 12x12 feedback matrix, got {feedback_matrix.shape}"
+    )
 
     ortho_check = feedback_matrix.T @ feedback_matrix
     max_deviation = np.max(np.abs(ortho_check - np.eye(12)))
@@ -122,7 +128,9 @@ def test_coupled_rooms_fdn():
     assert not np.any(np.isnan(ir)), "IR contains NaN values"
     assert not np.any(np.isinf(ir)), "IR contains infinite values"
     assert not np.any(np.isnan(feedback_matrix)), "Feedback matrix contains NaN values"
-    assert not np.any(np.isinf(feedback_matrix)), "Feedback matrix contains infinite values"
+    assert not np.any(np.isinf(feedback_matrix)), (
+        "Feedback matrix contains infinite values"
+    )
 
     print("  ✓ Coupled rooms FDN tests passed")
 
@@ -168,7 +176,7 @@ def test_energy_decay():
 
     # Compute energy decay curve (Schroeder integral)
     for channel in range(ir.shape[1]):
-        energy = np.cumsum(ir[::-1, channel]**2)[::-1]
+        energy = np.cumsum(ir[::-1, channel] ** 2)[::-1]
         energy_db = 10 * np.log10(energy / (energy[0] + 1e-12))
 
         # Check that energy generally decreases
@@ -177,14 +185,18 @@ def test_energy_decay():
         end_point = int(len(energy_db) * 0.9)  # 90% of the way through
 
         decay_amount = energy_db[0] - energy_db[end_point]
-        print(f"  Channel {channel+1} decay amount: {decay_amount:.1f} dB")
+        print(f"  Channel {channel + 1} decay amount: {decay_amount:.1f} dB")
 
         # Should have at least 10dB of decay (relaxed due to shorter IR length in test)
-        assert decay_amount > 10, f"Insufficient decay in channel {channel+1}: {decay_amount:.1f} dB"
+        assert decay_amount > 10, (
+            f"Insufficient decay in channel {channel + 1}: {decay_amount:.1f} dB"
+        )
 
         # Should not decay too fast (not more than 80dB in first half)
         mid_decay = energy_db[0] - energy_db[mid_point]
-        assert mid_decay < 80, f"Too fast decay in channel {channel+1}: {mid_decay:.1f} dB"
+        assert mid_decay < 80, (
+            f"Too fast decay in channel {channel + 1}: {mid_decay:.1f} dB"
+        )
 
     print("  ✓ Energy decay tests passed")
 

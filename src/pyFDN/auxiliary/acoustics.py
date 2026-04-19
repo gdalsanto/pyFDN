@@ -1,15 +1,15 @@
 """Acoustics and RT60 related functions."""
+
 from __future__ import annotations
+
 import warnings
-from typing import Tuple
+
 import numpy as np
 from numpy.typing import ArrayLike
-from numpy.linalg import svd
-from scipy.signal import firwin2, freqz, group_delay
-from scipy.interpolate import interp1d
+from scipy.signal import firwin2, freqz
 from scipy.special import erfc
 
-from pyFDN.auxiliary.utils import db_to_lin, lin_to_db, hertz_to_unit
+from pyFDN.auxiliary.utils import db_to_lin, hertz_to_unit, lin_to_db
 
 
 def rt_to_slope(rt: ArrayLike, fs: float) -> np.ndarray:
@@ -21,7 +21,8 @@ def rt_to_slope(rt: ArrayLike, fs: float) -> np.ndarray:
 
 def slope_to_rt(slope: ArrayLike, fs: float) -> np.ndarray:
     """Convert slope (dB/sample) to reverb time in seconds."""
-    return -60.0 / (slope * fs)
+    slope_arr = np.asarray(slope, dtype=float)
+    return -60.0 / (slope_arr * fs)
 
 
 def rt_to_gain_per_sample(rt: float, fs: float) -> float:
@@ -57,25 +58,32 @@ def edc(ir: ArrayLike, axis: int = 0) -> np.ndarray:
     return np.flip(cum, axis=axis)
 
 
-def absorption_filters(frequency, target_rt, filterOrder, delays, fs):
+def absorption_filters(
+    frequency: ArrayLike,
+    target_rt: np.ndarray,
+    filterOrder: int,
+    delays: ArrayLike,
+    fs: float,
+) -> np.ndarray:
     """
     Generate FIR absorption filters for each channel.
     frequency: [freq_points]
     target_rt: shape (freq_points, channels)
     delays: array of length channels
     """
-    num_channels = len(delays)
+    delays_arr = np.asarray(delays, dtype=float)
+    num_channels = len(delays_arr)
     unit_freq = hertz_to_unit(frequency, fs)
     FIR = np.zeros((num_channels, filterOrder + 1))
 
     if filterOrder == 0:
         rt = target_rt[0, :]
-        db = delays * rt_to_slope(rt, fs)
+        db = delays_arr * rt_to_slope(rt, fs)
         FIR[:, 0] = db_to_lin(db)
     else:
         for ch in range(num_channels):
             rt = target_rt[:, ch]
-            delay = delays[ch] + int(np.ceil(filterOrder / 2))
+            delay = delays_arr[ch] + int(np.ceil(filterOrder / 2))
             db = delay * rt_to_slope(rt, fs)
             target_amp = db_to_lin(db)
             # firwin2 expects normalized [0..1] freqs and gain values
@@ -83,16 +91,22 @@ def absorption_filters(frequency, target_rt, filterOrder, delays, fs):
     return FIR
 
 
-def absorption_to_rt(filterCoeffs, delays, nfft, fs):
+def absorption_to_rt(
+    filterCoeffs: np.ndarray,
+    delays: ArrayLike,
+    nfft: int,
+    fs: float,
+) -> tuple[np.ndarray, np.ndarray]:
     """Compute reverb time from recursive absorption filter with delay."""
+    delays_arr = np.asarray(delays, dtype=float)
     filterLen = filterCoeffs.shape[1]
     response = np.fft.fft(filterCoeffs, nfft, axis=1)
-    freq = np.linspace(0, fs/2, nfft // 2, endpoint=False)
+    freq = np.linspace(0, fs / 2, nfft // 2, endpoint=False)
 
-    response = response[:, :nfft // 2]
-    freq = freq[:nfft // 2]
+    response = response[:, : nfft // 2]
+    freq = freq[: nfft // 2]
 
-    totalDelay = delays[:, None] + filterLen / 2
+    totalDelay = delays_arr[:, None] + filterLen / 2
     decayPerSample = lin_to_db(np.abs(response)) / totalDelay
     rt = slope_to_rt(decayPerSample, fs)
     return rt.T, freq  # shape: (freq_points, channels)
@@ -105,7 +119,7 @@ def echo_density(
     pre_delay: int = 0,
     mixing_thresh: float = 1.0,
     hop: int = 500,
-) -> Tuple[float, np.ndarray]:
+) -> tuple[float, np.ndarray]:
     """Echo density and mixing time (Abel & Huang 2006).
 
     Computes the transition time between early reflections and stochastic
@@ -169,7 +183,7 @@ def echo_density(
             h_tau = ir_arr[n_center - half_win : len_ir]
             w_t = w_tau[: len(h_tau)].copy()
 
-        s = np.sqrt(np.sum(w_t * (h_tau ** 2)))
+        s = np.sqrt(np.sum(w_t * (h_tau**2)))
         tip_ct = (np.abs(h_tau) > s).astype(float)
         echo_dens_sparse[ii] = np.sum(w_t * tip_ct)
 
@@ -188,27 +202,30 @@ def echo_density(
             t_abel = 0.0
     else:
         t_abel = 0.0
-        warnings.warn("Mixing time not found within given limits.", UserWarning)
+        warnings.warn(
+            "Mixing time not found within given limits.", UserWarning, stacklevel=2
+        )
 
     return float(t_abel), echo_dens
 
 
-
-def one_pole_absorption(rt_dc: float, rt_ny: float, delays: ArrayLike, fs: float) -> np.ndarray:
+def one_pole_absorption(
+    rt_dc: float, rt_ny: float, delays: ArrayLike, fs: float
+) -> np.ndarray:
     """Design one-pole absorption filters according to specified reverb time.
 
     Returns SOS format: shape (6, N) with [b0, b1, b2, a0, a1, a2] per channel.
     """
     delays_arr = np.asarray(delays, dtype=float)
-    
+
     # Calculate target gains
     slope_dc = rt_to_slope(rt_dc, fs)
     slope_ny = rt_to_slope(rt_ny, fs)
-    
+
     # Convert to linear magnitude
     h_dc = db_to_lin(delays_arr * slope_dc)
     h_ny = db_to_lin(delays_arr * slope_ny)
-    
+
     # Design filters
     r = h_dc / h_ny
     a1 = (1.0 - r) / (1.0 + r)
@@ -217,9 +234,9 @@ def one_pole_absorption(rt_dc: float, rt_ny: float, delays: ArrayLike, fs: float
     num_filters = h_dc.size
     sos = np.zeros((6, num_filters))
     sos[0, :] = b0  # b0
-    sos[3, :] = 1.0 # a0
+    sos[3, :] = 1.0  # a0
     sos[4, :] = a1  # a1
-    
+
     return sos
 
 
@@ -270,6 +287,3 @@ def sos_gain_per_sample_curves(
         mag = np.abs(h)
         magnitude[:, ch] = np.power(mag, 1.0 / delays_arr[ch])
     return angles, magnitude
-
-
-

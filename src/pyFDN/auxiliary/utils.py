@@ -1,9 +1,13 @@
 """General utility functions."""
+
 from __future__ import annotations
+
 import warnings
+from typing import Any
+
 import numpy as np
-from numpy.typing import ArrayLike
 from numpy.linalg import svd
+from numpy.typing import ArrayLike
 from scipy.interpolate import interp1d
 from scipy.signal import freqz, group_delay
 
@@ -147,7 +151,13 @@ def hertz_to_rad(hz: ArrayLike, fs: float) -> np.ndarray:
     return np.asarray(hz, dtype=np.float64) * (2.0 * np.pi) / fs
 
 
-def is_bounding_curve(x_points, y_points, x_curve, y_curve, bound_type):
+def is_bounding_curve(
+    x_points: ArrayLike,
+    y_points: ArrayLike,
+    x_curve: ArrayLike,
+    y_curve: ArrayLike,
+    bound_type: str,
+) -> tuple[Any, np.ndarray]:
     """
     Check if all value points are bounded by the curve.
     Args:
@@ -175,7 +185,13 @@ def is_bounding_curve(x_points, y_points, x_curve, y_curve, bound_type):
     return all_bounded, is_bounded
 
 
-def pole_boundaries(delays, absorption, feedback_matrix, fs, nfft=2**12):
+def pole_boundaries(
+    delays: ArrayLike,
+    absorption: Any,
+    feedback_matrix: np.ndarray,
+    fs: float,
+    nfft: int = 2**12,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Find upper and lower pole boundaries for FDN loop.
     Args:
@@ -189,7 +205,8 @@ def pole_boundaries(delays, absorption, feedback_matrix, fs, nfft=2**12):
         MaxCurve: upper bound of pole magnitude (shape: nfft)
         f: frequency points (Hz, shape: nfft)
     """
-    N = len(delays)
+    delays_arr = np.asarray(delays, dtype=float).ravel()
+    N = len(delays_arr)
     # Compute frequency points
     w = np.linspace(0, np.pi, nfft)
     # FFT along the third axis
@@ -200,8 +217,8 @@ def pole_boundaries(delays, absorption, feedback_matrix, fs, nfft=2**12):
     Max = np.zeros(nfft)
     for it in range(nfft):
         s = svd(FeedbackMatrix[:, :, it], compute_uv=False)
-        Min[it] = np.min(np.abs(s)) ** (1 / np.min(delays))
-        Max[it] = np.max(np.abs(s)) ** (1 / np.max(delays))
+        Min[it] = np.min(np.abs(s)) ** (1 / np.min(delays_arr))
+        Max[it] = np.max(np.abs(s)) ** (1 / np.max(delays_arr))
 
     # Combine with absorption
     b = np.transpose(absorption.b, (0, 2, 1))  # shape (N, len, 1)
@@ -223,7 +240,7 @@ def pole_boundaries(delays, absorption, feedback_matrix, fs, nfft=2**12):
     # delays: shape (N,)
     # G: shape (nfft, N)
     # d: shape (nfft, N)
-    d = np.abs(H) ** (1.0 / (delays + G))
+    d = np.abs(H) ** (1.0 / (delays_arr + G))
     dMin = np.min(d, axis=1)
     dMax = np.max(d, axis=1)
 

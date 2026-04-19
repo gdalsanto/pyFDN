@@ -6,6 +6,7 @@ Similar to ss2tf but with per-delay lengths. Supports multiple inputs and output
 Derived from block matrix determinant (see determinant#Block_matrices on Wikipedia).
 Matches the reference dss2tf.m.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -58,9 +59,7 @@ def dss_to_tf(
     numerators = []
     for i_out in range(num_output):
         for i_in in range(num_input):
-            num = _numerator(
-                delays, A, B[:, i_in], C[i_out, :], D[i_out, i_in], tfA
-            )
+            num = _numerator(delays, A, B[:, i_in], C[i_out, :], D[i_out, i_in], tfA)
             numerators.append((i_out, i_in, num))
     order_b = max(len(num) for (_, _, num) in numerators)
     order = max(len(tfA), order_b)

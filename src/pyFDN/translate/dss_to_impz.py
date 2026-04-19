@@ -1,10 +1,18 @@
 # dss_to_impz.py
 import numpy as np
+from numpy.typing import ArrayLike
 
 from pyFDN.process import process_fdn
 
 
-def dss_to_impz(ir_len, delays, A, B, C, D):
+def dss_to_impz(
+    ir_len: int,
+    delays: ArrayLike,
+    A: np.ndarray,
+    B: np.ndarray,
+    C: np.ndarray,
+    D: np.ndarray,
+) -> np.ndarray:
     """
     Compute MIMO impulse response from delay state-space (DSS) representation.
 

@@ -3,15 +3,13 @@
 import numpy as np
 import pytest
 
-from pyFDN.auxiliary.acoustics import absorption_filters
-from pyFDN.auxiliary.acoustics import absorption_to_rt
-from pyFDN.auxiliary.acoustics import rt_to_slope
+from pyFDN.auxiliary.acoustics import absorption_filters, absorption_to_rt, rt_to_slope
 from pyFDN.auxiliary.utils import db_to_lin
-
 
 # ============================================================================
 # Absorption Filter Tests
 # ============================================================================
+
 
 @pytest.mark.parametrize(
     "target_rt, delays",
@@ -23,7 +21,9 @@ from pyFDN.auxiliary.utils import db_to_lin
 def test_absorption_filters_zero_order_matches_closed_form(target_rt, delays):
     fs = 48_000
     filter_order = 0
-    coeffs = absorption_filters(np.array([0.0, fs / 2]), target_rt, filter_order, delays, fs)
+    coeffs = absorption_filters(
+        np.array([0.0, fs / 2]), target_rt, filter_order, delays, fs
+    )
 
     expected = db_to_lin(delays * rt_to_slope(target_rt[0, :], fs))[:, None]
     assert coeffs.shape == (delays.size, filter_order + 1)
@@ -45,7 +45,7 @@ def test_absorption_filters_round_trip_with_analysis():
     filter_order = 8
 
     coeffs = absorption_filters(frequency, target_rt, filter_order, delays, fs)
-    rt, freq = absorption_to_rt(coeffs, delays, 2 ** 12, fs)
+    rt, freq = absorption_to_rt(coeffs, delays, 2**12, fs)
 
     assert freq.shape[0] == rt.shape[0]
     # Compare at sample frequencies

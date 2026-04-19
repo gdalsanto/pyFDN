@@ -113,11 +113,13 @@ __all__ = [
     "is_paraunitary",
 ]
 
-#acoustics and absorption
+# acoustics and absorption
+# Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
+from . import auxiliary
 from .auxiliary.acoustics import (
     absorption_filters,
-    echo_density,
     absorption_to_rt,
+    echo_density,
     edc,
     one_pole_absorption,
     rt_to_gain_per_sample,
@@ -125,14 +127,24 @@ from .auxiliary.acoustics import (
     slope_to_rt,
     sos_gain_per_sample_curves,
 )
+from .auxiliary.allpass import (
+    is_allpass,
+    is_paraunitary,
+    is_uniallpass,
+    nested_allpass,
+    poletti_allpass,
+    series_allpass,
+)
 
-#delay utilities
+# delay utilities
 from .auxiliary.delay import matrix_delay_approximation, mgrpdelay, ms_to_smp
+from .auxiliary.flamo_graph import (
+    draw_flamo_graph,
+    flamo_model_to_nodes,
+    flamo_nodes_flat,
+)
 
-#tiny rotation matrix
-from .auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
-
-#polynomial and matrix maths
+# polynomial and matrix maths
 from .auxiliary.math import (
     det_polynomial,
     general_char_poly,
@@ -149,14 +161,23 @@ from .auxiliary.math import (
     polydiag,
 )
 
-#general utilities
+# plotting
+from .auxiliary.plot import (
+    plot_impulse_response_matrix,
+    plot_spectrogram,
+    plot_system_matrix,
+)
+
+# tiny rotation matrix
+from .auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
+
+# general utilities
 from .auxiliary.utils import (
     db_to_lin,
     db_to_sq,
     ensure_3d,
-    hertz_to_unit,
     hertz_to_rad,
-    rad_to_hertz,
+    hertz_to_unit,
     is_bounding_curve,
     last_nonzero_indices,
     lin_to_db,
@@ -164,34 +185,14 @@ from .auxiliary.utils import (
     mulaw_encode,
     peak_normalize,
     pole_boundaries,
-    sq_to_db,
+    rad_to_hertz,
     skew,
+    sq_to_db,
 )
 
-#plotting
-from .auxiliary.plot import (
-    plot_impulse_response_matrix,
-    plot_system_matrix,
-    plot_spectrogram,
-)
-from .auxiliary.flamo_graph import (
-    flamo_model_to_nodes,
-    flamo_nodes_flat,
-    draw_flamo_graph,
-)
-
-from .auxiliary.allpass import (
-    is_uniallpass,
-    is_allpass,
-    is_paraunitary,
-    poletti_allpass,
-    series_allpass,
-    nested_allpass,
-)
-
+# dsp components
+from .dsp.feedback_delay import FeedbackDelay
 from .generate.allpass_FDN import allpass_completion
-from .generate.allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fdn
-from .generate.allpass_FDN.rand_admissible_homogeneous_allpass import rand_admissible_homogeneous_allpass
 from .generate.allpass_FDN.allpass_completion import (
     apply_diagonal_similarity,
     block_matrix,
@@ -199,54 +200,51 @@ from .generate.allpass_FDN.allpass_completion import (
     complete_fdn,
     complete_full_mimo_halmos,
     complete_general_mimo_svd,
-    diagonal_similarity_from_abs2_lyapunov,
     diag_inv_sqrt,
     diag_sqrt,
+    diagonal_similarity_from_abs2_lyapunov,
     eig_sqrt_psd,
     hermitize,
     map_back_from_similarity,
     orth_error,
     sqrtm_psd,
 )
-
-
-#matrix generators
-from .generate.random_orthogonal import random_orthogonal
-from .generate.random_matrix_shift import random_matrix_shift
-from .generate.shift_matrix import shift_matrix
-from .generate.shift_matrix_distribute import shift_matrix_distribute
+from .generate.allpass_FDN.homogeneous_allpass_fdn import homogeneous_allpass_fdn
+from .generate.allpass_FDN.rand_admissible_homogeneous_allpass import (
+    rand_admissible_homogeneous_allpass,
+)
 from .generate.construct_cascaded_paraunitary_matrix import (
     construct_cascaded_paraunitary_matrix,
 )
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from .generate.is_almost_zero import is_almost_zero
-from .generate.vanilla_FDN import vanilla_FDN
-from .generate.SDN import SDN
+from .generate.random_matrix_shift import random_matrix_shift
 
-#state-space translators
+# matrix generators
+from .generate.random_orthogonal import random_orthogonal
+from .generate.SDN import SDN
+from .generate.shift_matrix import shift_matrix
+from .generate.shift_matrix_distribute import shift_matrix_distribute
+from .generate.vanilla_FDN import vanilla_FDN
+
+# fdn processing
+from .process import process_fdn
+
+# state-space translators
 from .translate.dss_to_flamo import dss_to_flamo
-from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_impz import dss_to_impz
 from .translate.dss_to_pr_direct import dss_to_pr_direct
 from .translate.dss_to_pr_flamo import (
+    FlamoDecompositionForPR,
     dss_to_pr_flamo,
     flamo_decompose_for_pr,
     flamo_extract_pr_decomposition,
     flamo_to_pr,
-    FlamoDecompositionForPR,
 )
+from .translate.dss_to_ss import dss_to_ss
 from .translate.dss_to_tf import dss_to_tf
 from .translate.impz_to_res import impz_to_res
 from .translate.mtf_to_impz import mtf_to_impz
 from .translate.pr_to_impz import pr_to_impz
 
-#fdn processing
-from .process import process_fdn
-
-
-#dsp components
-from .dsp.feedback_delay import FeedbackDelay
-
-# Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
-from . import auxiliary
 allpass = auxiliary.allpass
