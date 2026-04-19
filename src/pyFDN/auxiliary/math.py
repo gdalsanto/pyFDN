@@ -26,8 +26,12 @@ def is_orthogonal(Q: np.ndarray, tol: float = 1e-10) -> bool:
     """Check if Q is orthogonal (Q.T @ Q ≈ I)."""
     return np.allclose(Q.T @ Q, np.eye(Q.shape[0]), atol=tol)
 
-def poly_degree(polynomial: ArrayLike, var: str, tol: float | None = None) -> int:
-    """Return the polynomial degree, matching ``polyDegree.m`` semantics."""
+def poly_degree(polynomial: ArrayLike, tol: float | None = None) -> int:
+    """Return the polynomial degree in the z^{-1} convention.
+
+    Coefficients are ordered as [z^0, z^{-1}, z^{-2}, ...]; the degree is
+    the index of the last coefficient whose magnitude is above the noise floor.
+    """
 
     coeffs = np.asarray(polynomial)
     if coeffs.ndim != 1:
@@ -45,11 +49,7 @@ def poly_degree(polynomial: ArrayLike, var: str, tol: float | None = None) -> in
     if active.size == 0:
         return 0
 
-    if var == "z^-1":
-        return int(active[-1])
-    if var == "z^1":
-        return int(len(coeffs) - 1 - active[0])
-    raise ValueError("var must be 'z^-1' or 'z^1'")
+    return int(active[-1])
 
 
 def polyder_rational(b: np.ndarray, a: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -137,39 +137,32 @@ def negpolyder(b: np.ndarray, a: np.ndarray, dont_truncate: bool = False) -> tup
     return q, p
 
 
-def matrix_polyder(B: np.ndarray, A: np.ndarray, var: str = 'z^1') -> tuple[np.ndarray, np.ndarray]:
-    """
-    Wrapper function for polynomial derivative of filter matrices.
-    
+def matrix_polyder(B: np.ndarray, A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Derivative of rational filter matrices in the z^{-1} convention.
+
+    Coefficients are ordered as [z^0, z^{-1}, z^{-2}, ...] along axis 0.
+
     Args:
-        B: Numerator [FIR, N, M]
-        A: Denominator [FIR, N, M]
-        var: Variable type {'z^1', 'z^-1'}
-        
+        B: Numerator coefficients, shape (order, N, M).
+        A: Denominator coefficients, shape (order, N, M).
+
     Returns:
-        Q: Numerator of derivative
-        P: Denominator of derivative
+        Q: Numerator of the derivative, shape (order, N, M).
+        P: Denominator of the derivative, shape (order, N, M).
     """
     order_B = B.shape[0]
     order_A = A.shape[0]
     Q = np.zeros((order_B, B.shape[1], B.shape[2]), dtype=complex)
     P = np.zeros((order_A, A.shape[1], A.shape[2]), dtype=complex)
-    
+
     for it1 in range(B.shape[1]):
         for it2 in range(B.shape[2]):
-            if var == 'z^1':
-                q, p = polyder_rational(B[:, it1, it2], A[:, it1, it2])
-                Q_len = min(len(q), order_B)
-                P_len = min(len(p), order_A)
-                Q[:Q_len, it1, it2] = q[:Q_len]
-                P[:P_len, it1, it2] = p[:P_len]
-            elif var == 'z^-1':
-                q, p = negpolyder(B[:, it1, it2], A[:, it1, it2])
-                Q_len = min(len(q), order_B)
-                P_len = min(len(p), order_A)
-                Q[:Q_len, it1, it2] = q[:Q_len]
-                P[:P_len, it1, it2] = p[:P_len]
-    
+            q, p = negpolyder(B[:, it1, it2], A[:, it1, it2])
+            Q_len = min(len(q), order_B)
+            P_len = min(len(p), order_A)
+            Q[:Q_len, it1, it2] = q[:Q_len]
+            P[:P_len, it1, it2] = p[:P_len]
+
     if np.allclose(Q.imag, 0.0):
         Q = Q.real.astype(float)
     if np.allclose(P.imag, 0.0):
@@ -178,35 +171,32 @@ def matrix_polyder(B: np.ndarray, A: np.ndarray, var: str = 'z^1') -> tuple[np.n
     return Q, P
 
 
-def det_polynomial(polynomial_matrix: np.ndarray, var: str) -> np.ndarray:
-    """
-    Determinant of a polynomial matrix.
+def det_polynomial(polynomial_matrix: np.ndarray) -> np.ndarray:
+    """Determinant of a polynomial matrix in the z^{-1} convention.
+
+    Coefficients are ordered as [z^0, z^{-1}, z^{-2}, ...] along axis 2.
+    Uses an FFT-based approach: evaluate at DFT points, compute scalar det
+    at each frequency, then IFFT back.
 
     Args:
-        polynomial_matrix: numpy array of shape (N, N, degree) containing the polynomial coefficients
-        var: 'z^1' or 'z^-1'
+        polynomial_matrix: shape (N, N, L), polynomial matrix entries.
+
     Returns:
-        determinant: Determinant polynomial
+        determinant: 1-D array of determinant polynomial coefficients,
+            ordered [z^0, z^{-1}, ...], trimmed to the actual degree.
     """
     N = polynomial_matrix.shape[1]
     length = polynomial_matrix.shape[2]
     fft_size = length * N
     is_real = np.isrealobj(polynomial_matrix)
 
-    if var == 'z^-1':
-        data = polynomial_matrix
-    elif var == 'z^1':
-        data = np.flip(polynomial_matrix, axis=2)
-    else:
-        raise ValueError('Variable type not defined')
-
     if is_real:
-        freq_mat = np.fft.rfft(data, fft_size, axis=2)
+        freq_mat = np.fft.rfft(polynomial_matrix, fft_size, axis=2)
         n_freq = fft_size // 2 + 1
         freq_det = np.array([np.linalg.det(freq_mat[:, :, k]) for k in range(n_freq)])
         determinant = np.fft.irfft(freq_det, fft_size)
     else:
-        freq_mat = np.fft.fft(data, fft_size, axis=2)
+        freq_mat = np.fft.fft(polynomial_matrix, fft_size, axis=2)
         freq_det = np.array([np.linalg.det(freq_mat[:, :, k]) for k in range(fft_size)])
         determinant = np.fft.ifft(freq_det).real
 
@@ -219,9 +209,6 @@ def det_polynomial(polynomial_matrix: np.ndarray, var: str) -> np.ndarray:
         tol = np.finfo(float).eps * N * abs_max
         nz = np.flatnonzero(np.abs(determinant) > tol)
         determinant = determinant[:nz[-1] + 1] if nz.size > 0 else determinant[:1]
-
-    if var == 'z^1':
-        determinant = np.flip(determinant)
 
     return determinant
 
@@ -266,7 +253,7 @@ def general_char_poly(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
         return p
 
     # Polyphase: A is (N, N, L); m = degree of det(A)
-    det_A = det_polynomial(A, "z^-1")
+    det_A = det_polynomial(A)
     m = len(det_A) - 1
     p_len = int(delays.sum()) + 1 + m
     p = np.zeros(p_len)
@@ -276,7 +263,7 @@ def general_char_poly(delays: ArrayLike, A: np.ndarray) -> np.ndarray:
             ind = np.array(ind)
             p_ind = int(delays[ind].sum())
             sub = A[np.ix_(ind, ind, list(range(A.shape[2])))]
-            dd = det_polynomial(sub, "z^-1")
+            dd = det_polynomial(sub)
             for j, c in enumerate(dd):
                 idx = p_ind - j
                 if 0 <= idx < p_len:

@@ -40,16 +40,18 @@ def test_matrix_polyval_basic():
 # Poly Degree Tests
 # ============================================================================
 
-def test_poly_degree_z1():
-    poly = np.array([0, 0, 1])
-    deg = poly_degree(poly, "z^1")
-    assert deg == 0
-
-
 def test_poly_degree_zm1():
+    # [1, 0, 0] in z^{-1} ordering: only z^0 term is nonzero, degree = 0
     poly = np.array([1, 0, 0])
-    deg = poly_degree(poly, "z^-1")
+    deg = poly_degree(poly)
     assert deg == 0
+
+
+def test_poly_degree_zm1_nonzero_last():
+    # [0, 0, 1] in z^{-1} ordering: z^{-2} term, degree = 2
+    poly = np.array([0, 0, 1])
+    deg = poly_degree(poly)
+    assert deg == 2
 
 
 # ============================================================================
@@ -113,7 +115,7 @@ def test_det_polynomial_scalar_matrix():
     A = np.zeros((2, 2, 1))
     A[0, 0, 0] = 1.0
     A[1, 1, 0] = 1.0
-    result = det_polynomial(A, "z^-1")
+    result = det_polynomial(A)
     np.testing.assert_allclose(result, [1.0], atol=1e-10)
 
 
@@ -122,7 +124,7 @@ def test_det_polynomial_diagonal_delay():
     A = np.zeros((2, 2, 3))
     A[0, 0, 1] = 1.0  # z^{-1}
     A[1, 1, 2] = 1.0  # z^{-2}
-    result = det_polynomial(A, "z^-1")
+    result = det_polynomial(A)
     expected = np.array([0.0, 0.0, 0.0, 1.0])
     np.testing.assert_allclose(result, expected, atol=1e-10)
 
@@ -134,7 +136,7 @@ def test_det_polynomial_known_2x2():
     A[0, 0, 1] = 1.0
     A[0, 1, 1] = 1.0
     A[1, 1, 0] = 1.0
-    result = det_polynomial(A, "z^-1")
+    result = det_polynomial(A)
     np.testing.assert_allclose(result, [1.0, 1.0], atol=1e-10)
 
 
@@ -143,17 +145,9 @@ def test_det_polynomial_agrees_with_linalg_det_for_constant():
     rng = np.random.default_rng(0)
     M = rng.standard_normal((3, 3))
     A = M[:, :, np.newaxis]  # shape (3, 3, 1)
-    result = det_polynomial(A, "z^-1")
+    result = det_polynomial(A)
     np.testing.assert_allclose(result[0], np.linalg.det(M), rtol=1e-10)
 
-
-def test_det_polynomial_z1_convention():
-    # diag([z, 1]) in z^1 convention: det = z => coefficients [1, 0] (high-to-low)
-    A = np.zeros((2, 2, 3))
-    A[0, 0, 1] = 1.0  # z^1 entry (second coefficient = z^1 term)
-    A[1, 1, 2] = 1.0  # constant entry (last coefficient = z^0 term)
-    result = det_polynomial(A, "z^1")
-    np.testing.assert_allclose(result, [1.0, 0.0], atol=1e-10)
 
 
 # ============================================================================
