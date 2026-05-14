@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.2"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -28,12 +28,13 @@ def _(mo):
 
 @app.cell
 def _():
-    import numpy as np
-    import matplotlib.pyplot as plt
     from pathlib import Path
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from IPython.display import HTML, Audio, display
     from scipy.io import loadmat
     from scipy.linalg import expm
-    from IPython.display import Audio, display, HTML
 
     import pyFDN
 
@@ -58,9 +59,9 @@ def _(Path, pyFDN):
     # Resolve param_dir: nbsphinx runs with cwd = notebook dir (docs/examples/), so go up to repo root
     _param_candidates = [
         Path.cwd().parent.parent / "examples" / "resources" / "colorless_FDN",  # from docs/examples/
-        Path.cwd().parent / "examples" / "resources" / "colorless_FDN",         # from docs/
-        Path.cwd() / "resources" / "colorless_FDN",                             # from examples/
-        Path.cwd() / "examples" / "resources" / "colorless_FDN",                # from project root
+        Path.cwd().parent / "examples" / "resources" / "colorless_FDN",  # from docs/
+        Path.cwd() / "resources" / "colorless_FDN",  # from examples/
+        Path.cwd() / "examples" / "resources" / "colorless_FDN",  # from project root
     ]
     param_dir = next((p for p in _param_candidates if p.is_dir()), _param_candidates[0])
     delay_set = 1
@@ -103,9 +104,9 @@ def _(Path, expm, loadmat, np, pyFDN):
 
 @app.cell
 def _(N, delay_set, g, ir_len, load_colorless_params, np, param_dir, pyFDN):
-    path_optim = param_dir / f'param_N{N}_d{delay_set}.mat'
+    path_optim = param_dir / f"param_N{N}_d{delay_set}.mat"
     m, A, B, C, D = load_colorless_params(path_optim)
-    _Gamma = np.diag(g ** m)
+    _Gamma = np.diag(g**m)
     Ag = A @ _Gamma
     ir_optim = pyFDN.dss_to_impz(ir_len, m, Ag, B, C, D).squeeze()
     return (ir_optim,)
@@ -121,9 +122,9 @@ def _(mo):
 
 @app.cell
 def _(N, delay_set, g, ir_len, load_colorless_params, np, param_dir, pyFDN):
-    path_init = param_dir / f'param_init_N{N}_d{delay_set}.mat'
+    path_init = param_dir / f"param_init_N{N}_d{delay_set}.mat"
     m_i, A_i, B_i, C_i, D_i = load_colorless_params(path_init)
-    _Gamma = np.diag(g ** m_i)
+    _Gamma = np.diag(g**m_i)
     Ag_i = A_i @ _Gamma
     ir_init = pyFDN.dss_to_impz(ir_len, m_i, Ag_i, B_i, C_i, D_i).squeeze()
     return (ir_init,)
@@ -142,7 +143,9 @@ def _(Audio, HTML, display, fs, ir_init, ir_len, ir_optim, np, plt, pyFDN):
     t = np.arange(ir_len) / fs
     plt.figure(figsize=(10, 3))
     plt.plot(t, pyFDN.mulaw_encode(ir_optim), alpha=0.8, lw=0.6, label="Optimized")
-    plt.plot(t, pyFDN.mulaw_encode(ir_init), alpha=0.8, lw=0.6, label="Random Initialization")
+    plt.plot(
+        t, pyFDN.mulaw_encode(ir_init), alpha=0.8, lw=0.6, label="Random Initialization"
+    )
     plt.xlabel("Time [s]")
     plt.ylabel("Amplitude [mu-law]")
     plt.legend()

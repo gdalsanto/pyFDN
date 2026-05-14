@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.2"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -29,9 +29,9 @@ def _(mo):
 
 @app.cell
 def _():
-    import numpy as np
     import matplotlib.pyplot as plt
-    from scipy.signal import ss2tf, dlti, dimpulse
+    import numpy as np
+    from scipy.signal import dimpulse, dlti, ss2tf
     import pyFDN
 
     np.random.seed(1)

@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.2"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -37,9 +37,9 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    from scipy.signal import butter, tf2sos
     import plotly.graph_objects as go
     import plotly.io as pio
+    from scipy.signal import butter, tf2sos
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
     from IPython.display import Audio, display
 
@@ -61,8 +61,8 @@ def _(mo):
 @app.cell
 def _(butter, np, tf2sos):
     room_size = np.array([5, 5, 5])
-    source_pos = np.array([0.3, 0.5, 0.9]) 
-    receiver_pos = np.array([0.4, 0.1, 0.4]) 
+    source_pos = np.array([0.3, 0.5, 0.9])
+    receiver_pos = np.array([0.4, 0.1, 0.4])
 
     # More natural setup
     room_size = np.array([7, 9, 5])
@@ -150,7 +150,11 @@ def _(mo):
 def _(Audio, Fs, display, go, ir, np):
     t = np.arange(len(ir)) / Fs
     fig = go.Figure(
-        data=[go.Scatter(x=t, y=ir, mode="lines", line=dict(color="rgb(31, 119, 180)", width=1))],
+        data=[
+            go.Scatter(
+                x=t, y=ir, mode="lines", line=dict(color="rgb(31, 119, 180)", width=1)
+            )
+        ],
         layout=dict(
             xaxis_title="Time [s]",
             yaxis_title="Amplitude",

@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.2"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -83,13 +83,22 @@ def _(mo):
 def _(C, T):
     # Plotly Express: one call, slider + play (animation_frame = axis to slice)
     import plotly.express as px
+
     zmin = -1
     zmax = 1
-    _fig = px.imshow(C, animation_frame=2, origin='upper', range_color=(zmin, zmax), color_continuous_scale='RdBu', color_continuous_midpoint=0, labels=dict(animation_frame='t'))
+    _fig = px.imshow(
+        C,
+        animation_frame=2,
+        origin="upper",
+        range_color=(zmin, zmax),
+        color_continuous_scale="RdBu",
+        color_continuous_midpoint=0,
+        labels=dict(animation_frame="t"),
+    )
     _fig.update_layout(height=420)
-    _fig.layout.sliders[0].currentvalue = dict(prefix='t = ', visible=True)
+    _fig.layout.sliders[0].currentvalue = dict(prefix="t = ", visible=True)
     for k, step in enumerate(_fig.layout.sliders[0].steps):
-        step['label'] = f'{T[k]:.2f}'
+        step["label"] = f"{T[k]:.2f}"
     # Optional: label slider with T values
     _fig.show()
     return
@@ -115,17 +124,34 @@ def _(C, N, T, go, np, num_t, pyFDN):
     d = np.array([[0.0]])
     idx = [0, num_t // 3 * 2, num_t - 1]
     # Pick three interpolants: start (A), middle, end (B)
-    labels = [f't={T[i]:.2f}' for i in idx]
+    labels = [f"t={T[i]:.2f}" for i in idx]
     irs = []
     for i in idx:
-        Af = C[:, :, i] @ np.diag(g ** delays)
-        ir = pyFDN.dss_to_impz(ir_len, delays, Af, b, c, d)  # feedback matrix with gain per delay
+        Af = C[:, :, i] @ np.diag(g**delays)
+        ir = pyFDN.dss_to_impz(
+            ir_len, delays, Af, b, c, d
+        )  # feedback matrix with gain per delay
         ir = np.asarray(ir).squeeze().ravel()
         irs.append(ir)
     _fig = go.Figure()
-    for i, (ir, label) in enumerate(zip(irs, labels)):
-        _fig.add_trace(go.Scatter(y=pyFDN.mulaw_encode(ir) + 2 * i, mode='lines', name=label, line=dict(width=1.5)))
-    _fig.update_layout(title='FDN impulse response for three interpolated feedback matrices', xaxis_title='Time [samples]', yaxis_title='Amplitude [μ-law]', legend_title='Interpolation', hovermode='x unified', template='plotly_white', height=400)
+    for i, (ir, label) in enumerate(zip(irs, labels, strict=False)):
+        _fig.add_trace(
+            go.Scatter(
+                y=pyFDN.mulaw_encode(ir) + 2 * i,
+                mode="lines",
+                name=label,
+                line=dict(width=1.5),
+            )
+        )
+    _fig.update_layout(
+        title="FDN impulse response for three interpolated feedback matrices",
+        xaxis_title="Time [samples]",
+        yaxis_title="Amplitude [μ-law]",
+        legend_title="Interpolation",
+        hovermode="x unified",
+        template="plotly_white",
+        height=400,
+    )
     _fig.show()
     return
 

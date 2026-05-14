@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.5"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -97,9 +97,9 @@ def _(A, b, c, d, np, pyFDN):
 
     _roots_den = np.roots(_den)
     _stable = np.all(np.abs(_roots_den) < 1)
-    assert _stable, 'Expected stable (|roots| < 1)'
-    assert _is_a, 'Expected allpass for m = [1,1,1]'
-    print('Allpass: OK, stable: OK')
+    assert _stable, "Expected stable (|roots| < 1)"
+    assert _is_a, "Expected allpass for m = [1,1,1]"
+    print("Allpass: OK, stable: OK")
     return
 
 
@@ -120,9 +120,9 @@ def _(A, b, c, d, np, pyFDN):
 
     _roots_den = np.roots(_den)
     unstable = np.any(np.abs(_roots_den) > 1)
-    assert unstable, 'Expected unstable for m = [2,1,1]'
-    assert not _is_a, 'Expected not allpass for m = [2,1,1]'
-    print('Not allpass: OK, unstable: OK')
+    assert unstable, "Expected unstable for m = [2,1,1]"
+    assert not _is_a, "Expected not allpass for m = [2,1,1]"
+    print("Not allpass: OK, unstable: OK")
     return
 
 
@@ -143,9 +143,9 @@ def _(A, b, c, d, np, pyFDN):
 
     _roots_den = np.roots(_den)
     _stable = np.all(np.abs(_roots_den) < 1)
-    assert _stable, 'Expected stable (|roots| < 1)'
-    assert _is_a, 'Expected allpass for m = [2,2,1]'
-    print('Allpass: OK, stable: OK')
+    assert _stable, "Expected stable (|roots| < 1)"
+    assert _is_a, "Expected allpass for m = [2,2,1]"
+    print("Allpass: OK, stable: OK")
     return
 
 

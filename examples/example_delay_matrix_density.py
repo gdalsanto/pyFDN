@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.5"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -31,15 +31,14 @@ def _(mo):
 def _():
     import copy
     import numpy as np
-    import torch
     import plotly.graph_objects as go
     import plotly.io as pio
+    import torch
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
     from collections import OrderedDict
+    from flamo.processor import dsp, system
     from IPython.display import Audio, display
-
     import pyFDN
-    from flamo.processor import system, dsp
 
     return Audio, OrderedDict, copy, display, dsp, go, np, pyFDN, system, torch
 
@@ -133,17 +132,21 @@ def _(
     delay_module = feedback_loop.feedforward.delay
     _mixing_matrix = feedback_loop.feedback
     device = next(delay_module.parameters()).device
-    n_fft = getattr(model.get_inputLayer(), 'nfft')
+    n_fft = model.get_inputLayer().nfft
 
     total_delay_t = torch.tensor(total_delay, dtype=torch.float32, device=device)
     delay_module.assign_value(delay_module.sample2s(total_delay_t))
 
-    feedback_matrix_t = torch.tensor(feedback_matrix, dtype=torch.float32, device=device)
+    feedback_matrix_t = torch.tensor(
+        feedback_matrix, dtype=torch.float32, device=device
+    )
     _mixing_matrix.assign_value(feedback_matrix_t)
 
     broadband_gain = dsp.Gain(size=(N, N), nfft=n_fft, device=device)
-    broadband_gain.assign_value(torch.diag(gain_per_sample ** total_delay_t))
-    feedback_loop.feedforward = system.Series(OrderedDict({'delay': delay_module, 'broadband_gain': broadband_gain}))
+    broadband_gain.assign_value(torch.diag(gain_per_sample**total_delay_t))
+    feedback_loop.feedforward = system.Series(
+        OrderedDict({"delay": delay_module, "broadband_gain": broadband_gain})
+    )
 
     ir_vanilla = model.get_time_response().flatten()
     return delay_module, device, ir_vanilla, n_fft
@@ -183,19 +186,43 @@ def _(
     _mixing_matrix = feedback_loop_delay_matrix.feedback
 
     delays_t = torch.tensor(delays, dtype=torch.float32, device=device)
-    feedback_loop_delay_matrix.feedforward.delay.assign_value(delay_module.sample2s(delays_t))
+    feedback_loop_delay_matrix.feedforward.delay.assign_value(
+        delay_module.sample2s(delays_t)
+    )
 
     max_in = int(np.max(delays_in))
     max_out = int(np.max(delays_out))
-    extra_delay_in = dsp.parallelDelay(size=(N,), max_len=max(1, max_in), nfft=n_fft, isint=True, unit=1, device=device)
-    extra_delay_out = dsp.parallelDelay(size=(N,), max_len=max(1, max_out), nfft=n_fft, isint=True, unit=1, device=device)
-    extra_delay_in.assign_value(extra_delay_in.sample2s(torch.tensor(delays_in, dtype=torch.float32, device=device)))
-    extra_delay_out.assign_value(extra_delay_out.sample2s(torch.tensor(delays_out, dtype=torch.float32, device=device)))
+    extra_delay_in = dsp.parallelDelay(
+        size=(N,), max_len=max(1, max_in), nfft=n_fft, isint=True, unit=1, device=device
+    )
+    extra_delay_out = dsp.parallelDelay(
+        size=(N,),
+        max_len=max(1, max_out),
+        nfft=n_fft,
+        isint=True,
+        unit=1,
+        device=device,
+    )
+    extra_delay_in.assign_value(
+        extra_delay_in.sample2s(
+            torch.tensor(delays_in, dtype=torch.float32, device=device)
+        )
+    )
+    extra_delay_out.assign_value(
+        extra_delay_out.sample2s(
+            torch.tensor(delays_out, dtype=torch.float32, device=device)
+        )
+    )
 
-    delay_matrix_chain = system.Series(OrderedDict([('delay_in', extra_delay_in), 
-                                                    ('matrix', _mixing_matrix), 
-                                                    ('delay_out', extra_delay_out)
-    ]))
+    delay_matrix_chain = system.Series(
+        OrderedDict(
+            [
+                ("delay_in", extra_delay_in),
+                ("matrix", _mixing_matrix),
+                ("delay_out", extra_delay_out),
+            ]
+        )
+    )
     feedback_loop_delay_matrix.feedback = delay_matrix_chain
 
     ir_delay_matrix = model_delay_matrix.get_time_response().flatten()
@@ -215,9 +242,9 @@ def _(mo):
 @app.cell
 def _(N, copy, delay_module, device, model_delay_matrix, np, rng, torch):
     # generate new delays for swapped model
-    delays_swapped = rng.integers(1000/3, 4000/3, size=N).astype(np.int64)
-    delays_in_swapped = rng.integers(1000/3, 7000/3, size=N).astype(np.int64)
-    delays_out_swapped = rng.integers(1000/3, 7000/3, size=N).astype(np.int64)
+    delays_swapped = rng.integers(1000 / 3, 4000 / 3, size=N).astype(np.int64)
+    delays_in_swapped = rng.integers(1000 / 3, 7000 / 3, size=N).astype(np.int64)
+    delays_out_swapped = rng.integers(1000 / 3, 7000 / 3, size=N).astype(np.int64)
 
     total_delay_swapped = delays_swapped + delays_in_swapped + delays_out_swapped
 
@@ -229,10 +256,21 @@ def _(N, copy, delay_module, device, model_delay_matrix, np, rng, torch):
     feedback_loop_swapped.feedforward = old_feedback
     feedback_loop_swapped.feedback = old_feedforward
 
-    feedback_loop_swapped.feedback.delay.assign_value(delay_module.sample2s(torch.tensor(delays_swapped, dtype=torch.float32, device=device)))
-    feedback_loop_swapped.feedforward.delay_in.assign_value(delay_module.sample2s(torch.tensor(delays_in_swapped, dtype=torch.float32, device=device)))
-    feedback_loop_swapped.feedforward.delay_out.assign_value(delay_module.sample2s(torch.tensor(delays_out_swapped, dtype=torch.float32, device=device)))
-
+    feedback_loop_swapped.feedback.delay.assign_value(
+        delay_module.sample2s(
+            torch.tensor(delays_swapped, dtype=torch.float32, device=device)
+        )
+    )
+    feedback_loop_swapped.feedforward.delay_in.assign_value(
+        delay_module.sample2s(
+            torch.tensor(delays_in_swapped, dtype=torch.float32, device=device)
+        )
+    )
+    feedback_loop_swapped.feedforward.delay_out.assign_value(
+        delay_module.sample2s(
+            torch.tensor(delays_out_swapped, dtype=torch.float32, device=device)
+        )
+    )
 
     ir_swapped = model_swapped.get_time_response().flatten()
     return (ir_swapped,)
@@ -270,9 +308,36 @@ def _(
     _, echo_swapped = pyFDN.echo_density(ir_sw, n=1024, fs=fs)
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=t, y=pyFDN.mulaw_encode(ir_v)+4, mode="lines", name="Vanilla FDN", line=dict(width=0.5), opacity=0.8))
-    fig.add_trace(go.Scatter(x=t, y=pyFDN.mulaw_encode(ir_dm)+2, mode="lines", name="Delay+matrix+delay in feedback", line=dict(width=0.5), opacity=0.8))
-    fig.add_trace(go.Scatter(x=t, y=pyFDN.mulaw_encode(ir_sw), mode="lines", name="Swapped feedforward/feedback", line=dict(width=0.5), opacity=0.8))
+    fig.add_trace(
+        go.Scatter(
+            x=t,
+            y=pyFDN.mulaw_encode(ir_v) + 4,
+            mode="lines",
+            name="Vanilla FDN",
+            line=dict(width=0.5),
+            opacity=0.8,
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=t,
+            y=pyFDN.mulaw_encode(ir_dm) + 2,
+            mode="lines",
+            name="Delay+matrix+delay in feedback",
+            line=dict(width=0.5),
+            opacity=0.8,
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=t,
+            y=pyFDN.mulaw_encode(ir_sw),
+            mode="lines",
+            name="Swapped feedforward/feedback",
+            line=dict(width=0.5),
+            opacity=0.8,
+        )
+    )
     fig.update_layout(
         title="Delay feedback matrix density",
         xaxis_title="Time [s]",
@@ -286,10 +351,39 @@ def _(
     fig.show()
 
     fig2 = go.Figure()
-    fig2.add_trace(go.Scatter(x=t, y=echo_vanilla, mode="lines", name="Vanilla FDN", line=dict(width=0.8), opacity=0.8))
-    fig2.add_trace(go.Scatter(x=t, y=echo_delay_matrix, mode="lines", name="Delay+matrix+delay in feedback", line=dict(width=0.8), opacity=0.8))
-    fig2.add_trace(go.Scatter(x=t, y=echo_swapped, mode="lines", name="Swapped feedforward/feedback", line=dict(width=0.8), opacity=0.8))
-    fig2.add_hline(y=1.0, line_dash="dash", line_color="gray", annotation_text="mixing thresh")
+    fig2.add_trace(
+        go.Scatter(
+            x=t,
+            y=echo_vanilla,
+            mode="lines",
+            name="Vanilla FDN",
+            line=dict(width=0.8),
+            opacity=0.8,
+        )
+    )
+    fig2.add_trace(
+        go.Scatter(
+            x=t,
+            y=echo_delay_matrix,
+            mode="lines",
+            name="Delay+matrix+delay in feedback",
+            line=dict(width=0.8),
+            opacity=0.8,
+        )
+    )
+    fig2.add_trace(
+        go.Scatter(
+            x=t,
+            y=echo_swapped,
+            mode="lines",
+            name="Swapped feedforward/feedback",
+            line=dict(width=0.8),
+            opacity=0.8,
+        )
+    )
+    fig2.add_hline(
+        y=1.0, line_dash="dash", line_color="gray", annotation_text="mixing thresh"
+    )
     fig2.update_layout(
         title="Echo density (Abel & Huang 2006)",
         xaxis_title="Time [s]",

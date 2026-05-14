@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.5"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -44,8 +44,8 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    import pyFDN
     from IPython.display import Audio, display
+    import pyFDN
 
     np.random.seed(42)
     return Audio, display, np, pyFDN
@@ -133,6 +133,7 @@ def _(mo):
 @app.cell
 def _(Fs, impulse_response, ir_len, np, pyFDN):
     import matplotlib.pyplot as plt
+
     plt.plot(
         np.arange(ir_len) / Fs,
         pyFDN.mulaw_encode(impulse_response),
@@ -155,10 +156,7 @@ def _(mo):
 def _(Audio, Fs, display, impulse_response, np, pyFDN):
     channel_ir = np.asarray(impulse_response).squeeze()
     _fig = pyFDN.plot_spectrogram(
-        channel_ir,
-        Fs,
-        title='Schroeder series allpass — spectrogram',
-        clim=(-170, -70)
+        channel_ir, Fs, title="Schroeder series allpass — spectrogram", clim=(-170, -70)
     )
     _fig.show()
 

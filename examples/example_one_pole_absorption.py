@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.5"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -31,15 +31,15 @@ def _(mo):
 
 @app.cell
 def _():
-    import numpy as np
-    import torch
-    import matplotlib.pyplot as plt
     from collections import OrderedDict
     from pathlib import Path
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import torch
 
-    from scipy.io import loadmat
-    from scipy import signal
     from flamo.processor import dsp, system
+    from scipy import signal
+    from scipy.io import loadmat
 
     import pyFDN
 
@@ -78,10 +78,13 @@ def _(Path, loadmat, np, torch):
         _repo = _repo.parent
 
     # ref_path = _repo / "tests" / "reference" / "example_onePoleAbsorption.mat"
-    ref_path = _repo.parent.parent / "tests" / "reference" / "example_onePoleAbsorption.mat"
+    ref_path = (
+        _repo.parent.parent / "tests" / "reference" / "example_onePoleAbsorption.mat"
+    )
     assert ref_path.exists(), f"Reference file not found: {ref_path}"
 
     import warnings
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         ref = loadmat(str(ref_path), simplify_cells=True)
@@ -164,10 +167,14 @@ def _(
     )
     delay_module.assign_value(delay_module.sample2s(delays_torch))
 
-    mixing_matrix = dsp.Matrix(size=(n, n), nfft=n_fft, matrix_type="random", device=device)
+    mixing_matrix = dsp.Matrix(
+        size=(n, n), nfft=n_fft, matrix_type="random", device=device
+    )
     mixing_matrix.assign_value(feedback_matrix_torch)
 
-    absorption = dsp.parallelSOSFilter(size=(n,), n_sections=1, nfft=n_fft, device=device)
+    absorption = dsp.parallelSOSFilter(
+        size=(n,), n_sections=1, nfft=n_fft, device=device
+    )
     absorption.assign_value(absorption_coeff)
 
     attenuated_delay = system.Series(
@@ -175,11 +182,13 @@ def _(
     )
     feedback_loop = system.Recursion(fF=attenuated_delay, fB=mixing_matrix)
     fdn = system.Series(
-        OrderedDict({
-            "input_gain": input_gain,
-            "feedback_loop": feedback_loop,
-            "output_gain": output_gain,
-        })
+        OrderedDict(
+            {
+                "input_gain": input_gain,
+                "feedback_loop": feedback_loop,
+                "output_gain": output_gain,
+            }
+        )
     )
 
     direct_gain = dsp.Gain(size=(num_output, num_input), nfft=n_fft, device=device)
@@ -208,7 +217,7 @@ def _(impulse_response_length, ir_matlab, model, np):
     ir_python = ir_python[:impulse_response_length]
     ir_matlab_1 = ir_matlab[:impulse_response_length]
     correlation = np.corrcoef(ir_python, ir_matlab_1)[0, 1]
-    print(f'Correlation (FLAMO vs MATLAB): {correlation:.6f}')
+    print(f"Correlation (FLAMO vs MATLAB): {correlation:.6f}")
     return ir_matlab_1, ir_python
 
 
@@ -244,70 +253,93 @@ def _(
     rt_theory = np.zeros_like(freqs)
     for i, f in enumerate(freqs):
         omega_f = 2 * np.pi * f / fs
-        h_avg = np.mean([np.abs(sos[0, j] / (1 + sos[4, j] * np.exp(-1j * omega_f))) for j in range(n)])
+        h_avg = np.mean(
+            [
+                np.abs(sos[0, j] / (1 + sos[4, j] * np.exp(-1j * omega_f)))
+                for j in range(n)
+            ]
+        )
         if h_avg > 0:
             slope = 20 * np.log10(h_avg) / np.mean(delays) * fs
             rt_theory[i] = -60 / slope if slope < 0 else 10
     plt.figure(figsize=(8, 3))
 
     # Impulse response
-    plt.plot(t, pyFDN.mulaw_encode(ir_python), 'b-', alpha=0.7, linewidth=0.5, label='FLAMO (Python)')
-    plt.plot(t, pyFDN.mulaw_encode(ir_matlab_1), 'r--', alpha=0.7, linewidth=0.5, label='MATLAB reference')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Amplitude [mu-law]')
-    plt.title('Impulse response')
+    plt.plot(
+        t,
+        pyFDN.mulaw_encode(ir_python),
+        "b-",
+        alpha=0.7,
+        linewidth=0.5,
+        label="FLAMO (Python)",
+    )
+    plt.plot(
+        t,
+        pyFDN.mulaw_encode(ir_matlab_1),
+        "r--",
+        alpha=0.7,
+        linewidth=0.5,
+        label="MATLAB reference",
+    )
+    plt.xlabel("Time (s)")
+    plt.ylabel("Amplitude [mu-law]")
+    plt.title("Impulse response")
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.show()
     plt.figure(figsize=(8, 3))
-    plt.pcolormesh(t_spec, f_spec, 10 * np.log10(Sxx + 1e-12), shading='gouraud', cmap='viridis')
-    plt.ylabel('Frequency (Hz)')
+    plt.pcolormesh(
+        t_spec, f_spec, 10 * np.log10(Sxx + 1e-12), shading="gouraud", cmap="viridis"
+    )
+    plt.ylabel("Frequency (Hz)")
 
     # Spectrogram
-    plt.xlabel('Time (s)')
-    plt.title('Spectrogram (FLAMO)')
+    plt.xlabel("Time (s)")
+    plt.title("Spectrogram (FLAMO)")
     plt.ylim([0, fs / 2])
-    plt.colorbar(label='dB')
+    plt.colorbar(label="dB")
     plt.tight_layout()
     plt.show()
     plt.figure(figsize=(8, 4))
     for i in range(n):
         H = sos[0, i] / (1 + sos[4, i] * np.exp(-1j * omega))
-        plt.semilogx(freqs, 20 * np.log10(np.abs(H)), label=f'Delay {i + 1} ({delays[i]} smp)')
+        plt.semilogx(
+            freqs, 20 * np.log10(np.abs(H)), label=f"Delay {i + 1} ({delays[i]} smp)"
+        )
 
     # One-pole filter responses
-    plt.xlabel('Frequency (Hz)')
-    plt.ylabel('Magnitude (dB)')
-    plt.title('One-pole filter responses')
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Magnitude (dB)")
+    plt.title("One-pole filter responses")
     plt.legend()
-    plt.grid(True, alpha=0.3, which='both')
+    plt.grid(True, alpha=0.3, which="both")
     plt.xlim([20, fs / 2])
     plt.tight_layout()
     plt.show()
     plt.figure(figsize=(6, 4))
-    plt.plot(delays, sos[0, :], 'bo', label='b0')
-    plt.plot(delays, sos[4, :], 'ro', label='a1')
-    plt.xlabel('Delay (samples)')
-    plt.ylabel('Coefficient value')
+    plt.plot(delays, sos[0, :], "bo", label="b0")
+    plt.plot(delays, sos[4, :], "ro", label="a1")
+    plt.xlabel("Delay (samples)")
+    plt.ylabel("Coefficient value")
 
     # One-pole coefficients
-    plt.title('One-pole filter coefficients')
+    plt.title("One-pole filter coefficients")
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.show()
     plt.figure(figsize=(8, 4))
-    plt.semilogx(freqs, rt_theory, 'b-', linewidth=2, label='Theoretical')
-    plt.axhline(y=rt_dc, color='g', linestyle='--', label=f'Target DC: {rt_dc}s')
-    plt.axhline(y=rt_ny, color='r', linestyle='--', label=f'Target Nyquist: {rt_ny}s')
-    plt.xlabel('Frequency (Hz)')
-    plt.ylabel('RT60 (s)')
+    plt.semilogx(freqs, rt_theory, "b-", linewidth=2, label="Theoretical")
+    plt.axhline(y=rt_dc, color="g", linestyle="--", label=f"Target DC: {rt_dc}s")
+    plt.axhline(y=rt_ny, color="r", linestyle="--", label=f"Target Nyquist: {rt_ny}s")
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("RT60 (s)")
 
     # RT60 vs frequency
-    plt.title('Reverberation time vs frequency')
+    plt.title("Reverberation time vs frequency")
     plt.legend()
-    plt.grid(True, alpha=0.3, which='both')
+    plt.grid(True, alpha=0.3, which="both")
     plt.xlim([20, fs / 2])
     plt.ylim([0, max(rt_dc * 1.2, 4)])
     plt.tight_layout()

@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.3"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -39,7 +39,6 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    import matplotlib.pyplot as plt
     import pyFDN
 
     np.random.seed(5)
@@ -101,8 +100,8 @@ def _(mo):
 
 @app.cell
 def _(ir_dss, ir_tf, mo, pyFDN):
-    fig1 = pyFDN.plot_impulse_response_matrix(t=None,ir=ir_tf)
-    fig2 = pyFDN.plot_impulse_response_matrix(t=None,ir=ir_dss)
+    fig1 = pyFDN.plot_impulse_response_matrix(t=None, ir=ir_tf)
+    fig2 = pyFDN.plot_impulse_response_matrix(t=None, ir=ir_dss)
 
     mo.vstack([fig1, fig2])
     return
@@ -119,7 +118,9 @@ def _(mo):
 @app.cell
 def _(ir_dss, ir_tf, pyFDN):
     # Test: impulse response from TF matches delay state-space simulation
-    assert pyFDN.is_almost_zero(ir_dss - ir_tf, tol=1e-10), "IR from TF and DSS should match"
+    assert pyFDN.is_almost_zero(ir_dss - ir_tf, tol=1e-10), (
+        "IR from TF and DSS should match"
+    )
     return
 
 

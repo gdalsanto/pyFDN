@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.4"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -62,7 +62,7 @@ def _(np, pyFDN):
     _A = _U @ _G
     _B, _C, _D, _X = pyFDN.complete_fdn(_A, k=_num_io)
     _is_a, _P = pyFDN.is_uniallpass(_A, _B, _C, _D, tol=1e-07)
-    assert _is_a, 'Completed system should be uniallpass'
+    assert _is_a, "Completed system should be uniallpass"
     pyFDN.plot_system_matrix(_A, _B, _C, _D)
     return
 
@@ -87,7 +87,7 @@ def _(np, pyFDN, scipy):
     XAX = XVX[:_N, :_N]
     _B, _C, _D, _X = pyFDN.complete_fdn(XAX, k=_num_io)
     _is_a, _P = pyFDN.is_uniallpass(XAX, _B, _C, _D, tol=1e-07)
-    assert _is_a, 'Completed system should be uniallpass'
+    assert _is_a, "Completed system should be uniallpass"
     pyFDN.plot_system_matrix(XAX, _B, _C, _D)
     return
 
@@ -109,7 +109,7 @@ def _(np, pyFDN):
     _A, _, _, _ = pyFDN.series_allpass(_g)
     _B, _C, _D, _X = pyFDN.complete_fdn(_A, k=1)
     _is_a, _P = pyFDN.is_uniallpass(_A, _B, _C, _D, tol=1e-07)
-    assert _is_a, 'Completed system should be uniallpass'
+    assert _is_a, "Completed system should be uniallpass"
     pyFDN.plot_system_matrix(_A, _B, _C, _D)
     return
 
@@ -131,7 +131,7 @@ def _(np, pyFDN):
     _A, _, _, _ = pyFDN.nested_allpass(_g)
     _B, _C, _D, _X = pyFDN.complete_fdn(_A, k=1)
     _is_a, _P = pyFDN.is_uniallpass(_A, _B, _C, _D, tol=1e-07)
-    assert _is_a, 'Completed system should be uniallpass'
+    assert _is_a, "Completed system should be uniallpass"
     pyFDN.plot_system_matrix(_A, _B, _C, _D)
     return
 
@@ -152,15 +152,15 @@ def _(np, pyFDN):
     _N = 4
     delays = np.random.randint(1, 31, size=_N)  # delays in samples, 1..30
     _g = 0.99
-    _G = np.diag(_g ** delays)  # global gain per sample
+    _G = np.diag(_g**delays)  # global gain per sample
     _X = pyFDN.rand_admissible_homogeneous_allpass(_G, (0.7, 0.999))  # gain matrix
     R = _X @ _G @ _G
     _A, b, c, d, _U = pyFDN.homogeneous_allpass_fdn(_G, _X)
     is_a0, P0 = pyFDN.is_uniallpass(_A, b, c, d, tol=1e-07)
-    assert is_a0, 'Completed system should be uniallpass'
+    assert is_a0, "Completed system should be uniallpass"
     _B, _C, _D, _X = pyFDN.complete_fdn(_A, k=1)
     _is_a, _P = pyFDN.is_uniallpass(_A, _B, _C, _D, tol=1e-07)
-    assert _is_a, 'Completed system should be uniallpass'
+    assert _is_a, "Completed system should be uniallpass"
     pyFDN.plot_system_matrix(_A, _B, _C, _D)
     return
 
