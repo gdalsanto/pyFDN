@@ -33,10 +33,10 @@ def _(mo):
 def _():
     from collections import OrderedDict
     from pathlib import Path
+
     import matplotlib.pyplot as plt
     import numpy as np
     import torch
-
     from flamo.processor import dsp, system
     from scipy import signal
     from scipy.io import loadmat
@@ -77,10 +77,7 @@ def _(Path, loadmat, np, torch):
     while _repo.name in ("examples", "docs"):
         _repo = _repo.parent
 
-    # ref_path = _repo / "tests" / "reference" / "example_onePoleAbsorption.mat"
-    ref_path = (
-        _repo.parent.parent / "tests" / "reference" / "example_onePoleAbsorption.mat"
-    )
+    ref_path = _repo / "tests" / "reference" / "example_onePoleAbsorption.mat"
     assert ref_path.exists(), f"Reference file not found: {ref_path}"
 
     import warnings
