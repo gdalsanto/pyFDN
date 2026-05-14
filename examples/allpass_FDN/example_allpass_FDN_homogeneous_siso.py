@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.5"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -58,7 +58,7 @@ def _(np, pyFDN):
     N = 6
     delays = np.random.randint(300, 700, size=N)  # delays in samples, 1..30
     g = pyFDN.rt_to_gain_per_sample(0.5, Fs)
-    G = np.diag(g ** delays)  # gain matrix
+    G = np.diag(g**delays)  # gain matrix
 
     X = pyFDN.rand_admissible_homogeneous_allpass(G, (0.7, 0.99))
     R = X @ G @ G
@@ -136,10 +136,10 @@ def _(Fs, impulse_response, ir_len, np):
 
     t = np.arange(ir_len) / Fs
     _fig, ax = plt.subplots(figsize=(10, 3))
-    ax.plot(t, impulse_response, color='tab:blue')
-    ax.set_xlabel('Time [s]')
-    ax.set_ylabel('Amplitude')
-    ax.set_title('Homogeneous allpass FDN — impulse response (time domain)')
+    ax.plot(t, impulse_response, color="tab:blue")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Amplitude")
+    ax.set_title("Homogeneous allpass FDN — impulse response (time domain)")
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.show()

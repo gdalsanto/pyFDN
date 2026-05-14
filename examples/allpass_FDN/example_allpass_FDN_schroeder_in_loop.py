@@ -44,8 +44,10 @@ def _():
     import numpy as np
     import plotly.graph_objects as go
     import plotly.io as pio
+
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
     from IPython.display import Audio, display
+
     import pyFDN
 
     np.random.seed(6)
@@ -71,7 +73,7 @@ def _(Fs, nfft, np, pyFDN):
     sections_per = 2
     gain_per_sample_sch = pyFDN.rt_to_gain_per_sample(0.2, Fs)
     delays_per = np.random.randint(30, 200, size=(N, sections_per))
-    g_per = gain_per_sample_sch ** delays_per * 0 + 0.7
+    g_per = gain_per_sample_sch**delays_per * 0 + 0.7
 
     A_list, B_list, C_list, D_list, delays_list = [], [], [], [], []
     for i in range(N):
@@ -83,13 +85,16 @@ def _(Fs, nfft, np, pyFDN):
         delays_list.append(delays_per[i])  # 1 sample per section
 
     from scipy.linalg import block_diag
+
     A_sch = block_diag(*A_list)
     B_sch = block_diag(*B_list)
     C_sch = block_diag(*C_list)
     D_sch = block_diag(*D_list)
     delays_sch = np.concatenate(delays_list)
 
-    model_sch = pyFDN.dss_to_flamo(A_sch, B_sch, C_sch, D_sch, delays_sch, Fs, nfft=nfft)
+    model_sch = pyFDN.dss_to_flamo(
+        A_sch, B_sch, C_sch, D_sch, delays_sch, Fs, nfft=nfft
+    )
     ir_sch = model_sch.get_time_response()
     return A_sch, B_sch, C_sch, D_sch, N, delays_sch, ir_sch
 
@@ -107,15 +112,15 @@ def _(Audio, Fs, display, go, ir_sch, np, pyFDN):
     ir_sch_channel = ir_sch[0, :, 1].squeeze()
     _t = np.arange(len(ir_sch_channel)) / Fs
     _fig = go.Figure()
-    _fig.add_trace(go.Scatter(x=_t, y=pyFDN.mulaw_encode(ir_sch_channel), mode='lines'))
+    _fig.add_trace(go.Scatter(x=_t, y=pyFDN.mulaw_encode(ir_sch_channel), mode="lines"))
     _fig.update_layout(
-        xaxis_title='Time [s]',
-        yaxis_title='Amplitude [mu-law]',
-        title='MIMO parallel Schröder allpass — impulse response (in0→out0)',
+        xaxis_title="Time [s]",
+        yaxis_title="Amplitude [mu-law]",
+        title="MIMO parallel Schröder allpass — impulse response (in0→out0)",
         height=300,
         margin=dict(t=50, b=50, l=60, r=40),
         showlegend=False,
-        xaxis=dict(range=[0, 0.1])
+        xaxis=dict(range=[0, 0.1]),
     )
     _fig.show()
     display(Audio(ir_sch_channel, rate=Fs))
@@ -145,7 +150,9 @@ def _(Fs, N, nfft, np, pyFDN):
     rt_ny = 0.7
     sos = pyFDN.one_pole_absorption(rt_dc, rt_ny, delays_fdn, fs=Fs)[np.newaxis, :]
 
-    model_fdn = pyFDN.dss_to_flamo(feedback_matrix, B_fdn, C_fdn, D_fdn, delays_fdn, Fs, nfft=nfft, sos_filter=sos)
+    model_fdn = pyFDN.dss_to_flamo(
+        feedback_matrix, B_fdn, C_fdn, D_fdn, delays_fdn, Fs, nfft=nfft, sos_filter=sos
+    )
     ir_fdn = model_fdn.get_time_response().squeeze()
     print(ir_fdn.shape)
     print(delays_fdn)
@@ -163,11 +170,11 @@ def _(delays_fdn):
 def _(Audio, Fs, display, go, ir_fdn, np, pyFDN):
     _t = np.arange(len(ir_fdn)) / Fs
     _fig = go.Figure()
-    _fig.add_trace(go.Scatter(x=_t, y=pyFDN.mulaw_encode(ir_fdn), mode='lines'))
+    _fig.add_trace(go.Scatter(x=_t, y=pyFDN.mulaw_encode(ir_fdn), mode="lines"))
     _fig.update_layout(
-        xaxis_title='Time [s]',
-        yaxis_title='Amplitude [mu-law]',
-        title='Vanilla FDN (SISO) — impulse response',
+        xaxis_title="Time [s]",
+        yaxis_title="Amplitude [mu-law]",
+        title="Vanilla FDN (SISO) — impulse response",
         height=300,
         margin=dict(t=50, b=50, l=60, r=40),
         showlegend=False,
@@ -206,11 +213,23 @@ def _(
 ):
     # Schröder core (4-in, 4-out) from section 1; append to FDN forward path
     schroeder_core = pyFDN.dss_to_flamo(
-        A_sch, B_sch, C_sch, D_sch, delays_sch, Fs, nfft=nfft,
+        A_sch,
+        B_sch,
+        C_sch,
+        D_sch,
+        delays_sch,
+        Fs,
+        nfft=nfft,
         shell=False,
     )
     model_fdn_ap = pyFDN.dss_to_flamo(
-        feedback_matrix, B_fdn, C_fdn, D_fdn, delays_fdn, Fs, nfft=nfft,
+        feedback_matrix,
+        B_fdn,
+        C_fdn,
+        D_fdn,
+        delays_fdn,
+        Fs,
+        nfft=nfft,
         sos_filter=sos,
         post_delay_module=schroeder_core,
     )
@@ -222,11 +241,11 @@ def _(
 def _(Audio, Fs, display, go, ir_fdn_ap, np, pyFDN):
     _t = np.arange(len(ir_fdn_ap)) / Fs
     _fig = go.Figure()
-    _fig.add_trace(go.Scatter(x=_t, y=pyFDN.mulaw_encode(ir_fdn_ap), mode='lines'))
+    _fig.add_trace(go.Scatter(x=_t, y=pyFDN.mulaw_encode(ir_fdn_ap), mode="lines"))
     _fig.update_layout(
-        xaxis_title='Time [s]',
-        yaxis_title='Amplitude [mu-law]',
-        title='FDN with Schröder allpass behind delays — impulse response',
+        xaxis_title="Time [s]",
+        yaxis_title="Amplitude [mu-law]",
+        title="FDN with Schröder allpass behind delays — impulse response",
         height=300,
         margin=dict(t=50, b=50, l=60, r=40),
         showlegend=False,

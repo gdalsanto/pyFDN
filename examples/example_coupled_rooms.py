@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.5"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -70,8 +70,8 @@ def _(torch):
     N1 = 6
     N2 = 6
     N = N1 + N2
-    ix1 = slice(0, N1)   # indices for room 1
-    ix2 = slice(N1, N)   # indices for room 2
+    ix1 = slice(0, N1)  # indices for room 1
+    ix2 = slice(N1, N)  # indices for room 2
 
     num_input = 1
     num_output = 2
@@ -161,14 +161,21 @@ def _(N, device, dsp, ix1, ix2, nfft, num_input, num_output, torch):
 @app.cell
 def _(N, delay_lengths, device, dsp, feedback_matrix, nfft):
     delays = dsp.parallelDelay(
-        size=(N,), max_len=int(delay_lengths.max()), nfft=nfft,
-        isint=True, requires_grad=False, device=device,
+        size=(N,),
+        max_len=int(delay_lengths.max()),
+        nfft=nfft,
+        isint=True,
+        requires_grad=False,
+        device=device,
     )
     delays.assign_value(delays.sample2s(delay_lengths.int()))
 
     mixing_matrix = dsp.Matrix(
-        size=(N, N), nfft=nfft, matrix_type="random",
-        requires_grad=False, device=device,
+        size=(N, N),
+        nfft=nfft,
+        matrix_type="random",
+        requires_grad=False,
+        device=device,
     )
     mixing_matrix.assign_value(feedback_matrix)
     return delays, mixing_matrix
@@ -208,11 +215,14 @@ def _(
 ):
     feedback = system.Series(OrderedDict({"mixing_matrix": mixing_matrix, "attenuation": attenuation}))
     feedback_loop = system.Recursion(fF=delays, fB=feedback)
-    fdn = system.Series(OrderedDict({
-        "input_gain": input_gain,
-        "feedback_loop": feedback_loop,
-        "output_gain": output_gain,
-    }))
+    fdn = system.Series(OrderedDict(
+            {
+                "input_gain": input_gain,
+                "feedback_loop": feedback_loop,
+                "output_gain": output_gain,
+            }
+        )
+    )
     model = system.Shell(core=fdn, input_layer=dsp.FFT(nfft), output_layer=dsp.iFFT(nfft))
     print("FDN built.")
     return (model,)
@@ -249,11 +259,23 @@ def _(N1, feedback_matrix, fs, ir, mo, np, plt, pyFDN):
     # Plot 1: Impulse responses
     ax1 = plt.subplot(1, 3, 1)
     samples = np.arange(len(ir))
-    ax1.plot(samples, pyFDN.mulaw_encode(ir[:, 0], 1), label='Room 1 (source)', alpha=0.7, linewidth=0.5)
-    ax1.plot(samples, pyFDN.mulaw_encode(ir[:, 1], 1)-2, label='Room 2', alpha=0.7, linewidth=0.5)
-    ax1.set_xlabel('Time [samples]')
-    ax1.set_ylabel('Amplitude [mu-law]')
-    ax1.set_title('Coupled Rooms Impulse Response')
+    ax1.plot(
+        samples,
+        pyFDN.mulaw_encode(ir[:, 0], 1),
+        label="Room 1 (source)",
+        alpha=0.7,
+        linewidth=0.5,
+    )
+    ax1.plot(
+        samples,
+        pyFDN.mulaw_encode(ir[:, 1], 1) - 2,
+        label="Room 2",
+        alpha=0.7,
+        linewidth=0.5,
+    )
+    ax1.set_xlabel("Time [samples]")
+    ax1.set_ylabel("Amplitude [mu-law]")
+    ax1.set_title("Coupled Rooms Impulse Response")
     ax1.legend()
 
     ax1.grid(True, alpha=0.3)
@@ -261,37 +283,39 @@ def _(N1, feedback_matrix, fs, ir, mo, np, plt, pyFDN):
 
     # Plot 2: Feedback matrix
     ax2 = plt.subplot(1, 3, 2)
-    im = ax2.imshow(feedback_matrix.numpy(), cmap='RdBu_r', vmin=-1, vmax=1)
+    im = ax2.imshow(feedback_matrix.numpy(), cmap="RdBu_r", vmin=-1, vmax=1)
     plt.colorbar(im, ax=ax2, fraction=0.046, pad=0.04)
-    ax2.set_title('Feedback Matrix')
-    ax2.axhline(y=N1 - 0.5, color='black', linewidth=1, linestyle='--', alpha=0.5)
-    ax2.axvline(x=N1 - 0.5, color='black', linewidth=1, linestyle='--', alpha=0.5)
+    ax2.set_title("Feedback Matrix")
+    ax2.axhline(y=N1 - 0.5, color="black", linewidth=1, linestyle="--", alpha=0.5)
+    ax2.axvline(x=N1 - 0.5, color="black", linewidth=1, linestyle="--", alpha=0.5)
 
     # Plot 3: Energy decay curves
     ax3 = plt.subplot(1, 3, 3)
     t = np.arange(len(ir)) / fs
     edc_db = pyFDN.sq_to_db(pyFDN.edc(ir))
-    ax3.plot(t, edc_db[:, 0], label='Room 1', alpha=0.8)
-    ax3.plot(t, edc_db[:, 1], label='Room 2', alpha=0.8)
+    ax3.plot(t, edc_db[:, 0], label="Room 1", alpha=0.8)
+    ax3.plot(t, edc_db[:, 1], label="Room 2", alpha=0.8)
 
-    ax3.set_xlabel('Time [s]')
-    ax3.set_ylabel('Energy [dB]')
-    ax3.set_title('Energy Decay Curves')
+    ax3.set_xlabel("Time [s]")
+    ax3.set_ylabel("Energy [dB]")
+    ax3.set_title("Energy Decay Curves")
     ax3.legend()
     ax3.grid(True, alpha=0.3)
-    ax3.set_xlim([0, min(2, len(ir)/fs)])
+    ax3.set_xlim([0, min(2, len(ir) / fs)])
     ax3.set_ylim([-40, 15])
 
     plt.tight_layout()
     plt.show()
 
     # add play widget
-    mo.vstack([
-        mo.md("Room 1 RIR:"),
-        mo.audio(ir[:, 0], rate=fs),
-        mo.md("Room 2 RIR:"),
-        mo.audio(ir[:, 1], rate=fs),
-    ])
+    mo.vstack(
+        [
+            mo.md("Room 1 RIR:"),
+            mo.audio(ir[:, 0], rate=fs),
+            mo.md("Room 2 RIR:"),
+            mo.audio(ir[:, 1], rate=fs),
+        ]
+    )
     return
 
 

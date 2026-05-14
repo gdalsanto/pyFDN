@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.4"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -26,9 +26,9 @@ def _(mo):
 
 @app.cell
 def _():
-    import numpy as np
-    import matplotlib.pyplot as plt
     from importlib.resources import files
+    import matplotlib.pyplot as plt
+    import numpy as np
     import soundfile as sf
     from IPython.display import Audio, display
 
@@ -52,7 +52,7 @@ def _(Audio, display, files, sf):
         dry, fs = sf.read(f, dtype="float64")
     dry = dry[:, 0] if dry.ndim > 1 else dry
 
-    print(f"Loaded {len(dry)} samples at {fs} Hz ({len(dry)/fs:.2f} s)")
+    print(f"Loaded {len(dry)} samples at {fs} Hz ({len(dry) / fs:.2f} s)")
     display(Audio(dry, rate=fs))
     return dry, fs
 
@@ -71,14 +71,14 @@ def _(fs, np, pyFDN):
     delays = pyFDN.ms_to_smp(np.array([20, 27, 31, 37, 43, 53, 61, 71]), fs)
     rt60 = 2.0  # reverberation time in seconds
 
-    U = pyFDN.random_orthogonal(N)              # N×N orthogonal mixing matrix
+    U = pyFDN.random_orthogonal(N)  # N×N orthogonal mixing matrix
     g = pyFDN.rt_to_gain_per_sample(rt60, fs)  # broadband gain per sample for RT60
-    G = np.diag(g ** delays)                   # delay-proportional attenuation
-    A = G @ U                                  # feedback matrix: decay × mixing
+    G = np.diag(g**delays)  # delay-proportional attenuation
+    A = G @ U  # feedback matrix: decay × mixing
 
-    B = np.ones((N, 1)) / np.sqrt(N)    # N×1 input gain
-    C = np.ones((1, N)) / np.sqrt(N)    # 1×N output gain
-    D = np.zeros((1, 1))                # no direct path
+    B = np.ones((N, 1)) / np.sqrt(N)  # N×1 input gain
+    C = np.ones((1, N)) / np.sqrt(N)  # 1×N output gain
+    D = np.zeros((1, 1))  # no direct path
 
     print(f"Delays: {delays} samples, gain per sample: {g:.6f}")
     return A, B, C, D, delays

@@ -37,8 +37,9 @@ def _(mo):
 
 @app.cell
 def _():
-    import numpy as np
     import matplotlib.pyplot as plt
+    import numpy as np
+
     import pyFDN
 
     return np, plt, pyFDN
@@ -59,22 +60,24 @@ def _(np, plt, pyFDN):
     filter_length = 10  # ms
     filter_order = int(pyFDN.ms_to_smp(filter_length, fs))
 
-    coeffs = pyFDN.absorption_filters(target_frequency, target_rt, filter_order, delays, fs)
+    coeffs = pyFDN.absorption_filters(
+        target_frequency, target_rt, filter_order, delays, fs
+    )
     rt, rt_f = pyFDN.absorption_to_rt(coeffs, np.array(delays), 2**10, fs)
 
     # Plot filters
     plt.figure()
     plt.plot(pyFDN.mulaw_encode(coeffs.T))
-    plt.legend(['Filter 1', 'Filter 2'])
+    plt.legend(["Filter 1", "Filter 2"])
     plt.xlabel("Time [samples]")
     plt.ylabel("Amplitude [mu-law]")
     plt.grid()
 
     # Plot target vs approximation
     plt.figure()
-    plt.plot(target_frequency, target_rt, 'o-')
+    plt.plot(target_frequency, target_rt, "o-")
     plt.plot(rt_f, rt)
-    plt.legend(['Target 1', 'Target 2', 'Approx 1', 'Approx 2'])
+    plt.legend(["Target 1", "Target 2", "Approx 1", "Approx 2"])
     plt.xlabel("Frequency [Hz]")
     plt.ylabel("Reverberation time [s]")
     plt.xlim([0, fs / 2])

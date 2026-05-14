@@ -2,14 +2,16 @@
 
 import os
 import subprocess
-from pathlib import Path
 import sys
+from pathlib import Path
 
-BASE = Path(__file__).parent.parent.parent # goes up from pyFDN/tests directory to the local root
+BASE = Path(
+    __file__
+).parent.parent.parent  # goes up from pyFDN/tests directory to the local root
 
 directories = [
-    BASE / "pyFDN" / "examples",                      # pyf/examples/*.py
-    BASE / "pyFDN" / "examples" / "allPass_FDN",      # pyf/examples/all/*.py
+    BASE / "pyFDN" / "examples",  # pyf/examples/*.py
+    BASE / "pyFDN" / "examples" / "allPass_FDN",  # pyf/examples/all/*.py
 ]
 python_exe = sys.executable
 
@@ -20,7 +22,7 @@ env = os.environ.copy()
 env["MPLBACKEND"] = "Agg"
 
 # suppress plotly browser tabs
-env["PLOTLY_RENDERER"] = "json"         
+env["PLOTLY_RENDERER"] = "json"
 
 
 for directory in directories:

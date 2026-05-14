@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.5"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -44,12 +44,13 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
+    import matplotlib.pyplot as plt
     import pyFDN
     from pyFDN.auxiliary.allpass import (
-        poletti_allpass,
-        is_uniallpass,
         is_allpass,
         is_paraunitary,
+        is_uniallpass,
+        poletti_allpass,
     )
 
     np.random.seed(42)
@@ -58,6 +59,7 @@ def _():
         is_paraunitary,
         is_uniallpass,
         np,
+        plt,
         poletti_allpass,
         pyFDN,
     )
@@ -115,8 +117,8 @@ def _(mo):
 @app.cell
 def _(A, B, C, D, is_uniallpass):
     _is_a, P = is_uniallpass(A, B, C, D)
-    assert _is_a, 'Expected uniallpass'
-    print('Uniallpass: OK')
+    assert _is_a, "Expected uniallpass"
+    print("Uniallpass: OK")
     return
 
 
@@ -134,8 +136,8 @@ def _(mo):
 def _(A, B, C, D, N, is_allpass, np):
     test_delays = 2 ** np.arange(N)
     _is_a, den, num = is_allpass(A, B, C, D, test_delays)
-    assert _is_a, 'Expected allpass'
-    print('Allpass: OK')
+    assert _is_a, "Expected allpass"
+    print("Allpass: OK")
     return
 
 
@@ -151,7 +153,7 @@ def _(mo):
 
 @app.cell
 def _(A, B, C, D, Fs, delays, is_paraunitary, pyFDN, rt):
-    ir_len = int(rt*Fs*5)
+    ir_len = int(rt * Fs * 5)
     impulse_response = pyFDN.dss_to_impz(ir_len, delays, A, B, C, D)
     # Shape: (ir_len, n_out, n_in)
 
@@ -173,17 +175,17 @@ def _(mo):
 
 
 @app.cell
-def _(Fs, impulse_response, ir_len, np, pyFDN):
+def _(Fs, impulse_response, ir_len, np, plt, pyFDN):
     fig, _, _ = pyFDN.plot_impulse_response_matrix(
         np.arange(ir_len),
         pyFDN.mulaw_encode(impulse_response),
-        xlabel='Time [samples]',
-        ylabel='Amplitude [mu-law]',
-        title='Poletti allpass FDN — MIMO impulse response',
-        xlim=(-1000, Fs / 2)
-        )
+        xlabel="Time [samples]",
+        ylabel="Amplitude [mu-law]",
+        title="Poletti allpass FDN — MIMO impulse response",
+        xlim=(-1000, Fs / 2),
+    )
 
-    fig
+    plt.show()
     return
 
 
@@ -203,12 +205,7 @@ def _(Fs, impulse_response, pyFDN):
 
     # Pick one channel: output 1, input 0
     channel_ir = impulse_response[:, 1, 0]
-    _fig = pyFDN.plot_spectrogram(
-        channel_ir,
-        Fs,
-        xlim=(0, 2),
-        clim=(-200, -100)
-    )
+    _fig = pyFDN.plot_spectrogram(channel_ir, Fs, xlim=(0, 2), clim=(-200, -100))
     _fig.show()
 
     display(Audio(channel_ir, rate=Fs))

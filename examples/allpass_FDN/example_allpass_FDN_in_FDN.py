@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.5"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -39,11 +39,11 @@ def _():
     import plotly.graph_objects as go
     import plotly.io as pio
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
-    from IPython.display import Audio, display
     from collections import OrderedDict
-    import pyFDN
-    from pyFDN.auxiliary.flamo import gain_module, delay_module, sos_filter_module
     from flamo.processor import dsp, system
+    from IPython.display import Audio, display
+    import pyFDN
+    from pyFDN.auxiliary.flamo import delay_module, gain_module, sos_filter_module
 
     np.random.seed(10)
     Fs = 48000
@@ -82,15 +82,14 @@ def _(Fs, N, nfft, np, pyFDN):
     # Homogeneous MIMO allpass FDN: delays, G = diag(g^delays), A = G @ U, complete_fdn
     delays_sch = np.random.randint(51, 300, size=N)
     _g = pyFDN.rt_to_gain_per_sample(0.07, Fs)
-    G = np.diag(_g ** delays_sch)
+    G = np.diag(_g**delays_sch)
     U = pyFDN.random_orthogonal(N)
     A_sch = G @ U
     B_sch, C_sch, D_sch, X = pyFDN.complete_fdn(A_sch, N, N)
 
     # FLAMO core (N→N), no Shell — for use inside the recursion
     allpass_fdn_core = pyFDN.dss_to_flamo(
-        A_sch, B_sch, C_sch, D_sch, delays_sch, Fs, nfft=nfft, 
-        shell=False
+        A_sch, B_sch, C_sch, D_sch, delays_sch, Fs, nfft=nfft, shell=False
     )
     return (allpass_fdn_core,)
 
@@ -109,7 +108,9 @@ def _(mo):
 def _(Fs, N, delay_module, nfft, np, pyFDN, sos_filter_module):
     # Main delays (feedback path), input and output delays — in seconds
     main_delay_sec = np.random.uniform(0.02, 0.04, size=N)
-    input_delay_sec = np.linspace(0.01, 0.02 * N, N) + np.random.uniform(0, 0.001, size=N)
+    input_delay_sec = np.linspace(0.01, 0.02 * N, N) + np.random.uniform(
+        0, 0.001, size=N
+    )
     output_delay_sec = np.linspace(0.01, 0.02, N) + np.random.uniform(0, 0.001, size=N)
 
     main_delays = delay_module(main_delay_sec, nfft, Fs=Fs)
@@ -159,20 +160,28 @@ def _(
     gain_C_out = gain_module(C_out, nfft)
 
     # Recursion: fF = allpass FDN → attenuation, fB = main delays
-    feedforward = system.Series(OrderedDict({
-        "allpass_fdn": allpass_fdn_core,
-        "attenuation": attenuation,
-    }))
+    feedforward = system.Series(
+        OrderedDict(
+            {
+                "allpass_fdn": allpass_fdn_core,
+                "attenuation": attenuation,
+            }
+        )
+    )
     feedback_loop = system.Recursion(fF=feedforward, fB=main_delays)
 
     # Full chain
-    core_chain = system.Series(OrderedDict({
-        "input_gain": gain_B_in,
-        "input_delay": input_delays,
-        "feedback_loop": feedback_loop,
-        "output_delay": output_delays,
-        "output_gain": gain_C_out,
-    }))
+    core_chain = system.Series(
+        OrderedDict(
+            {
+                "input_gain": gain_B_in,
+                "input_delay": input_delays,
+                "feedback_loop": feedback_loop,
+                "output_delay": output_delays,
+                "output_gain": gain_C_out,
+            }
+        )
+    )
 
     model = system.Shell(
         core=core_chain,
@@ -215,8 +224,12 @@ def _(Audio, Fs, display, go, ir_stereo, np, pyFDN):
     t = np.arange(ir_stereo.shape[0]) / Fs
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=t, y=pyFDN.mulaw_encode(ir_stereo[:, 0]), mode="lines", name="L"))
-    fig.add_trace(go.Scatter(x=t, y=pyFDN.mulaw_encode(ir_stereo[:, 1]), mode="lines", name="R"))
+    fig.add_trace(
+        go.Scatter(x=t, y=pyFDN.mulaw_encode(ir_stereo[:, 0]), mode="lines", name="L")
+    )
+    fig.add_trace(
+        go.Scatter(x=t, y=pyFDN.mulaw_encode(ir_stereo[:, 1]), mode="lines", name="R")
+    )
     fig.update_layout(
         xaxis_title="Time [s]",
         yaxis_title="Amplitude [mu-law]",

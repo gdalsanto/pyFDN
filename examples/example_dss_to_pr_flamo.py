@@ -191,8 +191,8 @@ def _(mo):
 
 @app.cell
 def _():
-    import numpy as np
     import matplotlib.pyplot as plt
+    import numpy as np
     import torch
 
     import pyFDN
@@ -282,8 +282,19 @@ def _(
     # Plot poles in the complex plane with SOS gain-per-sample curve
     angles_sos, mag_sos = pyFDN.sos_gain_per_sample_curves(sos_6n, delays, nfft=512)
     plt.figure(figsize=(10, 5))
-    plt.plot(pyFDN.rad_to_hertz(angles_sos, Fs), pyFDN.lin_to_db(mag_sos), alpha=0.7, label="SOS gain per sample")
-    plt.scatter(pyFDN.rad_to_hertz(np.angle(poles), Fs), pyFDN.lin_to_db(np.abs(poles)), marker=".", color="red", label="Poles")
+    plt.plot(
+        pyFDN.rad_to_hertz(angles_sos, Fs),
+        pyFDN.lin_to_db(mag_sos),
+        alpha=0.7,
+        label="SOS gain per sample",
+    )
+    plt.scatter(
+        pyFDN.rad_to_hertz(np.angle(poles), Fs),
+        pyFDN.lin_to_db(np.abs(poles)),
+        marker=".",
+        color="red",
+        label="Poles",
+    )
     plt.xlabel("Frequency [Hz]")
     plt.ylabel("Magnitude [dB]")
     # plt.ylim(-1,1)
@@ -296,7 +307,12 @@ def _(
     # Plot FLAMO vs modal IR (mu-law for visibility)
     plt.figure(figsize=(10, 4))
     plt.plot(pyFDN.mulaw_encode(ir_ref), label="IR from FLAMO", linewidth=1.2)
-    plt.plot(pyFDN.mulaw_encode(ir_modal), "--", label="IR from poles/residues", linewidth=1.2)
+    plt.plot(
+        pyFDN.mulaw_encode(ir_modal),
+        "--",
+        label="IR from poles/residues",
+        linewidth=1.2,
+    )
     plt.title("FLAMO time response vs modal reconstruction")
     plt.xlabel("Time [samples]")
     plt.ylabel("Amplitude [mu-law]")

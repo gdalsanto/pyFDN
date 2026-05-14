@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.4"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -60,9 +60,9 @@ def _(np, pyFDN):
 
     delays = np.random.randint(800, 1800, size=N)  # delays in samples, 1..30
     g = pyFDN.rt_to_gain_per_sample(0.6, Fs)
-    G = np.diag(g ** delays)  # gain matrix
+    G = np.diag(g**delays)  # gain matrix
     U = pyFDN.random_orthogonal(N)
-    A = G @ U 
+    A = G @ U
 
     B, C, D, X = pyFDN.complete_fdn(A, N, numio)
     return A, B, C, D, Fs, delays
@@ -134,13 +134,14 @@ def _(mo):
 def _(Fs, impulse_response, ir_len, np):
     import matplotlib.pyplot as plt
     from IPython.display import Audio, display
+
     ir_channel = impulse_response[:, 2, 1]
     t = np.arange(ir_len) / Fs
     _fig, ax = plt.subplots(figsize=(10, 3))
-    ax.plot(t, ir_channel, color='tab:blue')
-    ax.set_xlabel('Time [s]')
-    ax.set_ylabel('Amplitude')
-    ax.set_title('Homogeneous allpass FDN — impulse response (time domain)')
+    ax.plot(t, ir_channel, color="tab:blue")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Amplitude")
+    ax.set_title("Homogeneous allpass FDN — impulse response (time domain)")
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.show()

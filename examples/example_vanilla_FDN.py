@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.5"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -23,14 +23,14 @@ def _(mo):
 
 @app.cell
 def _():
+    from collections import OrderedDict
+    import matplotlib.pyplot as plt
     import numpy as np
     import torch
-    import matplotlib.pyplot as plt
-    from collections import OrderedDict
     from IPython.display import Audio, display
 
     import pyFDN
-    from flamo.processor import system, dsp
+    from flamo.processor import dsp, system
 
     return Audio, OrderedDict, display, dsp, np, plt, pyFDN, system, torch
 
@@ -85,14 +85,18 @@ def _(OrderedDict, dsp, model, n, np, system, torch):
     delay_module = feedback_loop.feedforward.delay
 
     new_delays = np.linspace(1100, 1150, n, dtype=np.int64)
-    new_delays_t = torch.tensor(new_delays, dtype=torch.float32, device=next(delay_module.parameters()).device)
+    new_delays_t = torch.tensor(
+        new_delays, dtype=torch.float32, device=next(delay_module.parameters()).device
+    )
     delay_module.assign_value(delay_module.sample2s(new_delays_t))
 
-    _n_fft = getattr(model.get_inputLayer(), 'nfft')
+    _n_fft = model.get_inputLayer().nfft
     device = next(delay_module.parameters()).device
     diagonal_gain = dsp.Gain(size=(n, n), nfft=_n_fft, device=device)
-    diagonal_gain.assign_value(torch.diag(0.9999 ** new_delays_t))
-    feedback_loop.feedforward = system.Series(OrderedDict({'delay': delay_module, 'diagonal_gain': diagonal_gain}))
+    diagonal_gain.assign_value(torch.diag(0.9999**new_delays_t))
+    feedback_loop.feedforward = system.Series(
+        OrderedDict({"delay": delay_module, "diagonal_gain": diagonal_gain})
+    )
 
     ir_altered = model.get_time_response().flatten()
     return (ir_altered,)
@@ -140,22 +144,24 @@ def _(mo):
 @app.cell
 def _(Audio, display, fs, model, torch):
     from importlib.resources import files
+
     import soundfile as sf
 
     try:
-        path = files('pyFDN.audio') / 'synth_dry.wav'
-        with path.open('rb') as f:
-            dry, file_fs = sf.read(f, dtype='float64')
+        path = files("pyFDN.audio") / "synth_dry.wav"
+        with path.open("rb") as f:
+            dry, file_fs = sf.read(f, dtype="float64")
     except Exception:
-        raise FileNotFoundError('pyFDN.audio/synth_dry.wav not found.')
+        raise FileNotFoundError("pyFDN.audio/synth_dry.wav not found.")
     dry = dry[:, 0] if dry.ndim > 1 else dry
     if file_fs != fs:
         from scipy.signal import resample
+
         dry = resample(dry, int(len(dry) * fs / file_fs))
-    
-    _n_fft = getattr(model.get_inputLayer(), 'nfft')
-    dry = dry[:int(_n_fft)]
-    dry[-(fs * 2):] = 0
+
+    _n_fft = model.get_inputLayer().nfft
+    dry = dry[: int(_n_fft)]
+    dry[-(fs * 2) :] = 0
     x = torch.tensor(dry, dtype=torch.float32).unsqueeze(0).unsqueeze(-1)
     with torch.no_grad():  # pad with zeros to avoid wrap around
         wet = model(x).squeeze().cpu().numpy()

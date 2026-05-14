@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.5"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -24,8 +24,8 @@ def _(mo):
 
 @app.cell
 def _():
-    import numpy as np
     import matplotlib.pyplot as plt
+    import numpy as np
     import pyFDN
 
     return np, plt, pyFDN
@@ -50,26 +50,33 @@ def _(A, b, c, d, delays, np, pyFDN):
     ir_time = pyFDN.dss_to_impz(ir_len, delays, A, b, c, d)[:, 0, 0]
 
     ir_modals = {}
-    modes = ['eig', 'roots', 'polyeig']
+    modes = ["eig", "roots", "polyeig"]
     for _mode in modes:
         residues, poles, direct, is_pair, _ = pyFDN.dss_to_pr_direct(
             delays, A, b, c, d, mode=_mode
         )
-        ir_modals[_mode] = pyFDN.pr_to_impz(residues, poles, direct, is_pair, ir_len)[:, 0, 0]
+        ir_modals[_mode] = pyFDN.pr_to_impz(residues, poles, direct, is_pair, ir_len)[
+            :, 0, 0
+        ]
         err = np.max(np.abs(ir_time - ir_modals[_mode]))
-        print(f'{_mode}: max |IR_time - IR_modal| = {err}')
+        print(f"{_mode}: max |IR_time - IR_modal| = {err}")
     return ir_modals, ir_time, modes
 
 
 @app.cell
 def _(ir_modals, ir_time, modes, plt, pyFDN):
     plt.figure(figsize=(10, 4))
-    plt.plot(pyFDN.mulaw_encode(ir_time), label='IR from dss_to_impz', linewidth=1.2)
+    plt.plot(pyFDN.mulaw_encode(ir_time), label="IR from dss_to_impz", linewidth=1.2)
     for _mode in modes:
-        plt.plot(pyFDN.mulaw_encode(ir_modals[_mode]), '--', label=f'IR from {_mode}', linewidth=1.2)
-    plt.title('DSS time response vs modal reconstruction')
-    plt.xlabel('Time [samples]')
-    plt.ylabel('Amplitude [mu-law]')
+        plt.plot(
+            pyFDN.mulaw_encode(ir_modals[_mode]),
+            "--",
+            label=f"IR from {_mode}",
+            linewidth=1.2,
+        )
+    plt.title("DSS time response vs modal reconstruction")
+    plt.xlabel("Time [samples]")
+    plt.ylabel("Amplitude [mu-law]")
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()
