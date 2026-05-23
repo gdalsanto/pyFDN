@@ -40,10 +40,8 @@ test = [
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
     "marimo",
-    "matplotlib>=3.5.0",  # required to run example scripts under test
-    "plotly>=5.0.0",  # required to run example scripts under test
-    "ipython>=8.0.0",  # IPython.display.Audio/display used in example notebooks
-    "graphviz>=0.20",  # pyFDN.draw_flamo_graph used in example notebooks
+    "matplotlib>=3.5.0",  # examples build matplotlib figures
+    "plotly>=5.0.0",  # examples build plotly figures
 ]
 dev = [
     "pyFDN[test]",  # everything from the [test] extra

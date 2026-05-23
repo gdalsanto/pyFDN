@@ -1,14 +1,12 @@
 """Smoke-test that every example script runs to completion."""
 
 import runpy
-import shutil
 from pathlib import Path
 
 import pytest
+import matplotlib.pyplot as plt
+import plotly.io as pio
 
-
-plt = pytest.importorskip("matplotlib.pyplot")
-pio = pytest.importorskip("plotly.io")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES_DIR = PROJECT_ROOT / "examples"
@@ -19,10 +17,22 @@ def _example_scripts() -> list[Path]:
 
 
 @pytest.fixture(autouse=True)
-def _headless_rendering():
-    """Render off-screen (no GUI window / browser tab) and close figures."""
+def _headless_rendering(monkeypatch):
+    """Neutralise display side-effects so examples run headless.
+
+    Only *rendering* is suppressed — the underlying objects are still built, so
+    the example logic is exercised:
+      - matplotlib draws to the Agg buffer (no window);
+      - plotly's ``fig.show()`` becomes a no-op, so plotly never reaches the
+        notebook mime stack (which would otherwise need IPython + nbformat);
+      - ``pyFDN.draw_flamo_graph`` becomes a no-op — it shells out to the system
+        Graphviz ``dot`` binary, which we don't install for tests.
+    """
+    import pyFDN
+
     plt.switch_backend("Agg")
-    pio.renderers.default = "json"
+    monkeypatch.setattr(pio, "show", lambda *args, **kwargs: None)
+    monkeypatch.setattr(pyFDN, "draw_flamo_graph", lambda *args, **kwargs: None)
     yield
     plt.close("all")
 
@@ -37,8 +47,4 @@ def test_examples_dir_is_populated() -> None:
     ids=lambda p: str(p.relative_to(EXAMPLES_DIR)),
 )
 def test_example_runs(script: Path) -> None:
-    # draw_flamo_graph shells out to the system Graphviz "dot" binary, which is
-    # not pip-installable. Skip (don't fail) where it isn't available.
-    if "draw_flamo_graph" in script.read_text() and shutil.which("dot") is None:
-        pytest.skip("system Graphviz 'dot' binary not installed")
     runpy.run_path(str(script), run_name="__main__")
