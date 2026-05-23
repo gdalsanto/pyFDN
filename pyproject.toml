@@ -39,6 +39,7 @@ test = [
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
+    "marimo",
     "matplotlib>=3.5.0",  # required to run example scripts under test
     "plotly>=5.0.0",  # required to run example scripts under test
     "ipython>=8.0.0",  # IPython.display.Audio/display used in example notebooks
