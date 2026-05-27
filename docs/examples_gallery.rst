@@ -2,8 +2,8 @@
 Examples Gallery
 ================
 
-Interactive Jupyter notebooks demonstrating the core features of ``pyFDN``.
-Each example can be downloaded as a ``.ipynb`` file or viewed directly on GitHub.
+Interactive Mariom notebooks demonstrating the core features of ``pyFDN``.
+Each example can be downloaded as a ``.py`` file or viewed directly on GitHub.
 
 ----
 
@@ -85,4 +85,3 @@ Advanced Topics
    examples/example_dss_to_pr_flamo
    examples/example_dss_to_tf
    examples/example_sdn_coefficients
-
