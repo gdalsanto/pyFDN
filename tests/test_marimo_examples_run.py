@@ -24,15 +24,10 @@ def _headless_rendering(monkeypatch):
     the example logic is exercised:
       - matplotlib draws to the Agg buffer (no window);
       - plotly's ``fig.show()`` becomes a no-op, so plotly never reaches the
-        notebook mime stack (which would otherwise need IPython + nbformat);
-      - ``pyFDN.draw_flamo_graph`` becomes a no-op — it shells out to the system
-        Graphviz ``dot`` binary, which we don't install for tests.
+        notebook mime stack (which would otherwise need IPython + nbformat).
     """
-    import pyFDN
-
     plt.switch_backend("Agg")
     monkeypatch.setattr(pio, "show", lambda *args, **kwargs: None)
-    monkeypatch.setattr(pyFDN, "draw_flamo_graph", lambda *args, **kwargs: None)
     yield
     plt.close("all")
 
