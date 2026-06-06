@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.5"
+__generated_with = "0.23.6"
 app = marimo.App()
 
 
@@ -33,27 +33,39 @@ def _(mo):
 def _(mo):
     mo.md(r"""
     ---
+    """)
+    return
 
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ## Notation
+    """)
+    return
 
+
+@app.cell
+def _(mo):
+    mo.md(r"""
     - Characteristic matrix of the recursive loop with feedforward $F(z)$ and feedback $G(z)$
-      $$
-      P(z) = I - F(z)G(z)
-      $$
-      In the standard FDN delay form this matches
-      $$
-      P(z) = I - A\,\mathrm{diag}(z^{-m_1},\dots,z^{-m_N}).
-      $$
+    $$
+    P(z) = I - F(z)G(z)
+    $$
+    In the standard FDN delay form this matches
+    $$
+    P(z) = I - A\,\mathrm{diag}(z^{-m_1},\dots,z^{-m_N}).
+    $$
 
     - Transfer decomposition:
-      $$
-      H(z) = C(z)\,P(z)^{-1}F(z)B(z) + D(z).
-      $$
+    $$
+    H(z) = C(z)\,P(z)^{-1}F(z)B(z) + D(z).
+    $$
 
     - Poles are roots of
-      $$
-      \det P(z)=0.
-      $$
+    $$
+    \det P(z)=0.
+    $$
 
     We use FLAMO's native recursion probes (`probe_recursion`, `probe_recursion_with_derivative`, `log_det_derivative`, `log_det_derivative_w`) directly.
     """)
@@ -137,30 +149,42 @@ def _(mo):
     $$
 
     This is exactly the conversion implemented in the refinement step.
+    """)
+    return
 
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ---
 
     ### EAI form used in code
+    """)
+    return
 
+
+@app.cell
+def _(mo):
+    mo.md(r"""
     At pole index $i$:
 
     1. Compute $N_z(z_i)$.
     2. Convert to w-plane Newton term:
-       $$
-       N_w(w_i) = -z_i^2 N_z(z_i),\quad w_i=1/z_i.
-       $$
+    $$
+    N_w(w_i) = -z_i^2 N_z(z_i),\quad w_i=1/z_i.
+    $$
     3. Deflation in w-plane:
-       $$
-       D_w(w_i)=\sum_{j\neq i}\frac{1}{w_i-w_j}.
-       $$
+    $$
+    D_w(w_i)=\sum_{j\neq i}\frac{1}{w_i-w_j}.
+    $$
     4. EAI update in w:
-       $$
-       w_i^{\text{new}} = w_i - \frac{1}{N_w(w_i)-D_w(w_i)}.
-       $$
+    $$
+    w_i^{\text{new}} = w_i - \frac{1}{N_w(w_i)-D_w(w_i)}.
+    $$
     5. Map back:
-       $$
-       z_i^{\text{new}} = 1/w_i^{\text{new}}.
-       $$
+    $$
+    z_i^{\text{new}} = 1/w_i^{\text{new}}.
+    $$
 
     Using deflation directly in w-plane is important because roots are distributed more naturally for delay-polynomial structure there.
     """)
