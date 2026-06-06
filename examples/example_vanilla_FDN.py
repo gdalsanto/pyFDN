@@ -114,8 +114,7 @@ def _(fs, ir_altered, ir_original, mo, np, plt, pyFDN):
     t = np.arange(len(ir_original)) / fs
     plt.figure(figsize=(10, 3))
     plt.plot(t, pyFDN.mulaw_encode(ir_original), alpha=0.8, lw=0.6, label="Original")
-    if "ir_altered" in globals():
-        plt.plot(t, pyFDN.mulaw_encode(ir_altered), alpha=0.8, lw=0.6, label="Altered")
+    plt.plot(t, pyFDN.mulaw_encode(ir_altered), alpha=0.8, lw=0.6, label="Altered")
     plt.xlabel("Time (s)")
     plt.ylabel("Amplitude (μ-law)")
     plt.title("Vanilla FDN impulse response")
