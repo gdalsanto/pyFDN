@@ -29,11 +29,14 @@ def _(mo):
 @app.cell
 def _():
     import math
+
     import numpy as np
     import plotly.graph_objects as go
     import plotly.io as pio
+
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
     from scipy.linalg import hadamard
+
     import pyFDN
 
     return go, hadamard, math, np, pyFDN
@@ -93,10 +96,10 @@ def _(C, T):
         range_color=(zmin, zmax),
         color_continuous_scale="RdBu",
         color_continuous_midpoint=0,
-        labels=dict(animation_frame="t"),
+        labels={"animation_frame": "t"},
     )
     _fig.update_layout(height=420)
-    _fig.layout.sliders[0].currentvalue = dict(prefix="t = ", visible=True)
+    _fig.layout.sliders[0].currentvalue = {"prefix": "t = ", "visible": True}
     for k, step in enumerate(_fig.layout.sliders[0].steps):
         step["label"] = f"{T[k]:.2f}"
     # Optional: label slider with T values
@@ -140,7 +143,7 @@ def _(C, N, T, go, np, num_t, pyFDN):
                 y=pyFDN.mulaw_encode(ir) + 2 * i,
                 mode="lines",
                 name=label,
-                line=dict(width=1.5),
+                line={"width": 1.5},
             )
         )
     _fig.update_layout(

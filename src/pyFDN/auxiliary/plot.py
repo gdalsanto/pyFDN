@@ -56,10 +56,13 @@ def plot_system_matrix(
     c_rows, c_cols = c.shape if c.ndim == 2 else (1, c.shape[0])
     d_rows, d_cols = d.shape if d.ndim == 2 else (1, 1)
 
-    # Ensure block compatibilities for visualization
-    assert b_rows == m, "b must have same number of rows as A"
-    assert c_cols == n, "c must have same number of columns as A"
-    assert d_rows == c_rows and d_cols == b_cols, "d must match c rows and b cols"
+    # Ensure block compatibilities for visualization.
+    if b_rows != m:
+        raise ValueError("b must have same number of rows as A")
+    if c_cols != n:
+        raise ValueError("c must have same number of columns as A")
+    if d_rows != c_rows or d_cols != b_cols:
+        raise ValueError("d must match c rows and b cols")
 
     row_heights = [m / (m + c_rows), c_rows / (m + c_rows)]
     column_widths = [n / (n + b_cols), b_cols / (n + b_cols)]
@@ -275,6 +278,7 @@ def plot_spectrogram(
         "z": Sxx_plot,
         "colorscale": colorscale,
         "colorbar": {"title": "dB"},
+        "zauto": zmin is None and zmax is None,
     }
     if zmin is not None:
         heatmap_kw["zmin"] = zmin

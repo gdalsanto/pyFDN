@@ -36,6 +36,7 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
+
     import pyFDN
 
     np.random.seed(1)
@@ -61,7 +62,7 @@ def _(np, pyFDN):
     G = np.diag(g**delays)  # gain matrix
 
     X = pyFDN.rand_admissible_homogeneous_allpass(G, (0.7, 0.99))
-    R = X @ G @ G
+    X @ G @ G
 
     A, b, c, d, U = pyFDN.homogeneous_allpass_fdn(G, X, verbose=False)
     return A, Fs, b, c, d, delays

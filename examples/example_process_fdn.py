@@ -27,6 +27,7 @@ def _(mo):
 @app.cell
 def _():
     from importlib.resources import files
+
     import matplotlib.pyplot as plt
     import numpy as np
     import soundfile as sf

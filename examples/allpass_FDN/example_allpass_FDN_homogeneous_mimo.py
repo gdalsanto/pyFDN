@@ -36,6 +36,7 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
+
     import pyFDN
 
     np.random.seed(1)

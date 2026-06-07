@@ -38,9 +38,12 @@ def _():
     import numpy as np
     import plotly.graph_objects as go
     import plotly.io as pio
+
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
     from collections import OrderedDict
+
     from flamo.processor import dsp, system
+
     import pyFDN
     from pyFDN.auxiliary.flamo import delay_module, gain_module, sos_filter_module
 
@@ -204,7 +207,7 @@ def _(mo):
 @app.cell
 def _(model, pyFDN):
     _g = pyFDN.draw_flamo_graph(model)
-    _g
+    _g  # noqa: B018
     return
 
 
@@ -232,7 +235,7 @@ def _(Fs, go, ir_stereo, mo, np, pyFDN):
         yaxis_title="Amplitude [mu-law]",
         title="Allpass FDN in FDN — stereo IR",
         height=300,
-        margin=dict(t=50, b=50, l=60, r=40),
+        margin={"t": 50, "b": 50, "l": 60, "r": 40},
         # xaxis=dict(range=[0, 0.2]),
         showlegend=True,
     )

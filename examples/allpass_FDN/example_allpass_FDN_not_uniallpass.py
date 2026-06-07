@@ -39,6 +39,7 @@ def _(mo):
 def _():
     import numpy as np
     from scipy.linalg import orth
+
     import pyFDN
 
     return np, orth, pyFDN

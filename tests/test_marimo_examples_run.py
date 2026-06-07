@@ -1,12 +1,13 @@
 """Smoke-test that every example script runs to completion."""
 
 import runpy
+from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
 import matplotlib.pyplot as plt
 import plotly.io as pio
-
+import pytest
+from pytest import MonkeyPatch
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES_DIR = PROJECT_ROOT / "examples"
@@ -16,8 +17,8 @@ def _example_scripts() -> list[Path]:
     return sorted(EXAMPLES_DIR.rglob("example_*.py"))
 
 
-@pytest.fixture(autouse=True)
-def _headless_rendering(monkeypatch):
+@pytest.fixture(autouse=True)  # type: ignore[misc]
+def _headless_rendering(monkeypatch: MonkeyPatch) -> Iterator[None]:
     """Neutralise display side-effects so examples run headless.
 
     Only *rendering* is suppressed — the underlying objects are still built, so
@@ -36,7 +37,7 @@ def test_examples_dir_is_populated() -> None:
     assert _example_scripts(), f"No example scripts found under {EXAMPLES_DIR}"
 
 
-@pytest.mark.parametrize(
+@pytest.mark.parametrize(  # type: ignore[misc]
     "script",
     _example_scripts(),
     ids=lambda p: str(p.relative_to(EXAMPLES_DIR)),

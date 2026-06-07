@@ -30,13 +30,17 @@ def _(mo):
 @app.cell
 def _():
     import copy
+
     import numpy as np
     import plotly.graph_objects as go
     import plotly.io as pio
     import torch
+
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
     from collections import OrderedDict
+
     from flamo.processor import dsp, system
+
     import pyFDN
 
     return OrderedDict, copy, dsp, go, np, pyFDN, system, torch
@@ -245,7 +249,7 @@ def _(N, copy, delay_module, device, model_delay_matrix, np, rng, torch):
     delays_in_swapped = rng.integers(333, 2333, size=N).astype(np.int64)
     delays_out_swapped = rng.integers(333, 2333, size=N).astype(np.int64)
 
-    total_delay_swapped = delays_swapped + delays_in_swapped + delays_out_swapped
+    delays_swapped + delays_in_swapped + delays_out_swapped
 
     # swap feedforward and feedback
     model_swapped = copy.deepcopy(model_delay_matrix)
@@ -303,7 +307,7 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
             y=pyFDN.mulaw_encode(ir_v) + 4,
             mode="lines",
             name="Vanilla FDN",
-            line=dict(width=0.5),
+            line={"width": 0.5},
             opacity=0.8,
         )
     )
@@ -313,7 +317,7 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
             y=pyFDN.mulaw_encode(ir_dm) + 2,
             mode="lines",
             name="Delay+matrix+delay in feedback",
-            line=dict(width=0.5),
+            line={"width": 0.5},
             opacity=0.8,
         )
     )
@@ -323,7 +327,7 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
             y=pyFDN.mulaw_encode(ir_sw),
             mode="lines",
             name="Swapped feedforward/feedback",
-            line=dict(width=0.5),
+            line={"width": 0.5},
             opacity=0.8,
         )
     )
@@ -331,11 +335,11 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
         title="Delay feedback matrix density",
         xaxis_title="Time [s]",
         yaxis_title="Amplitude [μ-law]",
-        xaxis=dict(range=[0, 0.8], showgrid=True, gridwidth=1, griddash="dot"),
-        yaxis=dict(showgrid=True, gridwidth=1, griddash="dot"),
-        legend=dict(yanchor="top", y=0.99, xanchor="right", x=0.99),
+        xaxis={"range": [0, 0.8], "showgrid": True, "gridwidth": 1, "griddash": "dot"},
+        yaxis={"showgrid": True, "gridwidth": 1, "griddash": "dot"},
+        legend={"yanchor": "top", "y": 0.99, "xanchor": "right", "x": 0.99},
         height=500,
-        margin=dict(l=60, r=40, t=50, b=50),
+        margin={"l": 60, "r": 40, "t": 50, "b": 50},
     )
 
     fig2 = go.Figure()
@@ -345,7 +349,7 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
             y=echo_vanilla,
             mode="lines",
             name="Vanilla FDN",
-            line=dict(width=0.8),
+            line={"width": 0.8},
             opacity=0.8,
         )
     )
@@ -355,7 +359,7 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
             y=echo_delay_matrix,
             mode="lines",
             name="Delay+matrix+delay in feedback",
-            line=dict(width=0.8),
+            line={"width": 0.8},
             opacity=0.8,
         )
     )
@@ -365,7 +369,7 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
             y=echo_swapped,
             mode="lines",
             name="Swapped feedforward/feedback",
-            line=dict(width=0.8),
+            line={"width": 0.8},
             opacity=0.8,
         )
     )
@@ -376,11 +380,11 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
         title="Echo density (Abel & Huang 2006)",
         xaxis_title="Time [s]",
         yaxis_title="Echo density",
-        xaxis=dict(range=[0, 0.8], showgrid=True, gridwidth=1, griddash="dot"),
-        yaxis=dict(showgrid=True, gridwidth=1, griddash="dot"),
-        legend=dict(yanchor="bottom", y=0.99, xanchor="right", x=0.99),
+        xaxis={"range": [0, 0.8], "showgrid": True, "gridwidth": 1, "griddash": "dot"},
+        yaxis={"showgrid": True, "gridwidth": 1, "griddash": "dot"},
+        legend={"yanchor": "bottom", "y": 0.99, "xanchor": "right", "x": 0.99},
         height=350,
-        margin=dict(l=60, r=40, t=50, b=50),
+        margin={"l": 60, "r": 40, "t": 50, "b": 50},
     )
 
     plots = mo.vstack([fig, fig2])
@@ -389,11 +393,12 @@ def _(fs, go, ir_delay_matrix, ir_swapped, ir_vanilla, mo, np, pyFDN):
         [
             mo.md("Vanilla:"),
             mo.audio(np.asarray(ir_vanilla), rate=fs),
-            mo.md("Delay matrix:"),   
+            mo.md("Delay matrix:"),
             mo.audio(np.asarray(ir_delay_matrix), rate=fs),
-            mo.md("Swapped:"),       
+            mo.md("Swapped:"),
             mo.audio(np.asarray(ir_swapped), rate=fs),
-    ])
+        ]
+    )
 
     mo.vstack([plots, audio_blocks])
     return
