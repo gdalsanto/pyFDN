@@ -2,8 +2,9 @@
 Examples Gallery
 ================
 
-Interactive Jupyter notebooks demonstrating the core features of ``pyFDN``.
-Each example can be downloaded as a ``.ipynb`` file or viewed directly on GitHub.
+Interactive Marimo notebooks demonstrating the core features of ``pyFDN``.
+Click any example to open the fully rendered notebook on its own page. Each
+example can also be downloaded as a ``.py`` file or viewed directly on GitHub.
 
 ----
 
@@ -14,9 +15,9 @@ Getting Started
    :widths: 35 65
    :header-rows: 0
 
-   * - :doc:`Vanilla FDN <examples/example_vanilla_FDN>`
+   * - `Vanilla FDN <_static/marimo/notebooks/example_vanilla_FDN.html>`_
      - Build a basic FDN from scratch with orthogonal feedback matrices and delay lines.
-   * - :doc:`Process FDN <examples/example_process_fdn>`
+   * - `Process FDN <_static/marimo/notebooks/example_process_fdn.html>`_
      - Run audio through an FDN and listen to the output.
 
 Absorption & Filters
@@ -26,12 +27,10 @@ Absorption & Filters
    :widths: 35 65
    :header-rows: 0
 
-   * - :doc:`Absorption Filters <examples/example_absorption_filters>`
+   * - `Absorption Filters <_static/marimo/notebooks/example_absorption_filters.html>`_
      - Design frequency-dependent absorption filters for realistic room acoustics.
-   * - :doc:`One-Pole Absorption <examples/example_one_pole_absorption>`
+   * - `One-Pole Absorption <_static/marimo/notebooks/example_one_pole_absorption.html>`_
      - One-pole filter design targeting specific RT60 values at DC and Nyquist.
-   * - :doc:`z-Domain Filters <examples/example_zFilter>`
-     - Working with z-domain filter representations (ZFilter, ZFIR, ZSOS, ZTF).
 
 Advanced Topics
 ----------------
@@ -40,16 +39,58 @@ Advanced Topics
    :widths: 35 65
    :header-rows: 0
 
-   * - :doc:`Colorless FDN <examples/example_colorless_FDN>`
+   * - `Colorless FDN <_static/marimo/notebooks/example_colorless_FDN.html>`_
      - Design FDNs with flat frequency response to avoid metallic colouration.
-   * - :doc:`Coupled Rooms <examples/example_coupled_rooms>`
+   * - `Coupled Rooms <_static/marimo/notebooks/example_coupled_rooms.html>`_
      - Simulate coupled room acoustics by connecting multiple FDN structures.
-   * - :doc:`Delay Matrix Density <examples/example_delay_matrix_density>`
+   * - `Delay Matrix Density <_static/marimo/notebooks/example_delay_matrix_density.html>`_
      - Analyse echo density and mixing behaviour of different delay-line topologies.
-   * - :doc:`Interpolate Matrix <examples/example_interpolate_matrix>`
+   * - `Interpolate Matrix <_static/marimo/notebooks/example_interpolate_matrix.html>`_
      - Smoothly interpolate between orthogonal feedback matrices.
-   * - :doc:`DSS to State-Space <examples/example_dss_to_ss>`
+   * - `DSS to State-Space <_static/marimo/notebooks/example_dss_to_ss.html>`_
      - Convert delay state-space representations to standard state-space form.
+
+Translation Examples
+---------------------
+
+.. list-table::
+   :widths: 35 65
+   :header-rows: 0
+
+   * - `Direct DSS→PR <_static/marimo/notebooks/example_dss_to_pr_direct.html>`_
+     - Numeric DSS-only pole-residue extraction with ``eig``, ``roots``, and ``polyeig`` modes, compared against the time-domain impulse response.
+   * - `FLAMO DSS→PR <_static/marimo/notebooks/example_dss_to_pr_flamo.html>`_
+     - In-depth DSS→pole-residue conversion with an SOS filter in the loop, including the refinement-fix derivation.
+   * - `DSS to Transfer Function <_static/marimo/notebooks/example_dss_to_tf.html>`_
+     - Convert the delay state-space form of an FDN into matrix transfer-function form and verify against direct simulation.
+   * - `SDN Coefficients <_static/marimo/notebooks/example_sdn_coefficients.html>`_
+     - Compute room-acoustics coefficients with a Scattering Delay Network and render the impulse response via FLAMO.
+
+Allpass FDN Examples
+--------------------
+
+.. list-table::
+   :widths: 35 65
+   :header-rows: 0
+
+   * - `Allpass FDN Completion <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_completion.html>`_
+     - Construct ``b``, ``c``, and ``d`` for a given feedback matrix so the FDN becomes uniallpass.
+   * - `Homogeneous Allpass (MIMO) <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_homogeneous_mimo.html>`_
+     - MIMO allpass FDN with homogeneous decay, giving every pole the same decay rate with extra degrees of freedom.
+   * - `Homogeneous Allpass (SISO) <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_homogeneous_siso.html>`_
+     - SISO allpass FDN with homogeneous decay so all poles share the same decay rate.
+   * - `Allpass FDN in FDN <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_in_FDN.html>`_
+     - Embed an allpass MIMO FDN inside a larger FDN loop, with single input and stereo output.
+   * - `Nested Allpass (Gardner) <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_nested.html>`_
+     - Gardner's nested allpass structure, built by iteratively nesting feedforward/back allpass sections.
+   * - `Allpass but not Uniallpass <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_not_uniallpass.html>`_
+     - An FDN that is allpass only for specific delay lengths, built via a non-diagonal similarity transform.
+   * - `Poletti's Allpass (MIMO) <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_poletti.html>`_
+     - Poletti's unitary MIMO reverberator for reduced colouration in assisted reverberation systems.
+   * - `Schroeder Series Allpass <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_schroeder.html>`_
+     - Schroeder's cascade of first-order allpass sections realised as an FDN with diagonal feedback.
+   * - `Schroeder Allpass in Loop <_static/marimo/notebooks/allpass_FDN/example_allpass_FDN_schroeder_in_loop.html>`_
+     - Place Schroeder allpass filters behind the delays in the FDN loop to increase echo density, rendered with FLAMO.
 
 ----
 
@@ -58,31 +99,3 @@ Advanced Topics
    All notebooks are located in the ``examples/`` directory of the repository.
    You can also browse them directly on
    `GitHub <https://github.com/artificial-audio/pyFDN/tree/main/examples>`_.
-
-.. toctree::
-   :hidden:
-
-   examples/example_vanilla_FDN
-   examples/example_process_fdn
-   examples/example_absorption_filters
-   examples/example_one_pole_absorption
-   examples/example_zFilter
-   examples/example_colorless_FDN
-   examples/example_coupled_rooms
-   examples/example_delay_matrix_density
-   examples/example_interpolate_matrix
-   examples/example_dss_to_ss
-   examples/allpass_FDN/example_allpass_FDN_completion
-   examples/allpass_FDN/example_allpass_FDN_homogeneous_mimo
-   examples/allpass_FDN/example_allpass_FDN_homogeneous_siso
-   examples/allpass_FDN/example_allpass_FDN_in_FDN
-   examples/allpass_FDN/example_allpass_FDN_nested
-   examples/allpass_FDN/example_allpass_FDN_not_uniallpass
-   examples/allpass_FDN/example_allpass_FDN_poletti
-   examples/allpass_FDN/example_allpass_FDN_schroeder
-   examples/allpass_FDN/example_allpass_FDN_schroeder_in_loop
-   examples/example_dss_to_pr_direct
-   examples/example_dss_to_pr_flamo
-   examples/example_dss_to_tf
-   examples/example_sdn_coefficients
-
