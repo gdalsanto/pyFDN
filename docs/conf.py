@@ -29,7 +29,7 @@ extensions = [
     "sphinx_design",
     "sphinx_copybutton",
     "sphinx_autodoc_typehints",
-    "sphinx_marimo", 
+    "sphinx_marimo",
 ]
 
 # Autodoc settings
@@ -104,10 +104,10 @@ latex_documents = [
     (master_doc, "pyFDN.tex", "pyFDN Documentation", author, "manual"),
 ]
 # -- Marimo configuration -----------------------------------------------------
-marimo_notebook_dir = '../examples'
-marimo_default_height = '800px'
-marimo_default_width = '100%'
-marimo_click_to_load = 'overlay'  # Use overlay mode for better performance
+marimo_notebook_dir = "../examples"
+marimo_default_height = "800px"
+marimo_default_width = "100%"
+marimo_click_to_load = "overlay"  # Use overlay mode for better performance
 marimo_load_button_text = "Load Interactive Notebook"
 
 # Build notebooks serially in-process. The export-mode override below patches the
@@ -116,6 +116,7 @@ marimo_load_button_text = "Load Interactive Notebook"
 # export. Caching is disabled so the static export is deterministic across builds.
 marimo_parallel_build = False
 marimo_cache_notebooks = False
+
 
 # -- Marimo export mode override ----------------------------------------------
 # sphinx-marimo hardcodes ``marimo export html-wasm``, which ships each notebook
@@ -161,7 +162,15 @@ def _patch_marimo_static_export():
         # baked in), so we log a warning and keep going rather than aborting the
         # whole docs build on one bad notebook.
         proc = subprocess.run(
-            ["marimo", "export", "html", str(notebook_path), "-o", str(output_path), "--force"],
+            [
+                "marimo",
+                "export",
+                "html",
+                str(notebook_path),
+                "-o",
+                str(output_path),
+                "--force",
+            ],
             capture_output=True,
             text=True,
         )

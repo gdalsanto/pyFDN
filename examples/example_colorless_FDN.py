@@ -57,7 +57,10 @@ def _(Path, pyFDN):
 
     # Resolve param_dir: nbsphinx runs with cwd = notebook dir (docs/examples/), so go up to repo root
     _param_candidates = [
-        Path.cwd().parent.parent / "examples" / "resources" / "colorless_FDN",  # from docs/examples/
+        Path.cwd().parent.parent
+        / "examples"
+        / "resources"
+        / "colorless_FDN",  # from docs/examples/
         Path.cwd().parent / "examples" / "resources" / "colorless_FDN",  # from docs/
         Path.cwd() / "resources" / "colorless_FDN",  # from examples/
         Path.cwd() / "examples" / "resources" / "colorless_FDN",  # from project root
@@ -162,11 +165,9 @@ def _(fs, ir_init, ir_len, ir_optim, mo, np, plt, pyFDN):
             mo.Html("Optimized").style({"font-size": "2.0em"}),
             mo.audio(np.asarray(ir_optim), rate=fs),
         ],
-        gap=1
+        gap=1,
     )
-    mo.vstack([plot, audio_blocks],
-                gap=3
-    )
+    mo.vstack([plot, audio_blocks], gap=3)
     return
 
 

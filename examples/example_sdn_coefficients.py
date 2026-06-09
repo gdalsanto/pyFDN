@@ -40,6 +40,7 @@ def _():
     import plotly.graph_objects as go
     import plotly.io as pio
     from scipy.signal import butter, tf2sos
+
     pio.renderers.default = "sphinx_gallery"  # interactive in Jupyter + docs HTML
 
     import pyFDN
@@ -98,7 +99,7 @@ def _(Fs, pyFDN, receiver_pos, room_size, source_pos, wall_filters):
         Fs=Fs,
         wall_filters=wall_filters,
     )
-    result = sdn.compute()
+    sdn.compute()
     return (sdn,)
 
 
@@ -151,16 +152,16 @@ def _(Fs, go, ir, mo, np):
     fig = go.Figure(
         data=[
             go.Scatter(
-                x=t, y=ir, mode="lines", line=dict(color="rgb(31, 119, 180)", width=1)
+                x=t, y=ir, mode="lines", line={"color": "rgb(31, 119, 180)", "width": 1}
             )
         ],
-        layout=dict(
-            xaxis_title="Time [s]",
-            yaxis_title="Amplitude",
-            title="SDN impulse response (FLAMO)",
-            template="plotly_white",
-            height=320,
-        ),
+        layout={
+            "xaxis_title": "Time [s]",
+            "yaxis_title": "Amplitude",
+            "title": "SDN impulse response (FLAMO)",
+            "template": "plotly_white",
+            "height": 320,
+        },
     )
     fig.show()
 

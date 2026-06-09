@@ -52,7 +52,6 @@ def _():
     np.random.seed(6)
     Fs = 48000
     nfft = 2**17
-    irLen = nfft
     return Fs, go, nfft, np, pyFDN
 
 
@@ -117,9 +116,9 @@ def _(Fs, go, ir_sch, mo, np, pyFDN):
         yaxis_title="Amplitude [mu-law]",
         title="MIMO parallel Schröder allpass — impulse response (in0→out0)",
         height=300,
-        margin=dict(t=50, b=50, l=60, r=40),
+        margin={"t": 50, "b": 50, "l": 60, "r": 40},
         showlegend=False,
-        xaxis=dict(range=[0, 0.1]),
+        xaxis={"range": [0, 0.1]},
     )
     _fig.show()
 
@@ -161,12 +160,6 @@ def _(Fs, N, nfft, np, pyFDN):
 
 
 @app.cell
-def _(delays_fdn):
-    delays_fdn
-    return
-
-
-@app.cell
 def _(Fs, go, ir_fdn, mo, np, pyFDN):
     _t = np.arange(len(ir_fdn)) / Fs
     _fig = go.Figure()
@@ -176,7 +169,7 @@ def _(Fs, go, ir_fdn, mo, np, pyFDN):
         yaxis_title="Amplitude [mu-law]",
         title="Vanilla FDN (SISO) — impulse response",
         height=300,
-        margin=dict(t=50, b=50, l=60, r=40),
+        margin={"t": 50, "b": 50, "l": 60, "r": 40},
         showlegend=False,
     )
     _fig.show()
@@ -248,7 +241,7 @@ def _(Fs, go, ir_fdn_ap, mo, np, pyFDN):
         yaxis_title="Amplitude [mu-law]",
         title="FDN with Schröder allpass behind delays — impulse response",
         height=300,
-        margin=dict(t=50, b=50, l=60, r=40),
+        margin={"t": 50, "b": 50, "l": 60, "r": 40},
         showlegend=False,
     )
     _fig.show()
@@ -274,8 +267,7 @@ def _(model_fdn_ap, pyFDN):
         print(n["path"], n["type"], n["name"])
 
     # Draw flowchart
-    g = pyFDN.draw_flamo_graph(model_fdn_ap)
-    g
+    pyFDN.draw_flamo_graph(model_fdn_ap)
     return
 
 

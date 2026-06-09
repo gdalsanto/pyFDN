@@ -37,6 +37,7 @@ def _(mo):
 def _():
     import numpy as np
     import scipy
+
     import pyFDN
 
     np.random.seed(3)
@@ -154,7 +155,7 @@ def _(np, pyFDN):
     _g = 0.99
     _G = np.diag(_g**delays)  # global gain per sample
     _X = pyFDN.rand_admissible_homogeneous_allpass(_G, (0.7, 0.999))  # gain matrix
-    R = _X @ _G @ _G
+    _X @ _G @ _G
     _A, b, c, d, _U = pyFDN.homogeneous_allpass_fdn(_G, _X)
     is_a0, P0 = pyFDN.is_uniallpass(_A, b, c, d, tol=1e-07)
     assert is_a0, "Completed system should be uniallpass"

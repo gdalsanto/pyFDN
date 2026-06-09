@@ -38,8 +38,8 @@ def _():
     import matplotlib.pyplot as plt
     import numpy as np
     import torch
-
     from flamo.processor import dsp, system
+
     import pyFDN
 
     return OrderedDict, dsp, np, plt, pyFDN, system, torch
@@ -95,7 +95,9 @@ def _(mo):
 def _(torch):
     # Per-room delay lengths (samples); lengths must match N1 and N2
     delays_room1 = torch.tensor([411, 736, 403, 760, 544, 606], dtype=torch.float32)
-    delays_room2 = torch.tensor([2532, 2037, 1593, 1375, 1161, 2477], dtype=torch.float32)
+    delays_room2 = torch.tensor(
+        [2532, 2037, 1593, 1375, 1161, 2477], dtype=torch.float32
+    )
     delay_lengths = torch.cat([delays_room1, delays_room2])
 
     print(f"Room 1 delays: {delays_room1.tolist()} samples")
@@ -144,13 +146,17 @@ def _(mo):
 @app.cell
 def _(N, device, dsp, ix1, ix2, nfft, num_input, num_output, torch):
     # Source in room 1 only
-    input_gain = dsp.Gain(size=(N, num_input), nfft=nfft, requires_grad=False, device=device)
+    input_gain = dsp.Gain(
+        size=(N, num_input), nfft=nfft, requires_grad=False, device=device
+    )
     input_gain_values = torch.zeros(N, num_input)
     input_gain_values[ix1, :] = 1.0
     input_gain.assign_value(input_gain_values)
 
     # One receiver per room (out 1 = room 1, out 2 = room 2)
-    output_gain = dsp.Gain(size=(num_output, N), nfft=nfft, requires_grad=False, device=device)
+    output_gain = dsp.Gain(
+        size=(num_output, N), nfft=nfft, requires_grad=False, device=device
+    )
     output_gain_values = torch.zeros(num_output, N)
     output_gain_values[0, ix1] = 1.0
     output_gain_values[1, ix2] = 1.0
@@ -184,7 +190,9 @@ def _(N, delay_lengths, device, dsp, feedback_matrix, nfft):
 @app.cell
 def _(N, delay_lengths, device, dsp, fs, ix1, ix2, nfft, pyFDN, torch):
     # Per-room RT (1 kHz band); frequency-independent attenuation
-    short_rt = torch.tensor([0.5, 0.5, 0.55, 0.575, 0.525, 0.375, 0.275, 0.2, 0.175, 0.175])
+    short_rt = torch.tensor(
+        [0.5, 0.5, 0.55, 0.575, 0.525, 0.375, 0.275, 0.2, 0.175, 0.175]
+    )
     long_rt = torch.tensor([4.0, 4.0, 4.4, 4.6, 4.2, 3.0, 2.2, 1.6, 1.4, 1.4])
     short_rt_1khz = short_rt[4].item()
     long_rt_1khz = long_rt[4].item()
@@ -195,7 +203,9 @@ def _(N, delay_lengths, device, dsp, fs, ix1, ix2, nfft, pyFDN, torch):
     attenuation_values[ix1] = g_short ** delay_lengths[ix1]
     attenuation_values[ix2] = g_long ** delay_lengths[ix2]
 
-    attenuation = dsp.parallelGain(size=(N,), nfft=nfft, requires_grad=False, device=device)
+    attenuation = dsp.parallelGain(
+        size=(N,), nfft=nfft, requires_grad=False, device=device
+    )
     attenuation.assign_value(attenuation_values)
     print(f"Room 1 RT (1 kHz): {short_rt_1khz:.2f} s, Room 2: {long_rt_1khz:.2f} s")
     return (attenuation,)
@@ -213,9 +223,12 @@ def _(
     output_gain,
     system,
 ):
-    feedback = system.Series(OrderedDict({"mixing_matrix": mixing_matrix, "attenuation": attenuation}))
+    feedback = system.Series(
+        OrderedDict({"mixing_matrix": mixing_matrix, "attenuation": attenuation})
+    )
     feedback_loop = system.Recursion(fF=delays, fB=feedback)
-    fdn = system.Series(OrderedDict(
+    fdn = system.Series(
+        OrderedDict(
             {
                 "input_gain": input_gain,
                 "feedback_loop": feedback_loop,
@@ -223,7 +236,9 @@ def _(
             }
         )
     )
-    model = system.Shell(core=fdn, input_layer=dsp.FFT(nfft), output_layer=dsp.iFFT(nfft))
+    model = system.Shell(
+        core=fdn, input_layer=dsp.FFT(nfft), output_layer=dsp.iFFT(nfft)
+    )
     print("FDN built.")
     return (model,)
 
@@ -253,8 +268,7 @@ def _(mo):
 
 @app.cell
 def _(N1, feedback_matrix, fs, ir, mo, np, plt, pyFDN):
-    fig = plt.figure(figsize=(15, 5))
-
+    plt.figure(figsize=(15, 5))
 
     # Plot 1: Impulse responses
     ax1 = plt.subplot(1, 3, 1)

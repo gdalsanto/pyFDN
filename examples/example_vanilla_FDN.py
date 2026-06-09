@@ -24,12 +24,13 @@ def _(mo):
 @app.cell
 def _():
     from collections import OrderedDict
+
     import matplotlib.pyplot as plt
     import numpy as np
     import torch
+    from flamo.processor import dsp, system
 
     import pyFDN
-    from flamo.processor import dsp, system
 
     return OrderedDict, dsp, np, plt, pyFDN, system, torch
 
@@ -124,13 +125,14 @@ def _(fs, ir_altered, ir_original, mo, np, plt, pyFDN):
     plt.tight_layout()
     plt.show()
 
-
-    mo.vstack([
-        mo.md("Original:"),
-        mo.audio(np.asanyarray(ir_original), fs),
-        mo.md("Altered:"),
-        mo.audio(np.asarray(ir_altered), fs)
-    ])
+    mo.vstack(
+        [
+            mo.md("Original:"),
+            mo.audio(np.asanyarray(ir_original), fs),
+            mo.md("Altered:"),
+            mo.audio(np.asarray(ir_altered), fs),
+        ]
+    )
     return
 
 
@@ -155,7 +157,7 @@ def _(fs, mo, model, np, torch):
         with path.open("rb") as f:
             dry, file_fs = sf.read(f, dtype="float64")
     except Exception:
-        raise FileNotFoundError("pyFDN.audio/synth_dry.wav not found.")
+        raise FileNotFoundError("pyFDN.audio/synth_dry.wav not found.") from None
     dry = dry[:, 0] if dry.ndim > 1 else dry
     if file_fs != fs:
         from scipy.signal import resample
@@ -169,13 +171,14 @@ def _(fs, mo, model, np, torch):
     with torch.no_grad():  # pad with zeros to avoid wrap around
         wet = model(x).squeeze().cpu().numpy()
 
-
-    mo.vstack([
-        mo.md("Dry:"),
-        mo.audio(np.asanyarray(dry), fs),
-        mo.md("Wet:"),
-        mo.audio(np.asarray(wet), fs)
-    ])
+    mo.vstack(
+        [
+            mo.md("Dry:"),
+            mo.audio(np.asanyarray(dry), fs),
+            mo.md("Wet:"),
+            mo.audio(np.asarray(wet), fs),
+        ]
+    )
     return
 
 

@@ -209,6 +209,74 @@ def echo_density(
     return float(t_abel), echo_dens
 
 
+def estimate_rt_bands(
+    ir: ArrayLike,
+    fs: float,
+    fc: float = 1000.0,
+    start: float = -4.0,
+    n: int = 8,
+    filter_order: int = 8,
+    decay_db: float = 30.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Estimate RT60 in octave bands via Butterworth bandpass filtering.
+
+    Filters the impulse response into octave bands using
+    ``pyroomacoustics.bandpass_filterbank``, then estimates RT60 per band
+    using ``pyroomacoustics.measure_rt60`` (extrapolated from ``decay_db``).
+
+    Default bands: 63, 125, 250, 500, 1000, 2000, 4000, 8000 Hz (``start=-4, n=8``).
+    Bands whose upper edge exceeds ``fs/2`` are dropped.
+
+    Parameters
+    ----------
+    ir : array-like, 1-D
+        Impulse response.
+    fs : float
+        Sampling rate in Hz.
+    fc : float
+        Octave-band reference centre frequency in Hz (default 1000).
+    start : float
+        Octave offset of the lowest band relative to ``fc`` (default -4 → 62.5 Hz).
+    n : int
+        Number of octave bands (default 8).
+    filter_order : int
+        Butterworth filter order (default 8).
+    decay_db : float
+        Decay range in dB used for the linear fit (default 30, i.e. RT30→RT60).
+
+    Returns
+    -------
+    rt : (n_bands,) ndarray
+        Estimated RT60 in seconds per band.
+    f_centre : (n_bands,) ndarray
+        Centre frequencies in Hz corresponding to each RT value.
+    """
+    try:
+        import pyroomacoustics as pra
+    except ImportError as exc:
+        raise ImportError(
+            "estimate_rt_bands requires pyroomacoustics (pip install pyroomacoustics)"
+        ) from exc
+
+    from scipy.signal import sosfilt
+
+    ir = np.asarray(ir, dtype=float).ravel()
+    bands, f_centre = pra.octave_bands(fc=fc, start=start, n=n)
+
+    # drop bands whose upper edge is at or above Nyquist
+    valid = bands[:, 1] < fs / 2
+    bands = bands[valid]
+    f_centre = f_centre[valid]
+
+    sos_bank = pra.bandpass_filterbank(bands, fs=fs, order=filter_order, output="sos")
+    rt = np.zeros(len(f_centre))
+    for k, sos in enumerate(sos_bank):
+        ir_band = sosfilt(sos, ir)
+        rt[k] = pra.measure_rt60(ir_band, fs=fs, decay_db=decay_db)
+
+    return rt, f_centre
+
+
 def one_pole_absorption(
     rt_dc: float, rt_ny: float, delays: ArrayLike, fs: float
 ) -> np.ndarray:

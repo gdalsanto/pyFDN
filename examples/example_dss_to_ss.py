@@ -32,6 +32,7 @@ def _():
     import matplotlib.pyplot as plt
     import numpy as np
     from scipy.signal import dimpulse, dlti, ss2tf
+
     import pyFDN
 
     np.random.seed(1)

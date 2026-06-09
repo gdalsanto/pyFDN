@@ -43,8 +43,9 @@ def _(mo):
 
 @app.cell
 def _():
-    import numpy as np
     import matplotlib.pyplot as plt
+    import numpy as np
+
     import pyFDN
     from pyFDN.auxiliary.allpass import (
         is_allpass,
