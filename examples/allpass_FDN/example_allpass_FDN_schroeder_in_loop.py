@@ -160,12 +160,6 @@ def _(Fs, N, nfft, np, pyFDN):
 
 
 @app.cell
-def _(delays_fdn):
-    delays_fdn  # noqa: B018
-    return
-
-
-@app.cell
 def _(Fs, go, ir_fdn, mo, np, pyFDN):
     _t = np.arange(len(ir_fdn)) / Fs
     _fig = go.Figure()
@@ -273,8 +267,7 @@ def _(model_fdn_ap, pyFDN):
         print(n["path"], n["type"], n["name"])
 
     # Draw flowchart
-    g = pyFDN.draw_flamo_graph(model_fdn_ap)
-    g  # noqa: B018
+    pyFDN.draw_flamo_graph(model_fdn_ap)
     return
 
 

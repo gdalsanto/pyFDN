@@ -32,6 +32,7 @@ dependencies = [
   "scipy",
   "flamo>=0.2.13",
   "flareverb",
+  "pyroomacoustics",
 ]
 
 [project.optional-dependencies]

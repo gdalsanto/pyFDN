@@ -249,8 +249,6 @@ def _(N, copy, delay_module, device, model_delay_matrix, np, rng, torch):
     delays_in_swapped = rng.integers(333, 2333, size=N).astype(np.int64)
     delays_out_swapped = rng.integers(333, 2333, size=N).astype(np.int64)
 
-    delays_swapped + delays_in_swapped + delays_out_swapped
-
     # swap feedforward and feedback
     model_swapped = copy.deepcopy(model_delay_matrix)
     feedback_loop_swapped = model_swapped.get_core().branchB.feedback_loop
