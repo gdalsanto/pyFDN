@@ -6,6 +6,7 @@ __version__ = "0.1.0"
 __all__ = [
     # dsp
     "FeedbackDelay",
+    "FIRMatrixFilter",
     # acoustics
     "absorption_filters",
     "echo_density",
@@ -26,6 +27,7 @@ __all__ = [
     "anderson_matrix",
     "complete_orthogonal",
     "construct_cascaded_paraunitary_matrix",
+    "construct_paraunitary_from_elementals",
     "construct_velvet_feedback_matrix",
     "degree_one_lossless",
     "fdn_matrix_gallery",
@@ -215,6 +217,7 @@ from .auxiliary.utils import (
 )
 
 # dsp components
+from .dsp.dfilt_matrix import FIRMatrixFilter
 from .dsp.feedback_delay import FeedbackDelay
 from .generate.allpass_FDN import allpass_completion
 from .generate.allpass_FDN.allpass_completion import (
@@ -242,6 +245,9 @@ from .generate.anderson_matrix import anderson_matrix
 from .generate.complete_orthogonal import complete_orthogonal
 from .generate.construct_cascaded_paraunitary_matrix import (
     construct_cascaded_paraunitary_matrix,
+)
+from .generate.construct_paraunitary_from_elementals import (
+    construct_paraunitary_from_elementals,
 )
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from .generate.degree_one_lossless import degree_one_lossless

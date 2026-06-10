@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
 from numpy.typing import ArrayLike
 
 
@@ -179,9 +180,9 @@ def plot_impulse_response_matrix(
     title: str | None = None,
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
-    fig: plt.Figure | None = None,
+    fig: Figure | None = None,
     **plot_kwargs: Any,
-) -> tuple[plt.Figure, np.ndarray, np.ndarray]:
+) -> tuple[Figure, np.ndarray, np.ndarray]:
     """Plot matrix of impulse responses in a subplot grid (out x in).
 
     Parameters
