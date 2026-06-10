@@ -6,31 +6,10 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.signal import sosfilt, sosfilt_zi
 
 from pyFDN.dsp.dfilt_matrix import FIRMatrixFilter
 from pyFDN.dsp.feedback_delay import FeedbackDelay
-
-
-def _normalize_absorption_sos(absorption_filters: ArrayLike, n: int) -> np.ndarray:
-    """Bring per-delay-line SOS filters to shape (N, n_sections, 6).
-
-    Accepted inputs:
-      - (6, N): one section per delay line (``one_pole_absorption`` convention);
-      - (n_sections, 6, N): section cascade per delay line;
-      - (N, n_sections, 6): scipy ``sosfilt`` convention per line.
-    """
-    sos = np.asarray(absorption_filters, dtype=float)
-    if sos.ndim == 2 and sos.shape[0] == 6 and sos.shape[1] == n:
-        return np.ascontiguousarray(sos.T[:, None, :])
-    if sos.ndim == 3 and sos.shape[1] == 6 and sos.shape[2] == n:
-        return np.ascontiguousarray(sos.transpose(2, 0, 1))
-    if sos.ndim == 3 and sos.shape[0] == n and sos.shape[2] == 6:
-        return np.ascontiguousarray(sos)
-    raise ValueError(
-        "absorption_filters must have shape (6, N), (n_sections, 6, N) "
-        f"or (N, n_sections, 6); got {sos.shape} for N={n}"
-    )
+from pyFDN.dsp.sos_filter_bank import SOSFilterBank
 
 
 def process_fdn(
@@ -62,7 +41,7 @@ def process_fdn(
     B, C, D : array
         Static input, output, and direct gains.
     absorption_filters : array, optional
-        Per-delay-line SOS filters; see ``_normalize_absorption_sos`` for
+        Per-delay-line SOS filters; see :class:`pyFDN.dsp.SOSFilterBank` for
         accepted shapes. Applied to the delay outputs inside the loop.
     extra_matrix : object, optional
         Object with a ``filter(block) -> block`` method applied after the
@@ -97,13 +76,9 @@ def process_fdn(
         raise ValueError("A must be a 2-D (static) or 3-D (FIR) matrix")
 
     if absorption_filters is not None:
-        sos_per_line = _normalize_absorption_sos(absorption_filters, n)
-        sos_state = [
-            sosfilt_zi(sos_per_line[i]) * 0.0 for i in range(n)
-        ]  # zero initial state
+        absorption: SOSFilterBank | None = SOSFilterBank(absorption_filters, n)
     else:
-        sos_per_line = None
-        sos_state = []
+        absorption = None
 
     max_block_size = min(int(2**12), int(np.min(delays_arr)))
     delay_bank = FeedbackDelay(delays_arr, max_block_size)
@@ -118,14 +93,8 @@ def process_fdn(
         block_in = x[start : start + block_size, :]
 
         delay_out = delay_bank.get_values(block_size)  # (block, N)
-        if sos_per_line is not None:
-            for i in range(n):
-                filtered, sos_state[i] = sosfilt(
-                    sos_per_line[i],
-                    np.ascontiguousarray(delay_out[:, i]),
-                    zi=sos_state[i],
-                )
-                delay_out[:, i] = filtered
+        if absorption is not None:
+            delay_out = absorption.filter(delay_out)
 
         if feedback_filter is not None:
             feedback = feedback_filter.filter(delay_out)

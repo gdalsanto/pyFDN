@@ -9,6 +9,7 @@ __all__ = [
     # dsp
     "FeedbackDelay",
     "FIRMatrixFilter",
+    "SOSFilterBank",
     # acoustics
     "absorption_filters",
     "echo_density",
@@ -34,6 +35,7 @@ __all__ = [
     "degree_one_lossless",
     "fdn_matrix_gallery",
     "fdn_system_gallery",
+    "filter_matrix_gallery",
     "FDNSystem",
     "householder_matrix",
     "is_almost_zero",
@@ -225,6 +227,7 @@ from .auxiliary.utils import (
 # dsp components
 from .dsp.dfilt_matrix import FIRMatrixFilter
 from .dsp.feedback_delay import FeedbackDelay
+from .dsp.sos_filter_bank import SOSFilterBank
 from .generate.allpass_FDN import allpass_completion
 from .generate.allpass_FDN.allpass_completion import (
     apply_diagonal_similarity,
@@ -261,6 +264,7 @@ from .generate.fdn_matrix_gallery import (
     FDNSystem,
     fdn_matrix_gallery,
     fdn_system_gallery,
+    filter_matrix_gallery,
 )
 from .generate.householder_matrix import householder_matrix
 from .generate.is_almost_zero import is_almost_zero

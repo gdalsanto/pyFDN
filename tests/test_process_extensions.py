@@ -97,6 +97,38 @@ def test_fir_matrix_filter_block_consistency() -> None:
     np.testing.assert_allclose(static, x @ coeffs[:, :, 0].T, atol=1e-12)
 
 
+def test_sos_filter_bank_block_consistency_and_shapes() -> None:
+    from scipy.signal import sosfilt
+
+    np.random.seed(4)
+    n = 3
+    fs = 48000
+    delays = np.array([100, 200, 300])
+    sos_6n = pyFDN.one_pole_absorption(0.3, 0.1, delays, fs)  # (6, N)
+    x = np.random.randn(200, n)
+
+    # block-wise filtering with persistent state matches one-shot sosfilt
+    bank = pyFDN.SOSFilterBank(sos_6n, n)
+    parts = [bank.filter(x[i : i + 32]) for i in range(0, 200, 32)]
+    blockwise = np.vstack(parts)
+    for i in range(n):
+        one_shot = sosfilt(
+            np.ascontiguousarray(sos_6n[:, i]).reshape(1, 6),
+            np.ascontiguousarray(x[:, i]),
+        )
+        np.testing.assert_allclose(blockwise[:, i], one_shot, atol=1e-12)
+
+    # all accepted coefficient layouts are equivalent
+    sos_n16 = sos_6n.T[:, None, :]  # (N, 1, 6)
+    sos_16n = sos_6n[None, :, :]  # (1, 6, N)
+    for layout in (sos_n16, sos_16n):
+        out = pyFDN.SOSFilterBank(layout, n).filter(x)
+        np.testing.assert_allclose(out, blockwise, atol=1e-12)
+
+    with pytest.raises(ValueError, match="shape"):
+        pyFDN.SOSFilterBank(np.zeros((5, n)), n)
+
+
 def test_construct_paraunitary_from_elementals_is_paraunitary() -> None:
     np.random.seed(5)
     n, degree = 3, 5

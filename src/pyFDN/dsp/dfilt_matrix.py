@@ -3,8 +3,8 @@
 The MATLAB toolbox wraps every matrix entry in a ``dfilt`` object; here only
 the FIR-matrix case is needed (used for paraunitary / velvet feedback
 matrices). Scalar matrices are handled directly by ``process_fdn`` and IIR
-per-delay-line absorption is handled with SOS filters, so neither needs this
-class.
+per-delay-line absorption is handled by
+:class:`pyFDN.dsp.sos_filter_bank.SOSFilterBank`, so neither needs this class.
 """
 
 from __future__ import annotations

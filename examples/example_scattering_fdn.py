@@ -17,13 +17,12 @@ def _(mo):
     # Scattering feedback matrices
 
     Demonstration of different types of scattering (FIR paraunitary) feedback
-    matrices:
+    matrices from `filter_matrix_gallery`:
 
-    - **RandomDense** — cascaded paraunitary matrix (`construct_cascaded_paraunitary_matrix`);
-    - **Velvet** — sparse velvet-noise feedback matrix (`construct_velvet_feedback_matrix`);
-    - **FromElementals** — cascade of degree-one lossless factors
-      (`construct_paraunitary_from_elementals`);
-    - **NoScatter** — plain static orthogonal matrix.
+    - **RandomDense** — dense cascaded paraunitary matrix;
+    - **Velvet** — sparse velvet-noise feedback matrix;
+    - **FromElementals** — cascade of degree-one lossless factors;
+    - **NoScatter** — plain static orthogonal matrix (for comparison).
 
     Validation is performed with the normalized echo density measure
     (Abel & Huang 2006): scattering matrices build up echo density much faster
@@ -74,23 +73,26 @@ def _(np, pyFDN):
     num_stages = 3
     sparsity = 3
     feedback_matrices = {
-        "RandomDense": pyFDN.construct_cascaded_paraunitary_matrix(
-            num_delays, num_stages
-        )[0],
-        "Velvet": pyFDN.construct_velvet_feedback_matrix(
-            num_delays, num_stages, sparsity
-        )[0],
-        "FromElementals": pyFDN.construct_paraunitary_from_elementals(
-            num_delays, num_delays * num_stages
-        )[0],
-        "NoScatter": pyFDN.random_orthogonal(num_delays),
+        _name: pyFDN.filter_matrix_gallery(
+            num_delays, _name, num_stages=num_stages, sparsity=sparsity
+        )
+        for _name in pyFDN.filter_matrix_gallery()
     }
+    feedback_matrices["NoScatter"] = pyFDN.random_orthogonal(num_delays)
 
     print(f"Delays: {delays}")
     for _name, _mat in feedback_matrices.items():
         _taps = _mat.shape[2] if _mat.ndim == 3 else 1
         print(f"{_name}: {_taps} taps")
-    return delays, direct, feedback_matrices, fs, input_gain, ir_len, output_gain
+    return (
+        delays,
+        direct,
+        feedback_matrices,
+        fs,
+        input_gain,
+        ir_len,
+        output_gain,
+    )
 
 
 @app.cell(hide_code=True)
@@ -105,7 +107,16 @@ def _(mo):
 
 
 @app.cell
-def _(delays, direct, feedback_matrices, fs, input_gain, ir_len, output_gain, pyFDN):
+def _(
+    delays,
+    direct,
+    feedback_matrices,
+    fs,
+    input_gain,
+    ir_len,
+    output_gain,
+    pyFDN,
+):
     irs = {}
     echo_densities = {}
     for _name, _mat in feedback_matrices.items():

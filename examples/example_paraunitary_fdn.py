@@ -66,8 +66,8 @@ def _(np, pyFDN):
     output_gain = np.eye(1, num_delays)
     direct = np.zeros((1, 1))
 
-    feedback_matrix, feedback_inverse = pyFDN.construct_cascaded_paraunitary_matrix(
-        num_delays, num_stages, matrix_type="random"
+    feedback_matrix = pyFDN.filter_matrix_gallery(
+        num_delays, "RandomDense", num_stages=num_stages, stage_matrix_type="random"
     )
     print(f"Delays: {delays} (sum = {delays.sum()})")
     print(f"Feedback matrix: {feedback_matrix.shape[2]} taps")
