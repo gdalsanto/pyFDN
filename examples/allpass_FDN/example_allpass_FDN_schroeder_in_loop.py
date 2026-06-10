@@ -267,7 +267,7 @@ def _(model_fdn_ap, pyFDN):
         print(n["path"], n["type"], n["name"])
 
     # Draw flowchart
-    pyFDN.draw_flamo_graph(model_fdn_ap)
+    pyFDN.plot_flamo_graph(model_fdn_ap)
     return
 
 

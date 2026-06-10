@@ -200,7 +200,21 @@ def _(
     rir = np.asarray(model.get_time_response().squeeze())[:rir_len]
     rir /= np.max(np.abs(rir)) + 1e-300
     print(f"RIR computed: {rir_len} samples, peak at sample {np.argmax(np.abs(rir))}")
-    return (rir,)
+    return model, rir
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Visualize DSP graph
+    """)
+    return
+
+
+@app.cell
+def _(model, pyFDN):
+    pyFDN.plot_flamo_graph(model)
+    return
 
 
 @app.cell(hide_code=True)

@@ -206,8 +206,7 @@ def _(mo):
 
 @app.cell
 def _(model, pyFDN):
-    _g = pyFDN.draw_flamo_graph(model)
-    _g  # noqa: B018
+    pyFDN.plot_flamo_graph(model)
     return
 
 
