@@ -1,5 +1,7 @@
 """Top-level package for pyFDN."""
 
+from importlib import import_module
+
 __author__ = "Facundo Franchino"
 __version__ = "0.1.0"
 
@@ -103,6 +105,9 @@ __all__ = [
     "plot_matrix",
     "plot_system_matrix",
     "plot_spectrogram",
+    "downsample_minmax",
+    "downsample_plotly_trace",
+    "downsampled_scatter",
     # FLAMO graph
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
@@ -137,8 +142,6 @@ __all__ = [
 ]
 
 # acoustics and absorption
-# Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
-from . import auxiliary
 from .auxiliary.acoustics import (
     absorption_filters,
     absorption_to_rt,
@@ -188,6 +191,9 @@ from .auxiliary.math import (
 
 # plotting
 from .auxiliary.plot import (
+    downsample_minmax,
+    downsample_plotly_trace,
+    downsampled_scatter,
     plot_impulse_response_matrix,
     plot_matrix,
     plot_spectrogram,
@@ -298,4 +304,5 @@ from .translate.impz_to_res import impz_to_res
 from .translate.mtf_to_impz import mtf_to_impz
 from .translate.pr_to_impz import pr_to_impz
 
-allpass = auxiliary.allpass
+# Expose allpass submodule for pyFDN.allpass.is_uniallpass etc.
+allpass = import_module(".auxiliary.allpass", __name__)

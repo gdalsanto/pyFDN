@@ -37,14 +37,13 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    import plotly.graph_objects as go
     import plotly.io as pio
     from plotly.subplots import make_subplots
 
     import pyFDN
 
     pio.renderers.default = "sphinx_gallery"
-    return go, make_subplots, np, pyFDN
+    return make_subplots, np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -72,7 +71,6 @@ def _(np, pyFDN):
     all_delays = np.round(
         base_delays[None, :] * np.array(delay_scales)[:, None]
     ).astype(int)
-    print(f"Gain per sample for RT60 = {rt60} s: {gain_per_sample:.6f}")
     return all_delays, fs, gain_per_sample, ir_len, sizes
 
 
@@ -89,8 +87,9 @@ def _(mo):
 
 
 @app.cell
-def _(all_delays, gain_per_sample, ir_len, np, pyFDN, sizes):
+def _(all_delays, fs, gain_per_sample, ir_len, np, pyFDN, sizes):
     rirs = {}
+    density = {}
     num_modes = {}
     for _n in sizes:
         for _s in range(all_delays.shape[0]):
@@ -105,12 +104,13 @@ def _(all_delays, gain_per_sample, ir_len, np, pyFDN, sizes):
                 np.ones((1, _n)),
                 np.zeros((1, 1)),
             )[:, 0, 0]
+            _, density[(_n, _s)] = pyFDN.echo_density(rirs[(_n, _s)], 1024, fs, 0)
             num_modes[(_n, _s)] = int(_delays.sum())
 
     for (_n, _s), _modes in sorted(num_modes.items()):
         _mean_delay = int(np.mean(all_delays[_s, :_n]))
         print(f"N = {_n:2d}, mean delay = {_mean_delay:4d}: {_modes:5d} modes")
-    return (rirs,)
+    return density, rirs
 
 
 @app.cell(hide_code=True)
@@ -128,13 +128,13 @@ def _(mo):
 
 
 @app.cell
-def _(all_delays, fs, go, make_subplots, np, pyFDN, rirs, sizes):
+def _(all_delays, density, fs, make_subplots, np, pyFDN, rirs, sizes):
     fig = make_subplots(
         rows=3,
         cols=3,
         shared_xaxes=True,
         subplot_titles=[
-            f"N = {_n}, mean delay = {int(np.mean(all_delays[_s, :_n]))}"
+            f"N = {_n}<br>mean delay = {int(np.mean(all_delays[_s, :_n]))}"
             for _s in range(3)
             for _n in sizes
         ],
@@ -145,11 +145,12 @@ def _(all_delays, fs, go, make_subplots, np, pyFDN, rirs, sizes):
     for _s in range(3):
         for _col, _n in enumerate(sizes, start=1):
             _rir = rirs[(_n, _s)]
-            _, _dens = pyFDN.echo_density(_rir, 1024, fs, 0)
+            _dens = density[(_n, _s)]
             fig.add_trace(
-                go.Scatter(
+                pyFDN.downsampled_scatter(
                     x=t_axis,
-                    y=pyFDN.peak_normalize(_rir),
+                    y=pyFDN.mulaw_encode(pyFDN.peak_normalize(_rir)),
+                    max_points=10_000,
                     mode="lines",
                     line={"color": "gray", "width": 0.5},
                     showlegend=False,
@@ -158,9 +159,10 @@ def _(all_delays, fs, go, make_subplots, np, pyFDN, rirs, sizes):
                 col=_col,
             )
             fig.add_trace(
-                go.Scatter(
+                pyFDN.downsampled_scatter(
                     x=t_axis,
                     y=_dens,
+                    max_points=100,
                     mode="lines",
                     line={"color": "crimson", "width": 1.5},
                     showlegend=False,
@@ -209,14 +211,14 @@ def _(all_delays, fs, mo, np, pyFDN, rirs, sizes):
                         mo.audio(
                             np.asarray(0.5 * pyFDN.peak_normalize(rirs[(_n, _s)])),
                             rate=fs,
-                        ).style({"width": "100%", "zoom": "0.82"}),
+                        ).style({"width": "100%", "zoom": "0.62"}),
                     ],
                     gap=0.4,
-                ).style({"min-width": "210px", "flex": "1 1 210px"})
+                ).style({"min-width": "110px", "flex": "1 1 110px"})
             )
-        _rows.append(mo.hstack(_players, wrap=True, gap=0.75))
+        _rows.append(mo.hstack(_players, wrap=True, gap=0.1))
 
-    mo.vstack(_rows, gap=1)
+    mo.vstack(_rows, gap=0.1)
     return
 
 
