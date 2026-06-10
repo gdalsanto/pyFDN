@@ -62,16 +62,18 @@ def _(mo):
 def _(np, pyFDN):
     np.random.seed(1)
     fs = 48000
-    ir_len = 2 * fs
     types = ["Proportional", "Spread"]
+
+    rt60 = 1.0  # seconds
+    ir_len = int(rt60 * fs)
+    gain_per_sample = pyFDN.rt_to_gain_per_sample(rt60, fs)
 
     num_delays = 8
     delays = np.random.randint(100, 301, num_delays)
     input_gain = np.eye(num_delays, 1)
     output_gain = np.eye(1, num_delays)
-    direct = np.random.randn(1, 1)
+    direct = np.zeros((1, 1))
 
-    gain_per_sample = 0.9999
     gain_matrix = np.diag(gain_per_sample ** delays.astype(float))
     feedback_matrix = {
         "Proportional": pyFDN.random_orthogonal(num_delays) @ gain_matrix,
@@ -88,6 +90,7 @@ def _(np, pyFDN):
         input_gain,
         ir_len,
         output_gain,
+        rt60,
         types,
     )
 
@@ -105,7 +108,16 @@ def _(mo):
 
 
 @app.cell
-def _(delays, direct, feedback_matrix, input_gain, ir_len, output_gain, pyFDN, types):
+def _(
+    delays,
+    direct,
+    feedback_matrix,
+    input_gain,
+    ir_len,
+    output_gain,
+    pyFDN,
+    types,
+):
     poles = {}
     edcs = {}
     for _type in types:
@@ -116,7 +128,7 @@ def _(delays, direct, feedback_matrix, input_gain, ir_len, output_gain, pyFDN, t
         _ir = pyFDN.pr_to_impz(
             _res, _pol, _direct_term, _is_pair, ir_len, mode="lowMemory"
         )[:, 0, 0]
-        edcs[_type] = pyFDN.edc(_ir)
+        edcs[_type] = pyFDN.sq_to_db(pyFDN.edc(_ir))
         print(f"{_type}: {_pol.size} poles")
     return edcs, poles
 
@@ -161,7 +173,7 @@ def _(mo):
 
 
 @app.cell
-def _(fs, go, np, poles, pyFDN, types):
+def _(fs, go, np, poles, pyFDN, rt60, types):
     fig_poles = go.Figure()
     for _type in types:
         _pol = poles[_type]
@@ -179,6 +191,7 @@ def _(fs, go, np, poles, pyFDN, types):
         xaxis={"title": "Pole angle (rad)"},
         yaxis={"title": "Pole T60 (s)"},
         template="plotly_white",
+        yaxis_range=[0, rt60 * 1.5],
         height=420,
     )
     fig_poles.show()
