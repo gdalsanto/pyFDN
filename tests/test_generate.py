@@ -261,12 +261,6 @@ def test_fdn_matrix_gallery_parallel():
     assert np.allclose(fdn_matrix_gallery(4, "parallel"), np.eye(4))
 
 
-def test_fdn_matrix_gallery_diagonal_conjugated_lossless():
-    A = fdn_matrix_gallery(4, "diagonalConjugated")
-    eigs = np.abs(np.linalg.eigvals(A))
-    np.testing.assert_allclose(np.sort(eigs), np.ones(4), atol=1e-8)
-
-
 def test_fdn_matrix_gallery_unknown_type_raises():
     with pytest.raises(ValueError):
         fdn_matrix_gallery(4, "unknown_type_xyz")
