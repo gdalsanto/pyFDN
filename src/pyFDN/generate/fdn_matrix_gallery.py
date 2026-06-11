@@ -231,9 +231,7 @@ def fdn_matrix_gallery(
 
         from ..auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
 
-        return tiny_rotation_matrix(
-            N, 0.01, log_matrix=torch.randn(N, N, dtype=torch.float64)
-        ).numpy()
+        return tiny_rotation_matrix(N, 0.01, dtype=torch.float64).numpy()
 
     if matrix_type == "Anderson":
         from .anderson_matrix import anderson_matrix

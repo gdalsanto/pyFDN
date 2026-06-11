@@ -44,6 +44,7 @@ __all__ = [
     "nearest_sign_agnostic_orthogonal",
     "random_matrix_shift",
     "random_orthogonal",
+    "rotation_matrix_from_angles",
     "schroeder_reverberator",
     "shift_matrix",
     "shift_matrix_distribute",
@@ -212,7 +213,10 @@ from .auxiliary.plot import (
 )
 
 # tiny rotation matrix
-from .auxiliary.tiny_rotation_matrix import tiny_rotation_matrix
+from .auxiliary.tiny_rotation_matrix import (
+    rotation_matrix_from_angles,
+    tiny_rotation_matrix,
+)
 
 # general utilities
 from .auxiliary.utils import (
