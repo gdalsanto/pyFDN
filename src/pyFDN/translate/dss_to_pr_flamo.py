@@ -786,7 +786,18 @@ def flamo_to_pr(
     poles_torch = 1.0 / roots_w
     # Convert to numpy only for scipy.optimize.linear_sum_assignment in reduce_conjugate_pairs
     poles_np = _to_numpy(poles_torch)
-    poles, is_conjugate, non_paired = reduce_conjugate_pairs(poles_np, verbose=verbose)
+    # Scale pairing tolerances to the achieved pole accuracy: refinement stops
+    # at quality_threshold and cannot beat the working precision (a float32
+    # model refines only to ~eps(float32)). With the float64-scale defaults,
+    # conjugate pairs and real poles would be misclassified as unpaired and
+    # dropped.
+    tol = max(1e-8, 100 * torch.finfo(dtype).eps, float(quality_threshold))
+    poles, is_conjugate, non_paired = reduce_conjugate_pairs(
+        poles_np,
+        tol_real=tol,
+        tol_pair=tol,
+        verbose=verbose,
+    )
     meta_data["nonPairedPoles"] = non_paired
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(
@@ -823,7 +834,12 @@ def dss_to_pr_flamo(
 
     Builds a FLAMO model with :func:`dss_to_flamo`, then runs :func:`flamo_to_pr`
     on it. For an existing FLAMO model use :func:`flamo_to_pr` directly.
+
+    ``dtype`` defaults to ``torch.float64``: pole refinement and conjugate
+    pairing need double precision; float32 stalls at ~1e-7 accuracy.
     """
+    if dtype is None:
+        dtype = torch.float64
     delays_arr = np.asarray(delays, dtype=int).ravel()
     model = dss_to_flamo(
         A=np.asarray(A, dtype=np.float64),
