@@ -118,7 +118,7 @@ __all__ = [
     # FLAMO graph
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
-    "draw_flamo_graph",
+    "plot_flamo_graph",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -174,9 +174,9 @@ from .auxiliary.allpass import (
 # delay utilities
 from .auxiliary.delay import matrix_delay_approximation, mgrpdelay, ms_to_smp
 from .auxiliary.flamo_graph import (
-    draw_flamo_graph,
     flamo_model_to_nodes,
     flamo_nodes_flat,
+    plot_flamo_graph,
 )
 
 # polynomial and matrix maths

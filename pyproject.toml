@@ -40,13 +40,11 @@ examples = [
     "marimo",  # the example notebooks are marimo apps
     "matplotlib>=3.5.0",  # examples build matplotlib figures
     "plotly>=5.0.0",  # examples build plotly figures
-    "graphviz>=0.20",  # draw_flamo_graph (also needs the system 'dot' binary to render)
 ]
 test = [
     "marimo",  # deps to run the example notebooks under test
     "matplotlib>=3.5.0",
     "plotly>=5.0.0",
-    "graphviz>=0.20",
     "pytest>=7.0.0",  # testing
     "pytest-cov>=4.0.0",  # coverage plugin for pytest
     "coverage>=7.0.0",  # coverage tooling
@@ -75,7 +73,6 @@ docs = [
     "pandoc>=2.0",
     "plotly>=5.0.0",
     "matplotlib>=3.5.0",
-    "graphviz>=0.20",  # draw_flamo_graph cells in the static marimo export (needs system 'dot' too)
 ]
 
 [project.urls]
@@ -110,7 +107,6 @@ disable_error_code = ["no-any-return"]
 # Third-party packages without complete PEP 561 typing metadata
 module = [
     "flamo.*",
-    "graphviz.*",
     "plotly.*",
     "pyroomacoustics.*",
     "scipy.*",

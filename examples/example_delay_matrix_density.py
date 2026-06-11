@@ -125,6 +125,7 @@ def _(
     feedback_matrix,
     gain_per_sample,
     model,
+    pyFDN,
     system,
     torch,
     total_delay,
@@ -152,6 +153,8 @@ def _(
     )
 
     ir_vanilla = model.get_time_response().flatten()
+
+    pyFDN.plot_flamo_graph(model)
     return delay_module, device, ir_vanilla, n_fft
 
 
@@ -179,6 +182,7 @@ def _(
     model,
     n_fft,
     np,
+    pyFDN,
     system,
     torch,
 ):
@@ -229,6 +233,8 @@ def _(
     feedback_loop_delay_matrix.feedback = delay_matrix_chain
 
     ir_delay_matrix = model_delay_matrix.get_time_response().flatten()
+
+    pyFDN.plot_flamo_graph(model_delay_matrix)
     return ir_delay_matrix, model_delay_matrix
 
 
@@ -243,7 +249,17 @@ def _(mo):
 
 
 @app.cell
-def _(N, copy, delay_module, device, model_delay_matrix, np, rng, torch):
+def _(
+    N,
+    copy,
+    delay_module,
+    device,
+    model_delay_matrix,
+    np,
+    pyFDN,
+    rng,
+    torch,
+):
     # generate new delays for swapped model
     delays_swapped = rng.integers(333, 1333, size=N).astype(np.int64)
     delays_in_swapped = rng.integers(333, 2333, size=N).astype(np.int64)
@@ -274,6 +290,8 @@ def _(N, copy, delay_module, device, model_delay_matrix, np, rng, torch):
     )
 
     ir_swapped = model_swapped.get_time_response().flatten()
+
+    pyFDN.plot_flamo_graph(model_swapped)
     return (ir_swapped,)
 
 
