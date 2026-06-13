@@ -3,8 +3,6 @@
 Translation of fdnMatrixGallery.m from fdnToolbox.
 """
 
-# TODO: Menzel matrix
-
 from __future__ import annotations
 
 from dataclasses import dataclass
