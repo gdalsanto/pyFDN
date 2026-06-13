@@ -30,6 +30,8 @@ __all__ = [
     "flamo_delay_feedback_matrix",
     "swap_flamo_recursion_paths",
     "flamo_time_response",
+    "flamo_process",
+    "load_audio",
     # matrix generators
     "allpass_in_fdn",
     "anderson_matrix",
@@ -118,6 +120,7 @@ __all__ = [
     "plot_db_per_sample",
     "plot_edc",
     "plot_fdn_parameter",
+    "plot_FDN_build",
     "plot_impulse_response",
     "plot_impulse_response_matrix",
     "plot_matrix",
@@ -185,6 +188,7 @@ from .auxiliary.allpass import (
     poletti_allpass,
     series_allpass,
 )
+from .auxiliary.audio import load_audio
 
 # delay utilities
 from .auxiliary.delay import (
@@ -194,7 +198,7 @@ from .auxiliary.delay import (
     ms_to_smp,
     swap_flamo_recursion_paths,
 )
-from .auxiliary.flamo import flamo_time_response
+from .auxiliary.flamo import flamo_process, flamo_time_response
 from .auxiliary.flamo_graph import (
     FlamoFDNParameters,
     flamo_model_to_fdn_parameters,
@@ -232,6 +236,7 @@ from .auxiliary.plot import (
     downsampled_scatter,
     plot_db_per_sample,
     plot_edc,
+    plot_FDN_build,
     plot_fdn_parameter,
     plot_impulse_response,
     plot_impulse_response_matrix,

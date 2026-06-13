@@ -8,7 +8,14 @@ from .allpass import (
     poletti_allpass,
     series_allpass,
 )
-from .flamo import delay_module, flamo_time_response, gain_module, sos_filter_module
+from .audio import load_audio
+from .flamo import (
+    delay_module,
+    flamo_process,
+    flamo_time_response,
+    gain_module,
+    sos_filter_module,
+)
 from .flamo_graph import (
     FlamoFDNParameters,
     flamo_model_to_fdn_parameters,
@@ -25,6 +32,8 @@ __all__ = [
     "delay_module",
     "sos_filter_module",
     "flamo_time_response",
+    "flamo_process",
+    "load_audio",
     "poletti_allpass",
     "series_allpass",
     "nested_allpass",

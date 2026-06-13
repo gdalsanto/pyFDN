@@ -60,6 +60,71 @@ def flamo_time_response(
     return np.asarray(response)
 
 
+def flamo_process(
+    model,
+    signal: np.ndarray,
+    *,
+    fs: int | None = None,
+    tail_seconds: float = 0.0,
+    dtype=None,
+) -> np.ndarray:
+    """Run a 1-D signal through a FLAMO ``Shell`` model offline.
+
+    Wraps the boilerplate of turning a NumPy signal into the
+    ``(batch, time, channel)`` tensor FLAMO expects, running a no-grad
+    forward pass, and converting the result back to NumPy.
+
+    The model convolves in the frequency domain over a block of length
+    ``nfft`` (read from the model's input layer), so the signal is
+    truncated or zero-padded to ``nfft``. Because that is a *circular*
+    convolution, a long reverb tail can wrap around onto the start of the
+    block; pass ``tail_seconds`` to reserve that much trailing silence for
+    the tail to decay into (requires ``fs``).
+
+    Parameters
+    ----------
+    model
+        FLAMO ``Shell`` whose input layer exposes ``nfft`` (e.g. the output
+        of :func:`pyFDN.dss_to_flamo`).
+    signal : np.ndarray
+        1-D input signal.
+    fs : int, optional
+        Sampling rate, required only when ``tail_seconds > 0``.
+    tail_seconds : float
+        Trailing silence to reserve so the reverb tail does not wrap around.
+    dtype : torch.dtype or None
+        Tensor dtype for the forward pass; defaults to float32.
+
+    Returns
+    -------
+    np.ndarray
+        Squeezed model output on CPU.
+    """
+    if not _HAS_FLAMO:
+        raise ImportError("flamo_process requires flamo (pip install flamo)")
+    import torch
+
+    nfft = int(model.get_inputLayer().nfft)
+    sig = np.asarray(signal, dtype=np.float64).ravel()
+
+    if tail_seconds:
+        if fs is None:
+            raise ValueError("fs is required when tail_seconds > 0")
+        usable = max(0, nfft - int(round(tail_seconds * fs)))
+    else:
+        usable = nfft
+
+    buf = np.zeros(nfft, dtype=np.float64)
+    n = min(len(sig), usable)
+    buf[:n] = sig[:n]
+
+    torch_dtype = torch.float32 if dtype is None else dtype
+    x = torch.as_tensor(buf, dtype=torch_dtype).unsqueeze(0).unsqueeze(-1)
+    with torch.no_grad():
+        wet = model(x)
+    return np.asarray(wet.squeeze().detach().cpu())
+
+
 def gain_module(
     values: np.ndarray,
     nfft: int,

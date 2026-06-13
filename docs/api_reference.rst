@@ -133,6 +133,7 @@ Plotting
    :nosignatures:
 
    pyFDN.plot_db_per_sample
+   pyFDN.plot_FDN_build
    pyFDN.plot_fdn_parameter
    pyFDN.plot_impulse_response
    pyFDN.plot_impulse_response_matrix

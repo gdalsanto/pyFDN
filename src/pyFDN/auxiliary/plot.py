@@ -817,6 +817,42 @@ def plot_fdn_parameter(
     return fig
 
 
+def plot_FDN_build(
+    build: Any,
+    *,
+    nfft: int = 512,
+    zmin: float | None = None,
+    zmax: float | None = None,
+    title: str | None = None,
+) -> Any:
+    """Plot the parameters stored in an :class:`pyFDN.FDNBuild`.
+
+    This is a convenience wrapper around :func:`plot_fdn_parameter`.
+    """
+    post_eq_sos = build.post_eq
+    if post_eq_sos is not None:
+        post_eq_sos = np.asarray(post_eq_sos)
+        if post_eq_sos.ndim == 3:
+            if post_eq_sos.shape[2] != 1:
+                raise ValueError("plot_FDN_build supports post EQ for one output")
+            post_eq_sos = post_eq_sos[:, :, 0]
+
+    return plot_fdn_parameter(
+        build.delays,
+        build.A,
+        build.B,
+        build.C,
+        build.D,
+        attenuation_sos=build.filters,
+        post_eq_sos=post_eq_sos,
+        fs=build.fs,
+        nfft=nfft,
+        zmin=zmin,
+        zmax=zmax,
+        title=title,
+    )
+
+
 def plot_impulse_response(
     *irs: ArrayLike,
     fs: float | None = None,

@@ -26,14 +26,11 @@ def _(mo):
 
 @app.cell
 def _():
-    from importlib.resources import files
-
     import numpy as np
-    import soundfile as sf
 
     import pyFDN
 
-    return files, np, pyFDN, sf
+    return np, pyFDN
 
 
 @app.cell(hide_code=True)
@@ -45,11 +42,8 @@ def _(mo):
 
 
 @app.cell
-def _(files, mo, sf):
-    path = files("pyFDN.audio") / "synth_dry.wav"
-    with path.open("rb") as f:
-        dry, fs = sf.read(f, dtype="float64")
-    dry = dry[:, 0] if dry.ndim > 1 else dry
+def _(mo, pyFDN):
+    dry, fs = pyFDN.load_audio("synth_dry.wav")
 
     print(f"Loaded {len(dry)} samples at {fs} Hz ({len(dry) / fs:.2f} s)")
     mo.vstack([mo.audio(dry, fs)])

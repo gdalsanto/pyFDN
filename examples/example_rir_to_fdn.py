@@ -63,13 +63,8 @@ def _(mo):
 
 
 @app.cell
-def _(np):
-    from importlib.resources import files
-
-    import soundfile as sf
-
-    rir_raw, fs = sf.read(str(files("pyFDN.audio") / "s3_r4_o.wav"))
-    rir = rir_raw[:, 0]
+def _(np, pyFDN):
+    rir, fs = pyFDN.load_audio("s3_r4_o.wav")
     _onset = int(np.argmax(np.abs(rir)))
     rir = rir[_onset:]
     rir = rir / np.linalg.norm(rir)
