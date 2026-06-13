@@ -61,20 +61,28 @@ def _(mo):
 
 @app.cell
 def _(fs, n, np, pyFDN):
-    # Vanilla FDN: random delays + orthogonal feedback matrix + first-order absorption.
-    _delays = np.random.randint(400, 1200, size=n).astype(np.float64)
-    _sos = pyFDN.first_order_absorption(2.0, 0.5, _delays, fs=fs)
-    model = pyFDN.dss_to_flamo(
-        pyFDN.random_orthogonal(n),
-        np.ones((n, 1)),
-        np.ones((1, n)),
-        np.ones((1, 1)),
-        _delays,
-        fs,
-        nfft=2**18,
-        sos_filter=_sos,
+    build = pyFDN.fdn_build_gallery(
+        n,
+        "vanillaFirstOrder",
+        fs=fs,
+        io_type="ones",
+        direct_gain=1.0,
+        rt60=2.0,
+        rt60_nyquist=0.5,
+        rng=42,
     )
-    ir_original = model.get_time_response().flatten()
+    model = pyFDN.dss_to_flamo(
+        build.A,
+        build.B,
+        build.C,
+        build.D,
+        build.delays,
+        build.fs,
+        nfft=2**18,
+        sos_filter=build.filters,
+        output_filter=build.post_eq,
+    )
+    ir_original = pyFDN.flamo_time_response(model).flatten()
     return ir_original, model
 
 
@@ -89,7 +97,7 @@ def _(mo):
 
 
 @app.cell
-def _(OrderedDict, dsp, model, n, np, system, torch):
+def _(OrderedDict, dsp, model, n, np, pyFDN, system, torch):
     core = model.get_core()
     fdn = core.branchA
     feedback_loop = fdn.feedback_loop
@@ -109,7 +117,7 @@ def _(OrderedDict, dsp, model, n, np, system, torch):
         OrderedDict({"delay": delay_module, "diagonal_gain": diagonal_gain})
     )
 
-    ir_altered = model.get_time_response().flatten()
+    ir_altered = pyFDN.flamo_time_response(model).flatten()
     return (ir_altered,)
 
 

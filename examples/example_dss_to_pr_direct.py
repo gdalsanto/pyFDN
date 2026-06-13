@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -24,24 +24,27 @@ def _(mo):
 
 @app.cell
 def _():
-    import matplotlib.pyplot as plt
     import numpy as np
 
     import pyFDN
 
-    return np, plt, pyFDN
+    return np, pyFDN
 
 
 @app.cell
 def _(np, pyFDN):
     np.random.seed(11)
 
-    n = 4
     delays = np.array([41, 53, 67, 79], dtype=int)
-    A = 0.65 * pyFDN.random_orthogonal(n)
-    b = np.eye(n, 1)
-    c = np.eye(1, n)
-    d = np.ones((1, 1))
+    build = pyFDN.fdn_build_gallery(
+        build_type="vanilla",
+        delays=delays,
+        io_type="identity",
+        direct_gain=1.0,
+        feedback_gain=0.65,
+        rng=11,
+    )
+    A, b, c, d, delays = build.A, build.B, build.C, build.D, build.delays
     return A, b, c, d, delays
 
 

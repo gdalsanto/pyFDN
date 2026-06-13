@@ -187,6 +187,50 @@ def _(mo):
     mo.md(r"""
     ---
 
+    # Complete FDN Build Gallery
+
+    `fdn_build_gallery` provides ready-to-render FDN parameters: feedback,
+    input/output/direct matrices, delays, sample rate, and optional loop filters.
+    """)
+    return
+
+
+@app.cell
+def _(pyFDN):
+    build_types = pyFDN.fdn_build_gallery()
+    builds = {}
+    for _type in build_types:
+        _kwargs = {}
+        if _type == "vanillaFirstOrder":
+            _kwargs = {"post_eq_rt60": 1.5, "post_eq_rt60_nyquist": 0.5}
+        builds[_type] = pyFDN.fdn_build_gallery(8, _type, rng=0, **_kwargs)
+    return build_types, builds
+
+
+@app.cell
+def _(build_types, builds, mo):
+    mo.ui.table(
+        [
+            {
+                "Type": _type,
+                "Delay lines": builds[_type].delays.size,
+                "Delay range": (
+                    f"{builds[_type].delays.min()}–{builds[_type].delays.max()}"
+                ),
+                "Filters": "yes" if builds[_type].filters is not None else "no",
+                "Post EQ": "yes" if builds[_type].post_eq is not None else "no",
+            }
+            for _type in build_types
+        ]
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ---
+
     # FDN System Gallery
 
     Overview of full FDN system types available in `pyFDN.fdn_system_gallery`.

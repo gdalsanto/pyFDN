@@ -38,14 +38,16 @@ def _():
     # Impulse response length for comparison
     impulse_response_length = 100
 
-    # Lossless FDN: N delay lines, delay lengths m, gain g, random orthogonal feedback
-    N = 3
     m = np.array([13, 19, 23])
-    g = 0.9
-    A = pyFDN.random_orthogonal(N) @ np.diag(g**m)
-    b = np.random.randn(N, 1)
-    c = np.random.randn(1, N)
-    d = np.random.randn(1, 1)
+    build = pyFDN.fdn_build_gallery(
+        build_type="vanillaBroadband",
+        delays=m,
+        io_type="random",
+        direct_gain=None,
+        gain_per_sample=0.9,
+        rng=1,
+    )
+    A, b, c, d, m = build.A, build.B, build.C, build.D, build.delays
 
     # Convert delay state-space to single state-space system
     aa, bb, cc, dd = pyFDN.dss_to_ss(m, A, b, c, d)

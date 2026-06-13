@@ -27,6 +27,9 @@ __all__ = [
     "matrix_delay_approximation",
     "mgrpdelay",
     "ms_to_smp",
+    "flamo_delay_feedback_matrix",
+    "swap_flamo_recursion_paths",
+    "flamo_time_response",
     # matrix generators
     "allpass_in_fdn",
     "anderson_matrix",
@@ -36,8 +39,10 @@ __all__ = [
     "construct_velvet_feedback_matrix",
     "degree_one_lossless",
     "fdn_matrix_gallery",
+    "fdn_build_gallery",
     "fdn_system_gallery",
     "filter_matrix_gallery",
+    "FDNBuild",
     "FDNSystem",
     "householder_matrix",
     "is_almost_zero",
@@ -126,6 +131,8 @@ __all__ = [
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
     "plot_flamo_graph",
+    "flamo_model_to_fdn_parameters",
+    "FlamoFDNParameters",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -180,8 +187,17 @@ from .auxiliary.allpass import (
 )
 
 # delay utilities
-from .auxiliary.delay import matrix_delay_approximation, mgrpdelay, ms_to_smp
+from .auxiliary.delay import (
+    flamo_delay_feedback_matrix,
+    matrix_delay_approximation,
+    mgrpdelay,
+    ms_to_smp,
+    swap_flamo_recursion_paths,
+)
+from .auxiliary.flamo import flamo_time_response
 from .auxiliary.flamo_graph import (
+    FlamoFDNParameters,
+    flamo_model_to_fdn_parameters,
     flamo_model_to_nodes,
     flamo_nodes_flat,
     plot_flamo_graph,
@@ -288,7 +304,9 @@ from .generate.construct_paraunitary_from_elementals import (
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from .generate.degree_one_lossless import degree_one_lossless
 from .generate.fdn_matrix_gallery import (
+    FDNBuild,
     FDNSystem,
+    fdn_build_gallery,
     fdn_matrix_gallery,
     fdn_system_gallery,
     filter_matrix_gallery,

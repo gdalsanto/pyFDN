@@ -123,11 +123,18 @@ def _(mo):
 def _(est_rt, fs, np, pyFDN):
     np.random.seed(5)
     num_delays = 16
-    delays = np.random.randint(500, 3500, num_delays)
-    feedback_matrix = pyFDN.random_orthogonal(num_delays)
-    input_gain = np.ones((num_delays, 1))
-    output_gain = np.ones((1, num_delays))
-    direct_gain = np.zeros((1, 1))
+    build = pyFDN.fdn_build_gallery(
+        num_delays,
+        "vanilla",
+        fs=fs,
+        delay_range=(500, 3500),
+        io_type="ones",
+        direct_gain=0.0,
+        rng=5,
+    )
+    delays = build.delays
+    feedback_matrix = build.A
+    input_gain, output_gain, direct_gain = build.B, build.C, build.D
 
     target_rt = np.concatenate(([est_rt[0]], est_rt, [est_rt[-1]]))
     target_rt = target_rt * np.array([0.9, 1, 1, 1, 1, 1, 1, 1, 0.9, 0.5])
@@ -183,7 +190,7 @@ def _(
         sos_filter=sos_absorption,
         shell=True,
     )
-    ir_unequalized = np.asarray(_model.get_time_response().squeeze())[:rir_len]
+    ir_unequalized = pyFDN.flamo_time_response(_model).squeeze()[:rir_len]
     print(f"Unequalized FDN IR computed: {rir_len} samples")
     return ir_unequalized, nfft
 
@@ -243,7 +250,7 @@ def _(
         output_filter=equalization_sos[:, :, np.newaxis],
         shell=True,
     )
-    ir_fdn = np.asarray(model_eq.get_time_response().squeeze())[:rir_len]
+    ir_fdn = pyFDN.flamo_time_response(model_eq).squeeze()[:rir_len]
 
     print(f"GEQ target (dB): {target_level_db.round(1)}")
     return equalization_sos, ir_fdn, model_eq

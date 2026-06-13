@@ -59,13 +59,17 @@ def _(mo):
 @app.cell
 def _(np, pyFDN):
     np.random.seed(1)
-    num_delays = 3
     delays = np.array([13, 19, 23])
-    g = 0.98
-    A = pyFDN.random_orthogonal(num_delays) @ np.diag(g ** delays.astype(float))
-    b = np.ones((num_delays, 1))
-    c = np.ones((1, num_delays))
-    d = np.zeros((1, 1))
+    build = pyFDN.fdn_build_gallery(
+        build_type="vanillaBroadband",
+        delays=delays,
+        io_type="ones",
+        direct_gain=0.0,
+        gain_per_sample=0.98,
+        rng=1,
+    )
+    A, b, c, d, delays = build.A, build.B, build.C, build.D, build.delays
+    num_delays = delays.size
     return A, b, c, d, delays, num_delays
 
 

@@ -8,8 +8,14 @@ from .allpass import (
     poletti_allpass,
     series_allpass,
 )
-from .flamo import delay_module, gain_module, sos_filter_module
-from .flamo_graph import flamo_model_to_nodes, flamo_nodes_flat, plot_flamo_graph
+from .flamo import delay_module, flamo_time_response, gain_module, sos_filter_module
+from .flamo_graph import (
+    FlamoFDNParameters,
+    flamo_model_to_fdn_parameters,
+    flamo_model_to_nodes,
+    flamo_nodes_flat,
+    plot_flamo_graph,
+)
 from .poles import reduce_conjugate_pairs
 from .utils import skew
 
@@ -18,6 +24,7 @@ __all__ = [
     "gain_module",
     "delay_module",
     "sos_filter_module",
+    "flamo_time_response",
     "poletti_allpass",
     "series_allpass",
     "nested_allpass",
@@ -25,7 +32,9 @@ __all__ = [
     "is_allpass",
     "is_paraunitary",
     "flamo_model_to_nodes",
+    "flamo_model_to_fdn_parameters",
     "flamo_nodes_flat",
+    "FlamoFDNParameters",
     "plot_flamo_graph",
     "reduce_conjugate_pairs",
 ]

@@ -62,6 +62,7 @@ Delay Utilities
    pyFDN.matrix_delay_approximation
    pyFDN.mgrpdelay
    pyFDN.ms_to_smp
+   pyFDN.flamo_time_response
 
 Polynomial & Matrix Maths
 --------------------------
@@ -136,4 +137,3 @@ Plotting
    pyFDN.plot_impulse_response
    pyFDN.plot_impulse_response_matrix
    pyFDN.plot_system_matrix
-

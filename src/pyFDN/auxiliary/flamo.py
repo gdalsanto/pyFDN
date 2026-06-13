@@ -26,6 +26,40 @@ def _get_device(device):
     return device
 
 
+def flamo_time_response(
+    model,
+    fs: int = 48000,
+    identity: bool = False,
+) -> np.ndarray:
+    """Return a FLAMO model's time response as a NumPy array.
+
+    This is the NumPy-facing counterpart of FLAMO's
+    ``model.get_time_response()``. It detaches the returned tensor from any
+    autograd graph, transfers it to CPU memory, and preserves its dimensions
+    and dtype during conversion.
+
+    Parameters
+    ----------
+    model
+        FLAMO model exposing ``get_time_response``.
+    fs : int
+        Sampling frequency passed to FLAMO.
+    identity : bool
+        Whether to request FLAMO's input-free identity response.
+
+    Returns
+    -------
+    np.ndarray
+        Time response with the same shape and numeric dtype as FLAMO's tensor.
+    """
+    response = model.get_time_response(fs=fs, identity=identity)
+    if hasattr(response, "detach"):
+        response = response.detach()
+    if hasattr(response, "cpu"):
+        response = response.cpu()
+    return np.asarray(response)
+
+
 def gain_module(
     values: np.ndarray,
     nfft: int,
