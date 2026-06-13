@@ -252,16 +252,20 @@ def _iter_leaf_modules(node: Any):
         yield from _iter_leaf_modules(child)
 
 
-def _sos_denominator_order(module: Any) -> int:
-    """IIR poles an SOS-format filter contributes: denominator degree summed over
-    sections and channels. Returns 0 for non-SOS modules (gains, delays, FIR),
-    which add no poles of their own.
+def _sos_section_order(module: Any) -> int:
+    """Order (pole count) an SOS-format filter contributes to the loop's
+    characteristic polynomial: the rational order summed over sections and
+    channels. Returns 0 for non-SOS modules (gains, delays, FIR), which add no
+    poles of their own.
 
     Recognizes any module exposing ``n_sections`` and a ``map(param)`` yielding
     second-order-section coefficients of shape ``(n_sections, 6, *channels)`` with
     rows ``[b0, b1, b2, a0, a1, a2]`` — how SOS filters (and biquad/SVF cascades
-    expressed as SOS) store coefficients in FLAMO. Per section/channel the order
-    is 2 if ``a2 != 0``, else 1 if ``a1 != 0``, else 0.
+    expressed as SOS) store coefficients in FLAMO.
+
+    Per section/channel the order is the larger of the numerator and denominator
+    degrees: 2 if ``a2`` or ``b2`` is non-zero, else 1 if ``a1`` or ``b1`` is
+    non-zero, else 0.
     """
     n_sec = getattr(module, "n_sections", None)
     mapping = getattr(module, "map", None)
@@ -274,11 +278,12 @@ def _sos_denominator_order(module: Any) -> int:
         return 0
     if mapped.ndim < 2 or mapped.shape[0] != int(n_sec) or mapped.shape[1] != 6:
         return 0
-    a = mapped[:, 3:6, ...].reshape(int(n_sec), 3, -1)  # (sections, [a0,a1,a2], chan)
+    # (sections, [b0,b1,b2,a0,a1,a2], chan)
+    c = mapped.reshape(int(n_sec), 6, -1)
     tol = 1e-12
-    a1_nz = np.abs(a[:, 1, :]) > tol
-    a2_nz = np.abs(a[:, 2, :]) > tol
-    order_per = np.where(a2_nz, 2, np.where(a1_nz, 1, 0))
+    deg2 = (np.abs(c[:, 2, :]) > tol) | (np.abs(c[:, 5, :]) > tol)  # b2 or a2
+    deg1 = (np.abs(c[:, 1, :]) > tol) | (np.abs(c[:, 4, :]) > tol)  # b1 or a1
+    order_per = np.where(deg2, 2, np.where(deg1, 1, 0))
     return int(order_per.sum())
 
 
@@ -292,7 +297,7 @@ def _count_loop_filter_poles(recursion_module: Any) -> int:
     total = 0
     for branch in (recursion_module.feedforward, recursion_module.feedback):
         for leaf in _iter_leaf_modules(branch):
-            total += _sos_denominator_order(leaf)
+            total += _sos_section_order(leaf)
     return total
 
 
@@ -770,6 +775,12 @@ def flamo_to_pr(
 
     Parameters
     ----------
+    num_poles : int or None, default None
+        Override the auto-detected pole count (``sum(delays)`` plus IIR poles from
+        loop filters). When given, this exact value sizes the Ehrlich-Aberth root
+        search instead of the detected order. Use it when the loop order is known
+        independently (e.g. the characteristic-polynomial degree) or when filters
+        sit where :func:`_count_loop_filter_poles` cannot see them.
     svd_refine : bool, default True
         Run a per-pole SVD null-vector Newton step after the Ehrlich-Aberth loop.
     symmetrize : bool, default True
@@ -789,9 +800,20 @@ def flamo_to_pr(
 
     # Pole count = delay-line poles (sum of delays) + IIR poles from any SOS-format
     # filters in the loop. Pure-delay loops keep the original sum(delays) count.
+    # A caller-supplied ``num_poles`` overrides this auto-detected order entirely
+    # (e.g. when filters live where the walker can't see them, or to match a known
+    # characteristic-polynomial degree).
     n_delay_poles = int(np.sum(delays_arr))
     n_filter_poles = _count_loop_filter_poles(rec)
     n_poles = n_delay_poles + n_filter_poles
+    if num_poles is not None:
+        if int(num_poles) <= 0:
+            raise ValueError(f"num_poles must be a positive integer, got {num_poles}.")
+        n_poles = int(num_poles)
+        if verbose:
+            print(
+                f"Overriding detected pole count: num_poles={n_poles}"
+            )
 
     # Seed equi-spaced on the unit circle in the w = 1/z domain. With IIR filters
     # in the loop the poles spread inward (off the unit circle) and plain
@@ -800,9 +822,10 @@ def flamo_to_pr(
     # iteration enough roots that every true pole is covered; surplus roots diverge
     # and are dropped by the convergence filter below (deflation keeps them from
     # duplicating real poles). Pure-delay loops keep the exact original seeding.
+    n_extra = max(0, n_poles - n_delay_poles)
     n_seed = n_poles
-    if n_filter_poles > 0:
-        n_seed = n_poles + max(8, 2 * n_filter_poles)
+    if n_extra > 0:
+        n_seed = n_poles + max(8, 2 * n_extra)
     root_angles = np.linspace(0.0, 2.0 * np.pi, n_seed, endpoint=False)
     roots_w = torch.tensor(
         np.exp(1j * root_angles).astype(np.complex128),

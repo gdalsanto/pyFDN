@@ -66,13 +66,13 @@ def test_process_fdn_fir_matrix_matches_frequency_inversion(
     np.testing.assert_allclose(ir_time, ir_freq, atol=1e-9)
 
 
-def test_dss_to_pr_direct_rejects_polynomial_matrix(
+def test_dss_to_pr_rejects_polynomial_matrix(
     paraunitary_fdn: FDNFixture,
 ) -> None:
     """Polynomial (FIR) feedback matrices are not supported by the direct path;
     use the FLAMO-based decomposition instead."""
     with pytest.raises(ValueError):
-        pyFDN.dss_to_pr_direct(
+        pyFDN.dss_to_pr(
             paraunitary_fdn["delays"],
             paraunitary_fdn["A"],
             paraunitary_fdn["B"],

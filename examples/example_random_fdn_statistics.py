@@ -2,7 +2,7 @@
 
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -74,23 +74,25 @@ def _(np, pyFDN):
     feedback_matrix = pyFDN.random_orthogonal(num_delays)
 
     print(f"Delays: {delays} (sum = {delays.sum()})")
-    return (
-        delays,
-        direct,
-        feedback_matrix,
-        input_gain,
-        ir_len,
-        output_gain,
-    )
+    return delays, direct, feedback_matrix, input_gain, ir_len, output_gain
 
 
 @app.cell
-def _(delays, direct, feedback_matrix, input_gain, ir_len, np, output_gain, pyFDN):
+def _(
+    delays,
+    direct,
+    feedback_matrix,
+    input_gain,
+    ir_len,
+    np,
+    output_gain,
+    pyFDN,
+):
     ir_time = pyFDN.dss_to_impz(
         ir_len, delays, feedback_matrix, input_gain, output_gain, direct
     )[:, 0, 0]
 
-    residues, poles, direct_term, is_pair, meta = pyFDN.dss_to_pr_direct(
+    residues, poles, direct_term, is_pair, meta = pyFDN.dss_to_pr(
         delays, feedback_matrix, input_gain, output_gain, direct
     )
     undriven_residues = meta["undrivenResidues"]
@@ -155,7 +157,7 @@ def _(mo):
 @app.cell
 def _(go, np, poles):
     angle_counts, angle_edges = np.histogram(
-        np.angle(poles), bins=np.linspace(0, np.pi, 400), density=True
+        np.angle(poles), bins=np.linspace(0, np.pi, 300), density=True
     )
     fig_angles = go.Figure(
         go.Bar(x=angle_edges[1:], y=angle_counts, marker={"line": {"width": 0}})

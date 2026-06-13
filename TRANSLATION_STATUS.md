@@ -87,8 +87,8 @@ marimo for interactive examples.
 | MATLAB | Python | Notes |
 |--------|--------|-------|
 | `dss2impz.m` | `translate/dss_to_impz.py` | ✅ also accepts FIR (N,N,L) feedback matrices since 2026-06-10 |
-| `dss2pr.m` | `translate/dss_to_pr_flamo.py` | ✅ FLAMO-based path |
-| `dss2pr_direct.m` | `translate/dss_to_pr_direct.py` | ✅ |
+| `dss2pr.m` | `translate/flamo_to_pr.py` | ✅ FLAMO-based path |
+| `dss2pr_direct.m` | `translate/dss_to_pr.py` | ✅ |
 | `dss2ss.m` | `translate/dss_to_ss.py` | ✅ |
 | `dss2tf.m` | `translate/dss_to_tf.py` | ✅ |
 | `impz2res.m` | `translate/impz_to_res.py` | ✅ |
@@ -226,8 +226,8 @@ enough that the whole smoke suite stays in CI budget (eigendecompositions ≲ 30
 |---|----------------|----------------|--------|------------------------|
 | 1 | `example_tradeoff.m` | `examples/example_tradeoff.py` | ✅ | none |
 | 2 | `example_spreadFDNpoles.m` | `examples/example_spread_fdn_poles.py` | ✅ | none |
-| 3 | `example_randomFDNstatistics.m` | `examples/example_random_fdn_statistics.py` | ✅ | none (`dss_to_pr_direct` meta has `undrivenResidues`) |
-| 4 | `example_FDNEigenvectors.m` | `examples/example_fdn_eigenvectors.py` | ✅ | none (`dss_to_pr_direct` meta has `eigenvectors`) |
+| 3 | `example_randomFDNstatistics.m` | `examples/example_random_fdn_statistics.py` | ✅ | none (`dss_to_pr` meta has `undrivenResidues`) |
+| 4 | `example_FDNEigenvectors.m` | `examples/example_fdn_eigenvectors.py` | ✅ | none (`dss_to_pr` meta has `eigenvectors`) |
 | 5 | `example_poleBoundaries.m` | `examples/example_pole_boundaries.py` | ✅ | none (FIR absorption as SOS in the FLAMO loop: `dss_to_flamo(sos_filter=...)` + `flamo_to_pr`) |
 | 6 | `example_scatteringFDN.m` | `examples/example_scattering_fdn.py` | ✅ | `generate/construct_paraunitary_from_elementals.py`; FIR feedback matrix in `process_fdn`/`dss_to_impz` |
 | 7 | `example_paraunitaryFDN.m` | `examples/example_paraunitary_fdn.py` | ✅ | FIR feedback in `process_fdn`; polynomial-A in `dss_to_flamo` + `flamo_to_pr(num_poles=...)` |
@@ -244,7 +244,7 @@ enough that the whole smoke suite stays in CI budget (eigendecompositions ≲ 30
   MATLAB `processFDN` loop ordering (delay → absorption → C; absorption → A → extra → +B).
   Validated against FLAMO (1e-9) and frequency-domain inversion (1e-13).
 - Polynomial (FIR) feedback matrices go through the FLAMO path, not
-  `dss_to_pr_direct` (which is numeric-static only): `dss_to_flamo` accepts a
+  `dss_to_pr` (which is numeric-static only): `dss_to_flamo` accepts a
   (N,N,L) feedback matrix (placed as a FLAMO `Filter` via
   `auxiliary/flamo.py::fir_matrix_module`), and `flamo_to_pr` gained a
   `num_poles` override for loops whose pole count exceeds sum(m) — set it to
@@ -308,10 +308,10 @@ enough that the whole smoke suite stays in CI budget (eigendecompositions ≲ 30
   the `undrivenResidues` factor: `res = undriven * (c·rv) * (lv^H·b)`. Verified to machine
   precision.
 - **example_random_fdn_statistics** — delays scaled down (100–400 vs MATLAB 500–2000);
-  uses `meta["undrivenResidues"]` from `dss_to_pr_direct` for the residue factorisation
+  uses `meta["undrivenResidues"]` from `dss_to_pr` for the residue factorisation
   histograms, matching the MATLAB metaData.
 - **example_spread_fdn_poles** — delays scaled down (100–300 vs MATLAB 500–2000) so the
-  `dss_to_pr_direct` eigendecomposition stays fast in CI; `pr_to_impz` uses `lowMemory`
+  `dss_to_pr` eigendecomposition stays fast in CI; `pr_to_impz` uses `lowMemory`
   mode to avoid the (ir_len × num_poles) complex matrix.
 - **example_tradeoff** — added echo-density overlay (Abel & Huang) per panel to make the
   tradeoff visible (the MATLAB script only renders the IRs); added audio playback of the

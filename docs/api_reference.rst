@@ -188,8 +188,7 @@ State-Space Translators
    pyFDN.dss_to_ss
    pyFDN.dss_to_impz
    pyFDN.dss_to_tf
-   pyFDN.dss_to_pr_direct
-   pyFDN.dss_to_pr_flamo
+   pyFDN.dss_to_pr
    pyFDN.dss_to_flamo
    pyFDN.flamo_to_pr
    pyFDN.flamo_decompose_for_pr
