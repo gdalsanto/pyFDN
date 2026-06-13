@@ -17,13 +17,14 @@ class SOSFilterBank:
     Parameters
     ----------
     sos : array
-        Per-channel SOS coefficients (N = ``num_channels``), in one of:
-
-        - (6, N): one section per channel (``first_order_absorption`` convention);
-        - (n_sections, 6, N): section cascade per channel;
-        - (N, n_sections, 6): scipy ``sosfilt`` convention per channel.
+        Per-channel SOS bank of shape ``(n_sections, 6, N)`` where
+        ``N = num_channels``. Section rows are ``[b0, b1, b2, a0, a1, a2]``.
+        This is the canonical SOS bank layout in pyFDN: it matches the FLAMO
+        ``parallelSOSFilter`` input and the output of
+        :func:`pyFDN.first_order_absorption`, :func:`pyFDN.one_pole_absorption`,
+        and :func:`pyFDN.absorption_geq`.
     num_channels : int
-        Number of channels N (disambiguates the accepted shapes).
+        Number of channels N.
 
     Filter state persists across calls to :meth:`filter`, so a long signal
     can be processed in consecutive blocks.
@@ -32,18 +33,14 @@ class SOSFilterBank:
     def __init__(self, sos: ArrayLike, num_channels: int):
         n = int(num_channels)
         sos_arr = np.asarray(sos, dtype=float)
-        if sos_arr.ndim == 2 and sos_arr.shape[0] == 6 and sos_arr.shape[1] == n:
-            sos_arr = sos_arr.T[:, None, :]
-        elif sos_arr.ndim == 3 and sos_arr.shape[1] == 6 and sos_arr.shape[2] == n:
+        if sos_arr.ndim == 3 and sos_arr.shape[1] == 6 and sos_arr.shape[2] == n:
+            # Canonical (n_sections, 6, N) -> (N, n_sections, 6) for scipy sosfilt.
             sos_arr = sos_arr.transpose(2, 0, 1)
-        elif sos_arr.ndim == 3 and sos_arr.shape[0] == n and sos_arr.shape[2] == 6:
-            pass
         else:
             raise ValueError(
-                "sos must have shape (6, N), (n_sections, 6, N) "
-                f"or (N, n_sections, 6); got {sos_arr.shape} for N={n}"
+                f"sos must have shape (n_sections, 6, N); got {sos_arr.shape} for N={n}"
             )
-        self.sos = np.ascontiguousarray(sos_arr)  # (N, n_sections, 6)
+        self.sos = np.ascontiguousarray(sos_arr)  # internal: (N, n_sections, 6)
         self.num_channels = n
         self._state = [sosfilt_zi(self.sos[i]) * 0.0 for i in range(n)]
 

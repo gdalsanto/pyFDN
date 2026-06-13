@@ -35,7 +35,7 @@ def design_geq(
     Returns:
         ``(sos, target_f)`` where
 
-        - ``sos`` — SOS matrix of shape ``(11, 6)``.
+        - ``sos`` — single SOS cascade of shape ``(n_sections, 6)`` (n_sections = 11).
         - ``target_f`` — 10-point frequency grid used for the target.
     """
     target_g = np.asarray(target_g, dtype=float).ravel()

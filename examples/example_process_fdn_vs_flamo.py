@@ -114,7 +114,7 @@ def _(delays, fs, go, np, num_delays, pyFDN, target_rt):
     fig_mag = go.Figure()
     for _i in range(num_delays):
         _, _H_bands, _W_bands = pyFDN.probe_sos(
-            sos_absorption[_i], np.array([]), fft_len=2**14, fs=fs
+            sos_absorption[..., _i], np.array([]), fft_len=2**14, fs=fs
         )
         _mag_db = pyFDN.lin_to_db(np.abs(np.prod(_H_bands, axis=1)))
         fig_mag.add_trace(
@@ -190,7 +190,7 @@ def _(
         delays,
         fs,
         nfft=2**17,
-        sos_filter=sos_absorption.transpose(1, 2, 0),  # (n_sections, 6, N)
+        sos_filter=sos_absorption,  # canonical (n_sections, 6, N) bank
         shell=True,
         dtype=torch.float64,
     )

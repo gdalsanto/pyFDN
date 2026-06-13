@@ -50,7 +50,6 @@ __all__ = [
     "shift_matrix",
     "shift_matrix_distribute",
     "tiny_rotation_matrix",
-    "vanilla_FDN",
     # graphicEQ
     "absorption_geq",
     "bandpass_filter",
@@ -306,7 +305,6 @@ from .generate.schroeder_reverberator import schroeder_reverberator
 from .generate.SDN import SDN
 from .generate.shift_matrix import shift_matrix
 from .generate.shift_matrix_distribute import shift_matrix_distribute
-from .generate.vanilla_FDN import vanilla_FDN
 from .graphicEQ import (
     absorption_geq,
     bandpass_filter,

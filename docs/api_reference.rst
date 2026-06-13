@@ -24,7 +24,6 @@ Matrix Generators
    pyFDN.shift_matrix_distribute
    pyFDN.construct_cascaded_paraunitary_matrix
    pyFDN.construct_velvet_feedback_matrix
-   pyFDN.vanilla_FDN
    pyFDN.tiny_rotation_matrix
 
 Acoustics & Absorption

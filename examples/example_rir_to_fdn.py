@@ -180,7 +180,7 @@ def _(
         delays,
         fs,
         nfft=nfft,
-        sos_filter=sos_absorption.transpose(1, 2, 0),
+        sos_filter=sos_absorption,
         shell=True,
     )
     ir_unequalized = np.asarray(_model.get_time_response().squeeze())[:rir_len]
@@ -239,7 +239,7 @@ def _(
         delays,
         fs,
         nfft=nfft,
-        sos_filter=sos_absorption.transpose(1, 2, 0),
+        sos_filter=sos_absorption,
         output_filter=equalization_sos[:, :, np.newaxis],
         shell=True,
     )

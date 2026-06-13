@@ -93,7 +93,7 @@ def _(delays, fs, pyFDN, target_rt):
     # The outer two are the shelf bounds; strip them to match the 10 GEQ bands
     sos_absorption = pyFDN.absorption_geq(target_rt, delays, fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
-    # shape: (num_delays, 11, 6)
+    # shape: (11, 6, num_delays)  -> (n_sections, 6, N)
     return (sos_absorption,)
 
 
@@ -145,9 +145,6 @@ def _(
     rir_len,
     sos_absorption,
 ):
-    # reshape (N, n_sections, 6) → (n_sections, 6, N) for dss_to_flamo
-    sos_loop = sos_absorption.transpose(1, 2, 0)
-
     nfft = int(2 ** np.ceil(np.log2(rir_len)))
     model = pyFDN.dss_to_flamo(
         feedback_matrix,
@@ -157,7 +154,7 @@ def _(
         delays,
         fs,
         nfft=nfft,
-        sos_filter=sos_loop,
+        sos_filter=sos_absorption,  # canonical (n_sections, 6, N) bank
         shell=True,
     )
     rir = np.asarray(model.get_time_response().squeeze())[:rir_len]

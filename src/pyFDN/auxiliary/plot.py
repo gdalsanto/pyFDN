@@ -589,9 +589,8 @@ def plot_db_per_sample(
     Parameters
     ----------
     sos : array-like
-        Per-delay-line SOS filters; accepts the same shapes as
-        :class:`pyFDN.dsp.SOSFilterBank`: ``(6, N)``, ``(n_sections, 6, N)``
-        or ``(N, n_sections, 6)``.
+        Per-delay-line SOS bank, same layout as
+        :class:`pyFDN.dsp.SOSFilterBank`: ``(n_sections, 6, N)``.
     delays : array-like
         Delay lengths in samples, shape (N,).
     fs : float, optional
@@ -667,9 +666,8 @@ def plot_fdn_parameter(
     A, b, c, d : array-like
         Feedback matrix, input gains, output gains, direct gains.
     attenuation_sos : array-like, optional
-        Per-delay-line SOS attenuation filters; accepts the same shapes as
-        :class:`pyFDN.dsp.SOSFilterBank`: ``(6, N)``, ``(n_sections, 6, N)``
-        or ``(N, n_sections, 6)``.
+        Per-delay-line SOS attenuation bank, same layout as
+        :class:`pyFDN.dsp.SOSFilterBank`: ``(n_sections, 6, N)``.
     post_eq_sos : array-like, optional
         Post EQ as a single SOS cascade in scipy format, shape
         ``(n_sections, 6)`` (or ``(6,)`` for one section).

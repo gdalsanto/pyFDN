@@ -16,7 +16,7 @@ def _(mo):
     mo.md(r"""
     # Vanilla FDN (FLAMO)
 
-    Build a vanilla FDN with `pyFDN.vanilla_FDN`, optionally alter delays and feedforward (e.g. diagonal gain, no absorption), plot IRs, and run a dry signal through the model.
+    Build a vanilla FDN with `pyFDN.dss_to_flamo`, optionally alter delays and feedforward (e.g. diagonal gain, no absorption), plot IRs, and run a dry signal through the model.
     """)
     return
 
@@ -60,8 +60,20 @@ def _(mo):
 
 
 @app.cell
-def _(fs, n, pyFDN):
-    model = pyFDN.vanilla_FDN(n, fs=fs, n_fft=2**18)
+def _(fs, n, np, pyFDN):
+    # Vanilla FDN: random delays + orthogonal feedback matrix + first-order absorption.
+    _delays = np.random.randint(400, 1200, size=n).astype(np.float64)
+    _sos = pyFDN.first_order_absorption(2.0, 0.5, _delays, fs=fs)
+    model = pyFDN.dss_to_flamo(
+        pyFDN.random_orthogonal(n),
+        np.ones((n, 1)),
+        np.ones((1, n)),
+        np.ones((1, 1)),
+        _delays,
+        fs,
+        nfft=2**18,
+        sos_filter=_sos,
+    )
     ir_original = model.get_time_response().flatten()
     return ir_original, model
 
@@ -79,7 +91,7 @@ def _(mo):
 @app.cell
 def _(OrderedDict, dsp, model, n, np, system, torch):
     core = model.get_core()
-    fdn = core.branchB
+    fdn = core.branchA
     feedback_loop = fdn.feedback_loop
     delay_module = feedback_loop.feedforward.delay
 

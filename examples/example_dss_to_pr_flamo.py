@@ -237,10 +237,9 @@ def _(np, pyFDN, torch):
     C = np.eye(1, n)
     D = np.zeros((1, 1))
 
-    # First-order absorption in the loop: (6, N) -> (1, 6, N) for dss_to_flamo
+    # First-order absorption in the loop: canonical (1, 6, N) SOS bank.
     rt_dc, rt_ny = 0.5, 0.1  # reverb time at DC and Nyquist (seconds)
-    sos_6n = pyFDN.first_order_absorption(rt_dc, rt_ny, delays, Fs)
-    sos_loop = np.asarray(sos_6n)[np.newaxis, :, :]  # (1, 6, N)
+    sos = pyFDN.first_order_absorption(rt_dc, rt_ny, delays, Fs)
 
     # DSS -> FLAMO with SOS in the loop (delay -> filter -> A). shell=True for get_time_response().
     nfft = 2**16
@@ -253,10 +252,10 @@ def _(np, pyFDN, torch):
         Fs=Fs,
         nfft=nfft,
         shell=True,
-        sos_filter=sos_loop,
+        sos_filter=sos,
         dtype=torch.float64,
     )
-    return Fs, delays, model, sos_6n
+    return Fs, delays, model, sos
 
 
 @app.cell
@@ -287,7 +286,7 @@ def _(
     poles,
     pyFDN,
     residues,
-    sos_6n,
+    sos,
 ):
     # Reference IR from FLAMO (only way to get the true IR when the loop has an SOS)
     ir_flamo = model.get_time_response(fs=int(Fs)).squeeze()
@@ -304,7 +303,7 @@ def _(
     print("max |IR_flamo - IR_modal|:", err)
 
     # Plot poles in the complex plane with SOS gain-per-sample curve
-    angles_sos, mag_sos = pyFDN.sos_gain_per_sample_curves(sos_6n, delays, nfft=512)
+    angles_sos, mag_sos = pyFDN.sos_gain_per_sample_curves(sos, delays, nfft=512)
     plt.figure(figsize=(10, 5))
     plt.plot(
         pyFDN.rad_to_hertz(angles_sos, Fs),

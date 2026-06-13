@@ -76,7 +76,7 @@ def _(mo):
 @app.cell
 def _(delays, fs, pyFDN, rt_dc, rt_ny):
     sos = pyFDN.first_order_absorption(rt_dc, rt_ny, delays, fs)
-    print("SOS shape (6, N):", sos.shape)
+    print("SOS shape (1, 6, N):", sos.shape)
     return (sos,)
 
 
@@ -91,7 +91,7 @@ def _(mo):
 
 
 @app.cell
-def _(B, C, D, delays, feedback_matrix, fs, np, pyFDN, sos):
+def _(B, C, D, delays, feedback_matrix, fs, pyFDN, sos):
     nfft = 2**17
 
     model = pyFDN.dss_to_flamo(
@@ -102,7 +102,7 @@ def _(B, C, D, delays, feedback_matrix, fs, np, pyFDN, sos):
         delays,
         fs,
         nfft=nfft,
-        sos_filter=sos[np.newaxis, :, :],  # (1, 6, N)
+        sos_filter=sos,  # canonical (1, 6, N) bank
     )
     return (model,)
 

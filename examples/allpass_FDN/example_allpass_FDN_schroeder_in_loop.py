@@ -138,7 +138,7 @@ def _(Fs, N, nfft, np, pyFDN):
 
     rt_dc = 2.0
     rt_ny = 0.7
-    sos = pyFDN.first_order_absorption(rt_dc, rt_ny, delays_fdn, fs=Fs)[np.newaxis, :]
+    sos = pyFDN.first_order_absorption(rt_dc, rt_ny, delays_fdn, fs=Fs)
 
     model_fdn = pyFDN.dss_to_flamo(
         feedback_matrix, B_fdn, C_fdn, D_fdn, delays_fdn, Fs, nfft=nfft, sos_filter=sos

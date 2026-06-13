@@ -19,7 +19,7 @@ def _(mo):
     Demonstrates `pyFDN.process_fdn` for time-domain simulation of a feedback delay network with static matrices.
     A dry audio signal is run through the FDN to produce reverberation.
 
-    For FDNs with absorption filters or learnable parameters, use the FLAMO path (`vanilla_FDN`, `dss_to_flamo`).
+    For FDNs with absorption filters or learnable parameters, use the FLAMO path (`dss_to_flamo`).
     """)
     return
 

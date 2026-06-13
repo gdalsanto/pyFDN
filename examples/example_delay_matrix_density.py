@@ -18,7 +18,7 @@ def _(mo):
 
     This example compares three FDN topologies and their **echo density** (Abel & Huang 2006):
 
-    1. **Vanilla FDN** — Build with `pyFDN.vanilla_FDN`, then overwrite delays and feedback matrix and replace absorption with a **broadband gain** (diagonal gain per delay).
+    1. **Vanilla FDN** — Build with `pyFDN.dss_to_flamo`, then overwrite delays and feedback matrix and replace absorption with a **broadband gain** (diagonal gain per delay).
     2. **Delay+matrix+delay in feedback** — Copy the model and replace the feedback path with **delay_in → matrix → delay_out** to increase echo density.
     3. **Swapped feedforward/feedback** — Copy again and swap the two paths (feedforward ↔ feedback).
 
@@ -90,17 +90,25 @@ def _(mo):
     mo.md(r"""
     ## Build vanilla FDN
 
-    Create the model with `pyFDN.vanilla_FDN` (FLAMO). Delays and absorption will be overwritten in the next step.
+    Create the model with `pyFDN.dss_to_flamo` (FLAMO). Delays and absorption will be overwritten in the next step.
     """)
     return
 
 
 @app.cell
-def _(N, fs, pyFDN):
-    model = pyFDN.vanilla_FDN(
-        N,
-        fs=fs,
-        n_fft=2**18,
+def _(N, fs, np, pyFDN):
+    # Vanilla FDN (delays + matrix + absorption are overwritten in the next cell).
+    _delays = np.random.randint(400, 1200, size=N).astype(np.float64)
+    _sos = pyFDN.first_order_absorption(2.0, 0.5, _delays, fs=fs)
+    model = pyFDN.dss_to_flamo(
+        pyFDN.random_orthogonal(N),
+        np.ones((N, 1)),
+        np.ones((1, N)),
+        np.ones((1, 1)),
+        _delays,
+        fs,
+        nfft=2**18,
+        sos_filter=_sos,
     )
     return (model,)
 
@@ -131,7 +139,7 @@ def _(
     total_delay,
 ):
     core = model.get_core()
-    fdn = core.branchB
+    fdn = core.branchA
     feedback_loop = fdn.feedback_loop
     delay_module = feedback_loop.feedforward.delay
     _mixing_matrix = feedback_loop.feedback
@@ -188,7 +196,7 @@ def _(
 ):
     model_delay_matrix = copy.deepcopy(model)
     core_delay_matrix = model_delay_matrix.get_core()
-    fdn_delay_matrix = core_delay_matrix.branchB
+    fdn_delay_matrix = core_delay_matrix.branchA
     feedback_loop_delay_matrix = fdn_delay_matrix.feedback_loop
     _mixing_matrix = feedback_loop_delay_matrix.feedback
 
@@ -267,7 +275,7 @@ def _(
 
     # swap feedforward and feedback
     model_swapped = copy.deepcopy(model_delay_matrix)
-    feedback_loop_swapped = model_swapped.get_core().branchB.feedback_loop
+    feedback_loop_swapped = model_swapped.get_core().branchA.feedback_loop
     old_feedforward = feedback_loop_swapped.feedforward
     old_feedback = feedback_loop_swapped.feedback
     feedback_loop_swapped.feedforward = old_feedback
