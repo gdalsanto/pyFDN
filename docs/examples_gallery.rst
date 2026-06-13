@@ -42,9 +42,9 @@ Translation Examples
      - This example converts an FDN in delay state-space form (separate delay lengths and feedback matrix) into a single state-space system, and checks that the impulse response matches the delay-state-space implementation.
    * - `Delay state-space to transfer function <_static/marimo/notebooks/example_dss_to_tf.html>`_
      - Convert the delay state-space form of an FDN into matrix transfer function form (``dss_to_tf``). Verify by comparing the impulse response from the TF with the one from direct delay state-space simulation (``dss_to_impz``).
-   * - `Direct DSS→PR example <_static/marimo/notebooks/example_dss_to_pr_direct.html>`_
-     - Uses ``dss_to_pr_direct`` (numeric DSS-only path) with modes ``eig``, ``roots``, and ``polyeig``. Compares time-domain IR from ``dss_to_impz`` with modal reconstruction from each mode.
-   * - `FLAMO DSS→PR (Notebook) <_static/marimo/notebooks/example_dss_to_pr_flamo.html>`_
+   * - `DSS→PR example <_static/marimo/notebooks/example_dss_to_pr_direct.html>`_
+     - Uses ``dss_to_pr`` with modes ``eig``, ``roots`` (pure-NumPy pole finding) and ``eai`` (Ehrlich–Aberth iteration in ``w = 1/z`` via FLAMO). Compares the time-domain IR from ``dss_to_impz`` with the modal reconstruction from each mode.
+   * - `FLAMO→PR (Notebook) <_static/marimo/notebooks/example_dss_to_pr_flamo.html>`_
      - In-depth math documentation of the refinement fix, with an SOS filter in the loop and plotting.
 
 Allpass FDN Examples

@@ -102,7 +102,7 @@ def _(mo):
     mo.md(r"""
     ## Modal decomposition, impulse response, energy decay curve
 
-    For each matrix type, compute poles/residues with `dss_to_pr_direct`,
+    For each matrix type, compute poles/residues with `dss_to_pr`,
     synthesize the impulse response from the modes with `pr_to_impz`, and
     compute the energy decay curve.
     """)
@@ -123,7 +123,7 @@ def _(
     poles = {}
     edcs = {}
     for _type in types:
-        _res, _pol, _direct_term, _is_pair, _ = pyFDN.dss_to_pr_direct(
+        _res, _pol, _direct_term, _is_pair, _ = pyFDN.dss_to_pr(
             delays, feedback_matrix[_type], input_gain, output_gain, direct
         )
         poles[_type] = _pol

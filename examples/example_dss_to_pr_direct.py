@@ -16,10 +16,11 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # Direct DSS→PR example
+    # DSS→PR example
 
-    Uses ``dss_to_pr_direct`` (numeric DSS-only path) with modes ``eig``, ``roots``, and ``polyeig``.
-    Compares time-domain IR from ``dss_to_impz`` with modal reconstruction from each mode.
+    Uses ``dss_to_pr`` with modes ``eig``, ``roots`` (pure-NumPy pole finding) and
+    ``eai`` (Ehrlich–Aberth iteration in ``w = 1/z`` via FLAMO). Compares the
+    time-domain IR from ``dss_to_impz`` with the modal reconstruction from each mode.
     """)
     return
 
@@ -57,9 +58,9 @@ def _(A, b, c, d, delays, np, pyFDN):
     ir_time = pyFDN.dss_to_impz(ir_len, delays, A, b, c, d)[:, 0, 0]
 
     ir_modals = {}
-    modes = ["eig", "roots", "polyeig"]
+    modes = ["eig", "roots", "eai"]
     for _mode in modes:
-        residues, poles, direct, is_pair, _ = pyFDN.dss_to_pr_direct(
+        residues, poles, direct, is_pair, _ = pyFDN.dss_to_pr(
             delays, A, b, c, d, mode=_mode
         )
         ir_modals[_mode] = pyFDN.pr_to_impz(residues, poles, direct, is_pair, ir_len)[

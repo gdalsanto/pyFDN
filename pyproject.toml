@@ -95,6 +95,10 @@ where = ["src"]
 [tool.pytest.ini_options]
 filterwarnings = [
     "ignore:FigureCanvasAgg is non-interactive:UserWarning",
+    # netCDF4 1.7.x ships abi3 (limited-API) wheels whose Cython binary-compat
+    # check reports a stale numpy.ndarray struct size under numpy 2.x. Reached
+    # transitively (flamo -> pyfar -> sofar -> netCDF4); the warning is benign.
+    "ignore:numpy.ndarray size changed:RuntimeWarning",
 ]
 
 # Mypy

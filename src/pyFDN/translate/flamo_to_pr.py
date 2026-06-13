@@ -1,12 +1,7 @@
-"""FLAMO-only modal decomposition entry point.
+"""Modal decomposition for a FLAMO FDN model via Ehrlich-Aberth iteration.
 
-What FLAMO must provide
-----------------------
-- P(z): Recursion.probe_recursion(z).
-- P(w): Recursion.probe_recursion_w(w).
-
-All derivatives are built in _FDNLoopFlamo (grad for d/dw log det P(w), JVP for
-dP/dz(z)) and stored on the loop. No derivative APIs required from FLAMO.
+Poles of ``H(z) = C(z)P(z)^{-1}B(z) + D(z)`` are found in the w = 1/z domain,
+polished via SVD null-vector Newton, then converted to z.
 """
 
 from __future__ import annotations
@@ -18,43 +13,13 @@ from typing import Any
 
 import numpy as np
 import torch
-from numpy.typing import ArrayLike
 
 from pyFDN.auxiliary.poles import reduce_conjugate_pairs
-from pyFDN.translate.dss_to_flamo import dss_to_flamo
 
 
-class _IdentityProbe:
-    """Constant identity matrix probe used for empty module chains. Returns torch."""
-
-    def __init__(
-        self,
-        size: int,
-        *,
-        device: torch.device | None = None,
-        dtype: torch.dtype | None = None,
-    ):
-        self.size = int(size)
-        self.output_channels = self.size
-        self.input_channels = self.size
-        self._device = device or torch.device("cpu")
-        self._dtype = dtype or torch.complex128
-        self._eye = torch.eye(self.size, device=self._device, dtype=self._dtype)
-        self._zero = torch.zeros(
-            self.size, self.size, device=self._device, dtype=self._dtype
-        )
-
-    def at_z(self, z: complex) -> torch.Tensor:
-        return self._eye
-
-    def at_w(self, w: complex) -> torch.Tensor:
-        return self._eye
-
-    def at(self, z: complex) -> torch.Tensor:
-        return self.at_z(z)
-
-    def der(self, z: complex) -> torch.Tensor:
-        return self._zero
+# ───────────────────────────────────────────────────────────────────────────
+# Small infrastructure helpers
+# ───────────────────────────────────────────────────────────────────────────
 
 
 def _infer_model_device(model: Any) -> torch.device:
@@ -90,12 +55,32 @@ def _to_numpy(t: torch.Tensor | np.ndarray) -> np.ndarray:
     return t.detach().cpu().resolve_conj().numpy()
 
 
-def _device_dtype_from_decomposition(
-    decomposition: Any,
-) -> tuple[torch.device, torch.dtype]:
-    """Infer device and complex dtype from decomposition's P (recursion)."""
-    rec = decomposition.p_probe
-    return _infer_model_device(rec), _infer_model_complex_dtype(rec)
+def _sort_by_torch(
+    a: torch.Tensor, key: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Sort tensor a by key (by angle for complex); return (a_sorted, indices)."""
+    key_np = _to_numpy(key)
+    ind = np.argsort(key_np)
+    ind_t = torch.as_tensor(ind, device=a.device, dtype=torch.long)
+    return a[ind_t], ind_t
+
+
+def _rcond_torch(mat: torch.Tensor) -> float:
+    """Reciprocal condition number for torch (complex) matrix."""
+    try:
+        m = mat.resolve_conj()
+        cond = torch.linalg.cond(m)
+    except Exception:
+        return 0.0
+    c = float(cond.cpu().numpy())
+    if not np.isfinite(c) or c == 0:
+        return 0.0
+    return float(1.0 / c)
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# Derivative builders (used by _FDNLoopFlamo)
+# ───────────────────────────────────────────────────────────────────────────
 
 
 def _make_log_det_derivative_w(recursion: Any):
@@ -126,55 +111,21 @@ def _make_P_and_dP_dz(recursion: Any):
     return get_P_and_dP_dz
 
 
-def _make_log_det_derivative_z(recursion: Any):
-    """Build (d/dz) log det P(z) once using grad; uses recursion.probe_recursion(z)."""
-
-    def d_log_det_z(z):
-        z_var = (
-            _as_torch_complex_scalar(z, model=recursion)
-            .detach()
-            .clone()
-            .requires_grad_(True)
-        )
-        P_z = recursion.probe_recursion(z_var)
-        y = torch.logdet(P_z)
-        (g,) = torch.autograd.grad(y, z_var, torch.ones_like(y))
-        return g.conj().detach()
-
-    return d_log_det_z
-
-
-def _sort_by_torch(
-    a: torch.Tensor, key: torch.Tensor
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Sort tensor a by key (by angle for complex); return (a_sorted, indices)."""
-    key_np = _to_numpy(key)
-    ind = np.argsort(key_np)
-    ind_t = torch.as_tensor(ind, device=a.device, dtype=torch.long)
-    return a[ind_t], ind_t
-
-
-@dataclass
-class _CharacteristicDecomposition:
-    """H(z)=C(z)P(z)^{-1}B(z)+D(z) with probes for B,C,D."""
-
-    p_probe: Any
-    f_probe: Any
-    in_probe: Any
-    out_probe: Any
-    direct_probe: Any
+# ───────────────────────────────────────────────────────────────────────────
+# FLAMO model decomposition (public)
+# ───────────────────────────────────────────────────────────────────────────
 
 
 def _decomposition_to_public_dict(
-    decomposition: _CharacteristicDecomposition,
+    decomposition: FlamoDecompositionForPR,
 ) -> dict[str, Any]:
     """Public dict: P, F (feedforward), B (input path), C, D probes. H = C P^{-1} F B + D."""
     return {
-        "P": decomposition.p_probe,
-        "F": decomposition.f_probe,
-        "B": decomposition.in_probe,
-        "C": decomposition.out_probe,
-        "D": decomposition.direct_probe,
+        "P": decomposition.recursion_module,
+        "F": decomposition.f_subgraph,
+        "B": decomposition.in_subgraph,
+        "C": decomposition.out_subgraph,
+        "D": decomposition.direct_subgraph,
     }
 
 
@@ -231,6 +182,12 @@ def flamo_decompose_for_pr(model: Any) -> FlamoDecompositionForPR:
     Expects core with branchA (Series of input_gain, Recursion(feedforward, feedback), output_gain)
     and branchB (direct path). Returns small FLAMO subgraphs (no probing); pass the result
     to :func:`flamo_to_pr` as ``decomposition=...``.
+
+    Supported architecture (see :func:`flamo_to_pr` for the full contract):
+    branchA must contain exactly **one, non-nested** ``Recursion``, and the
+    delay lines must live in that recursion's **feedforward** path. SOS-format
+    filters (incl. biquad/SVF cascades) anywhere in the feedforward/feedback are
+    fine; a ``Recursion`` nested inside another loop is **not** supported.
     """
     core = model.get_core() if callable(getattr(model, "get_core", None)) else model
     if not hasattr(core, "branchA") or not hasattr(core, "branchB"):
@@ -281,55 +238,82 @@ def _delays_from_recursion(recursion_module: Any) -> np.ndarray:
     return np.asarray(np.round(out), dtype=int)
 
 
-def _extract_flamo_recursion_probes(
-    decomposition: FlamoDecompositionForPR,
-) -> _CharacteristicDecomposition:
-    """Build characteristic decomposition from pre-decomposed FLAMO subgraphs."""
-    rec = decomposition.recursion_module
-    return _CharacteristicDecomposition(
-        p_probe=rec,
-        f_probe=decomposition.f_subgraph,
-        in_probe=decomposition.in_subgraph,
-        out_probe=decomposition.out_subgraph,
-        direct_probe=decomposition.direct_subgraph,
-    )
+def _iter_leaf_modules(node: Any):
+    """Yield the leaf modules of a FLAMO subgraph, descending into Series-like
+    containers. Non-iterable modules (Gain, Delay, SOSFilter, …) are leaves."""
+    try:
+        children = list(node)
+    except TypeError:
+        children = []
+    if not children:
+        yield node
+        return
+    for child in children:
+        yield from _iter_leaf_modules(child)
+
+
+def _sos_section_order(module: Any) -> int:
+    """Order (pole count) an SOS-format filter contributes to the loop's
+    characteristic polynomial: the rational order summed over sections and
+    channels. Returns 0 for non-SOS modules (gains, delays, FIR), which add no
+    poles of their own.
+
+    Recognizes any module exposing ``n_sections`` and a ``map(param)`` yielding
+    second-order-section coefficients of shape ``(n_sections, 6, *channels)`` with
+    rows ``[b0, b1, b2, a0, a1, a2]`` — how SOS filters (and biquad/SVF cascades
+    expressed as SOS) store coefficients in FLAMO.
+
+    Per section/channel the order is the larger of the numerator and denominator
+    degrees: 2 if ``a2`` or ``b2`` is non-zero, else 1 if ``a1`` or ``b1`` is
+    non-zero, else 0.
+    """
+    n_sec = getattr(module, "n_sections", None)
+    mapping = getattr(module, "map", None)
+    param = getattr(module, "param", None)
+    if n_sec is None or not callable(mapping) or param is None:
+        return 0
+    try:
+        mapped = mapping(param).detach().cpu().numpy()
+    except Exception:
+        return 0
+    if mapped.ndim < 2 or mapped.shape[0] != int(n_sec) or mapped.shape[1] != 6:
+        return 0
+    # (sections, [b0,b1,b2,a0,a1,a2], chan)
+    c = mapped.reshape(int(n_sec), 6, -1)
+    tol = 1e-12
+    deg2 = (np.abs(c[:, 2, :]) > tol) | (np.abs(c[:, 5, :]) > tol)  # b2 or a2
+    deg1 = (np.abs(c[:, 1, :]) > tol) | (np.abs(c[:, 4, :]) > tol)  # b1 or a1
+    order_per = np.where(deg2, 2, np.where(deg1, 1, 0))
+    return int(order_per.sum())
+
+
+def _count_loop_filter_poles(recursion_module: Any) -> int:
+    """Extra poles contributed by IIR filters in the recursion's feedforward and
+    feedback paths, beyond the pure delays (which are counted via the delays).
+
+    Walks Series containers; nested ``Recursion`` modules are treated as opaque
+    leaves and contribute 0 (nested loops are unsupported — see
+    :func:`flamo_to_pr`)."""
+    total = 0
+    for branch in (recursion_module.feedforward, recursion_module.feedback):
+        for leaf in _iter_leaf_modules(branch):
+            total += _sos_section_order(leaf)
+    return total
 
 
 def flamo_extract_pr_decomposition(model: Any) -> dict[str, Any]:
     """
     Extract the H(z)=C P(z)^{-1}B+D probes from a FLAMO model.
 
-    Uses :func:`flamo_decompose_for_pr` then builds probe adapters. Returns a dict
-    with keys ``"P"``, ``"F"`` (feedforward), ``"B"`` (input path), ``"C"``, ``"D"``.
-    For poles/residues use
-    :func:`flamo_to_pr`(model) or :func:`flamo_to_pr`(decomposition=...).
+    Returns a dict with keys ``"P"``, ``"F"`` (feedforward), ``"B"`` (input
+    path), ``"C"``, ``"D"``. For poles/residues use :func:`flamo_to_pr`.
     """
-    decomp = flamo_decompose_for_pr(model)
-    decomposition = _extract_flamo_recursion_probes(decomp)
-    return _decomposition_to_public_dict(decomposition)
+    return _decomposition_to_public_dict(flamo_decompose_for_pr(model))
 
 
-def _rcond(mat: np.ndarray) -> float:
-    try:
-        cond = np.linalg.cond(mat)
-    except np.linalg.LinAlgError:
-        return 0.0
-    if not np.isfinite(cond) or cond == 0:
-        return 0.0
-    return float(1.0 / cond)
-
-
-def _rcond_torch(mat: torch.Tensor) -> float:
-    """Reciprocal condition number for torch (complex) matrix."""
-    try:
-        m = mat.resolve_conj()
-        cond = torch.linalg.cond(m)
-    except Exception:
-        return 0.0
-    c = float(cond.cpu().numpy())
-    if not np.isfinite(c) or c == 0:
-        return 0.0
-    return float(1.0 / c)
+# ───────────────────────────────────────────────────────────────────────────
+# FDN loop (P(z), dP/dz, Newton step) — used by EAI and SVD refinement
+# ───────────────────────────────────────────────────────────────────────────
 
 
 @dataclass
@@ -351,7 +335,6 @@ class _FDNLoopFlamo:
         self._dtype = _infer_model_complex_dtype(rec)
         self._inverse_newton_step_w_fn = _make_log_det_derivative_w(rec)
         self._get_P_and_dP_dz = _make_P_and_dP_dz(rec)
-        self._log_det_derivative_z_fn = _make_log_det_derivative_z(rec)
 
     def at_z(self, z: complex) -> torch.Tensor:
         """P(z) via Recursion.probe_recursion(z)."""
@@ -363,10 +346,6 @@ class _FDNLoopFlamo:
         out = self.recursion.probe_recursion_w(w)
         return out.detach()
 
-    def der(self, z: complex) -> torch.Tensor:
-        """dP/dz(z) from built-once JVP callable."""
-        return self._get_P_and_dP_dz(z)[1]
-
     def get_P_and_dP_dz(self, z: complex) -> tuple[torch.Tensor, torch.Tensor]:
         """(P(z), dP/dz(z)) from built-once JVP callable."""
         return self._get_P_and_dP_dz(z)
@@ -375,36 +354,26 @@ class _FDNLoopFlamo:
         """(d/dw) log det P(w) for Newton refinement."""
         return self._inverse_newton_step_w_fn(w)
 
-    def log_det_derivative_z(self, z: complex) -> torch.Tensor:
-        """(d/dz) log det P(z)."""
-        return self._log_det_derivative_z_fn(z)
 
-    def log_det_derivative_w(self, w: complex) -> torch.Tensor:
-        """(d/dw) log det P(w)."""
-        return self._inverse_newton_step_w_fn(w)
+# ───────────────────────────────────────────────────────────────────────────
+# Ehrlich-Aberth iteration (pole quality, deflation, refinement loop)
+# ───────────────────────────────────────────────────────────────────────────
 
 
-def _pole_quality_z(
-    poles_z: torch.Tensor,
-    loop: _FDNLoopFlamo,
-    device: torch.device,
-    dtype: torch.dtype,
-) -> torch.Tensor:
-    """Pole quality in z-domain: rcond(P(z)) for each pole z. Returns torch tensor."""
-    poles_flat = poles_z.ravel()
-    n = poles_flat.shape[0]
-    quality = torch.zeros(n, device=device, dtype=torch.float64)
-    for i in range(n):
-        z = poles_flat[i].item()
-        m = loop.at_z(z)
-        if m.ndim == 0:
-            q = m.abs().item()
-        else:
-            q = _rcond_torch(m)
-        if torch.isfinite(m).all() and m.abs().max().item() > 1e10:
-            q = 1e10
-        quality[i] = q
-    return quality
+def _matrix_quality(m: torch.Tensor) -> float:
+    """rcond(P) as a pole-quality score; 1e10 sentinel for blown-up matrices.
+
+    A non-finite ``P`` (e.g. a root that ran off to ``w → ∞`` / ``z → 0`` where
+    the loop's ``z^{-m}`` terms overflow) must score *worst*, not best — otherwise
+    ``_rcond_torch`` returns 0 for it and the runaway is mistaken for a perfectly
+    converged pole and survives into residue extraction.
+    """
+    if not torch.isfinite(m).all():
+        return 1e10
+    q = m.abs().item() if m.ndim == 0 else _rcond_torch(m)
+    if m.abs().max().item() > 1e10:
+        q = 1e10
+    return q
 
 
 def _pole_quality_w(
@@ -413,29 +382,14 @@ def _pole_quality_w(
     device: torch.device,
     dtype: torch.dtype,
 ) -> torch.Tensor:
-    """
-    Pole quality for roots w: rcond(P(1/w)).
-    Uses z-domain when |w| > 1; else w-domain. Returns torch tensor.
-    """
+    """Pole quality rcond(P(1/w)) per root. Probes in z when |w|>1 (pole inside
+    the unit disk, where P is better conditioned), else in w."""
     roots_flat = roots_w.ravel()
-    n = roots_flat.shape[0]
-    quality = torch.zeros(n, device=device, dtype=torch.float64)
-    for i in range(n):
+    quality = torch.zeros(roots_flat.shape[0], device=device, dtype=torch.float64)
+    for i in range(roots_flat.shape[0]):
         w = roots_flat[i].item()
-        if abs(w) > 1:
-            z = 1.0 / w
-            q = _pole_quality_z(
-                torch.tensor([z], device=device, dtype=dtype), loop, device, dtype
-            )[0].item()
-        else:
-            m = loop.at_w(w)
-            if m.ndim == 0:
-                q = m.abs().item()
-            else:
-                q = _rcond_torch(m)
-            if torch.isfinite(m).all() and m.abs().max().item() > 1e10:
-                q = 1e10
-        quality[i] = q
+        m = loop.at_z(1.0 / w) if abs(w) > 1 else loop.at_w(w)
+        quality[i] = _matrix_quality(m)
     return quality
 
 
@@ -555,23 +509,6 @@ def _refine_pole_positions_w(
             it = int(non_converged[idx].item())
             if quality[it] <= quality_threshold:
                 continue
-            if quality[it] > 10000.0:
-                new_w = torch.tensor(
-                    np.exp(1j * np.random.uniform(0, 2 * np.pi)),
-                    device=device,
-                    dtype=dtype,
-                )
-                roots_w = roots_w.clone()
-                roots_w[it] = new_w
-                q_new = _pole_quality_w(roots_w[it : it + 1], loop, device, dtype)[0]
-                quality = quality.clone()
-                quality[it] = q_new
-                if verbose:
-                    print(
-                        f"Pole {it} was at {roots_w_old[it].item():.3f} and set to random "
-                        f"value on unit circle: {roots_w[it].item():.3f}"
-                    )
-                continue
 
             newton_step_counter += 1
             w_i = roots_w[it].item()
@@ -636,8 +573,6 @@ def _refine_pole_positions_w(
         "newtonStepCounter": int(newton_step_counter),
         "iterations": int(iteration_counter),
         "exactCounter": int(exact_counter),
-        "recordNeighborDeflation": [],
-        "recordNewton": [],
         "recordRootsW": np.asarray(
             [_to_numpy(r) for r in record_roots_w], dtype=np.complex128
         ),
@@ -645,16 +580,100 @@ def _refine_pole_positions_w(
     return roots_w, quality, meta
 
 
+def _refine_pole_via_svd(
+    z_init: complex,
+    loop: _FDNLoopFlamo,
+    *,
+    max_iters: int = 5,
+    tol: float = 1e-14,
+) -> complex:
+    """Refine a single approximate pole via SVD null-vector Newton:
+    ``dz = -sigma_min / (l^H · dP/dz · r)``.
+    """
+    z = complex(z_init)
+    for _ in range(max_iters):
+        P, dP = loop.get_P_and_dP_dz(z)
+        if not (torch.isfinite(P).all() and torch.isfinite(dP).all()):
+            break
+        # Scale P and dP together before the SVD: poles far from the unit circle
+        # (|z| << 1 makes the loop's z^{-m} terms huge) otherwise yield an
+        # ill-conditioned matrix that fails to decompose. Null vectors are
+        # scale-invariant and dz cancels the shared scale, so the step is unchanged.
+        scale = P.abs().max()
+        if scale > 0 and torch.isfinite(scale):
+            P, dP = P / scale, dP / scale
+        try:
+            u, s, vh = torch.linalg.svd(P)
+        except Exception:
+            break
+        sigma_min = float(s[-1].cpu().item())
+        r = vh.conj().T[:, -1]  # right singular vector for sigma_min
+        l = u[:, -1]  # left singular vector for sigma_min
+        denom = torch.vdot(l, dP @ r)  # l^H (dP/dz) r
+        denom_c = complex(denom.resolve_conj().cpu().numpy())
+        if abs(denom_c) < 1e-30 or not np.isfinite(denom_c):
+            break
+        dz = -sigma_min / denom_c
+        z = z + dz
+        if abs(dz) < tol:
+            break
+    return z
+
+
+def _conjugate_symmetrize(poles: np.ndarray, *, tol: float = 1e-6) -> np.ndarray:
+    """Enforce conjugate-pair symmetry on a pole set: average each pole with
+    the conjugate of its nearest match and snap near-real poles to the real axis.
+    """
+    poles = np.asarray(poles, dtype=np.complex128).copy()
+    n = poles.size
+    out = poles.copy()
+    used = np.zeros(n, dtype=bool)
+    for i in range(n):
+        if used[i]:
+            continue
+        scale = max(abs(poles[i]), 1.0)
+        # Near-real: snap imaginary part to zero
+        if abs(poles[i].imag) < tol * scale:
+            out[i] = complex(poles[i].real, 0.0)
+            used[i] = True
+            continue
+        # Find nearest unused candidate for conjugate match
+        target = poles[i].conjugate()
+        mask = ~used.copy()
+        mask[i] = False
+        if not mask.any():
+            used[i] = True
+            continue
+        idx = np.where(mask)[0]
+        dists = np.abs(poles[idx] - target)
+        k = int(np.argmin(dists))
+        j = int(idx[k])
+        if dists[k] < tol * scale:
+            avg = 0.5 * (poles[i] + poles[j].conjugate())
+            out[i] = avg
+            out[j] = avg.conjugate()
+            used[i] = True
+            used[j] = True
+        else:
+            used[i] = True
+    return out
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# Residue extractor
+# ───────────────────────────────────────────────────────────────────────────
+
+
 def _dss_to_res_flamo(
     poles: np.ndarray,
     loop: _FDNLoopFlamo,
     decomposition: Any,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, np.ndarray]]:
-    """Residues from poles; P and dP/dz from loop (built once in _FDNLoopFlamo)."""
+    """Residues from poles using FLAMO probes for B, C, D."""
     poles = np.asarray(poles, dtype=np.complex128).ravel()
     n_poles = poles.size
-    n_in = int(decomposition.in_probe.input_channels)
-    n_out = int(decomposition.out_probe.output_channels)
+    n_in = int(decomposition.in_subgraph.input_channels)
+    n_out = int(decomposition.out_subgraph.output_channels)
     n = loop.n
 
     p0, _ = loop.get_P_and_dP_dz(poles[0])
@@ -667,12 +686,16 @@ def _dss_to_res_flamo(
 
     for it, pole in enumerate(poles):
         p, dp = loop.get_P_and_dP_dz(pole)
-        f_at = decomposition.f_probe.probe(pole)
-        in_at = decomposition.in_probe.probe(pole)
+        f_at = decomposition.f_subgraph.probe(pole)
+        in_at = decomposition.in_subgraph.probe(pole)
         b = f_at @ in_at
-        c = decomposition.out_probe.probe(pole)
+        c = decomposition.out_subgraph.probe(pole)
 
-        u, s, vh = torch.linalg.svd(p)
+        # Scale p before the SVD (null vectors are scale-invariant) so poles far
+        # from the unit circle stay well-conditioned; dp is left unscaled for denom.
+        scale = p.abs().max()
+        p_svd = p / scale if (scale > 0 and torch.isfinite(scale)) else p
+        u, s, vh = torch.linalg.svd(p_svd)
         r = vh.conj().T[:, -1]
         l = u[:, -1]
 
@@ -697,7 +720,7 @@ def _dss_to_res_flamo(
     residues = r_nom / r_den[:, None, None]
     zero = torch.tensor(0.0 + 0.0j, device=device, dtype=dtype)
     residues = torch.where(torch.isfinite(residues), residues, zero)
-    direct_term = decomposition.direct_probe.probe(1.0 + 0j)
+    direct_term = decomposition.direct_subgraph.probe(1.0 + 0j)
 
     return (
         _to_numpy(residues),
@@ -705,6 +728,11 @@ def _dss_to_res_flamo(
         _to_numpy(undriven),
         {"right": _to_numpy(eig_right), "left": _to_numpy(eig_left)},
     )
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# Public API
+# ───────────────────────────────────────────────────────────────────────────
 
 
 def flamo_to_pr(
@@ -716,37 +744,89 @@ def flamo_to_pr(
     quality_threshold: float = 1e-10,
     maximum_iterations: int = 50,
     refinement_tol: float = 1e-12,
+    svd_refine: bool = True,
+    symmetrize: bool = True,
     verbose: bool = True,
     num_poles: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
-    """
-    Poles/residues from a FLAMO transfer H(z)=C(z)P(z)^{-1}B(z)+D(z).
+    """Poles/residues from a FLAMO transfer ``H(z) = C(z)P(z)^{-1}B(z) + D(z)``.
 
-    Pass either a full FLAMO **model** (decomposition is done via
-    :func:`flamo_decompose_for_pr`) or a **decomposition** returned by that
-    function. Poles are refined in the w-domain (w = 1/z) then converted to z.
+    Pass either a FLAMO ``model`` or a ``decomposition`` from
+    :func:`flamo_decompose_for_pr`.
 
-    ``num_poles`` overrides the number of root seeds (default: sum of the
-    recursion delays). Use it when the loop contains filters that add poles
-    beyond the delays, e.g. a polynomial (FIR) feedback matrix, where the
-    pole count is the degree of the generalized characteristic polynomial.
+    Supported architecture
+    ----------------------
+    The model must reduce to a **single, non-nested** ``Recursion`` (the canonical
+    FDN: ``Parallel(branchA=Series(in_gain, Recursion, out_gain), branchB=direct)``,
+    as produced by :func:`pyFDN.translate.dss_to_flamo.dss_to_flamo`). Two
+    constraints are assumed and **not** auto-detected:
 
-    For DSS matrices (A,B,C,D) use :func:`dss_to_pr_flamo` instead.
+    - **Delays live in the recursion's feedforward path.** Delay lengths are read
+      from ``feedforward`` to size the pole search.
+    - **No nested recursion.** A ``Recursion`` placed inside another loop's
+      feedforward/feedback (e.g. an allpass realized as its own sub-FDN) is *not*
+      supported: its internal poles are folded into ``F(z)`` by ``probe`` but are
+      not roots of the outer ``det P`` and would be silently dropped.
+
+    SOS-format filters (one-pole/biquad/SVF cascades stored as second-order
+    sections) anywhere in the feedforward or feedback are supported: their poles
+    are added to the pole count via :func:`_count_loop_filter_poles` so the
+    Ehrlich-Aberth search is sized correctly.
+
+    Parameters
+    ----------
+    num_poles : int or None, default None
+        Override the auto-detected pole count (``sum(delays)`` plus IIR poles from
+        loop filters). When given, this exact value sizes the Ehrlich-Aberth root
+        search instead of the detected order. Use it when the loop order is known
+        independently (e.g. the characteristic-polynomial degree) or when filters
+        sit where :func:`_count_loop_filter_poles` cannot see them.
+    svd_refine : bool, default True
+        Run a per-pole SVD null-vector Newton step after the Ehrlich-Aberth loop.
+    symmetrize : bool, default True
+        Enforce exact conjugate-pair symmetry on the refined pole set before
+        :func:`reduce_conjugate_pairs`.
     """
     if decomposition is None:
         if model is None:
             raise ValueError("Provide model or decomposition.")
         decomposition = flamo_decompose_for_pr(model)
     delays_arr = decomposition.delays
-    decomposition_obj = _extract_flamo_recursion_probes(decomposition)
 
-    loop = _FDNLoopFlamo(recursion=decomposition_obj.p_probe)
-    device, dtype = _device_dtype_from_decomposition(decomposition_obj)
+    rec = decomposition.recursion_module
+    loop = _FDNLoopFlamo(recursion=rec)
+    device = _infer_model_device(rec)
+    dtype = _infer_model_complex_dtype(rec)
 
-    n_poles = int(np.sum(delays_arr)) if num_poles is None else int(num_poles)
+    # Pole count = delay-line poles (sum of delays) + IIR poles from any SOS-format
+    # filters in the loop. Pure-delay loops keep the original sum(delays) count.
+    # A caller-supplied ``num_poles`` overrides this auto-detected order entirely
+    # (e.g. when filters live where the walker can't see them, or to match a known
+    # characteristic-polynomial degree).
+    n_delay_poles = int(np.sum(delays_arr))
+    n_filter_poles = _count_loop_filter_poles(rec)
+    n_poles = n_delay_poles + n_filter_poles
+    if num_poles is not None:
+        if int(num_poles) <= 0:
+            raise ValueError(f"num_poles must be a positive integer, got {num_poles}.")
+        n_poles = int(num_poles)
+        if verbose:
+            print(
+                f"Overriding detected pole count: num_poles={n_poles}"
+            )
 
-    # Initialize on unit circle in w-domain (torch), refine in torch
-    root_angles = np.linspace(0.0, 2.0 * np.pi, n_poles, endpoint=False)
+    # Seed equi-spaced on the unit circle in the w = 1/z domain. With IIR filters
+    # in the loop the poles spread inward (off the unit circle) and plain
+    # Ehrlich-Aberth tends to leave one root homeless — it runs off to w → ∞ while
+    # two seeds collide on a single pole. Over-provisioning the seed count gives the
+    # iteration enough roots that every true pole is covered; surplus roots diverge
+    # and are dropped by the convergence filter below (deflation keeps them from
+    # duplicating real poles). Pure-delay loops keep the exact original seeding.
+    n_extra = max(0, n_poles - n_delay_poles)
+    n_seed = n_poles
+    if n_extra > 0:
+        n_seed = n_poles + max(8, 2 * n_extra)
+    root_angles = np.linspace(0.0, 2.0 * np.pi, n_seed, endpoint=False)
     roots_w = torch.tensor(
         np.exp(1j * root_angles).astype(np.complex128),
         device=device,
@@ -785,80 +865,29 @@ def flamo_to_pr(
     poles_torch = 1.0 / roots_w
     # Convert to numpy only for scipy.optimize.linear_sum_assignment in reduce_conjugate_pairs
     poles_np = _to_numpy(poles_torch)
-    # Scale pairing tolerances to the achieved pole accuracy: refinement stops
-    # at quality_threshold and cannot beat the working precision (a float32
-    # model refines only to ~eps(float32)). With the float64-scale defaults,
-    # conjugate pairs and real poles would be misclassified as unpaired and
-    # dropped.
-    tol = max(1e-8, 100 * torch.finfo(dtype).eps, float(quality_threshold))
+
+    if svd_refine:
+        poles_np = np.array(
+            [_refine_pole_via_svd(complex(z), loop) for z in poles_np],
+            dtype=np.complex128,
+        )
+        meta_data["polesBeforeSymmetrize"] = poles_np.copy()
+
+    if symmetrize:
+        sym_tol = max(float(quality_threshold) * 1000.0, 1e-9)
+        poles_np = _conjugate_symmetrize(poles_np, tol=sym_tol)
+
     poles, is_conjugate, non_paired = reduce_conjugate_pairs(
-        poles_np,
-        tol_real=tol,
-        tol_pair=tol,
-        verbose=verbose,
+        poles_np, verbose=verbose
     )
     meta_data["nonPairedPoles"] = non_paired
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(
-        poles, loop, decomposition_obj
+        poles, loop, decomposition
     )
     meta_data["undrivenResidues"] = undriven
     meta_data["eigenvectors"] = eigenvectors
-    meta_data["decomposition"] = _decomposition_to_public_dict(decomposition_obj)
+    meta_data["decomposition"] = _decomposition_to_public_dict(decomposition)
     meta_data["loop"] = loop
 
     return residues, poles, direct, is_conjugate, meta_data
-
-
-def dss_to_pr_flamo(
-    delays: ArrayLike,
-    A: Any,
-    B: Any,
-    C: Any,
-    D: Any,
-    *,
-    deflation_type: str = "fullDeflation",
-    reject_unstable_poles: bool = False,
-    quality_threshold: float = 1e-7,
-    maximum_iterations: int = 50,
-    refinement_tol: float = 1e-12,
-    verbose: bool = True,
-    dtype: Any = None,
-    Fs: float = 1.0,
-    nfft: int = 2**16,
-    device: Any = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
-    """
-    DSS -> FLAMO -> PR in one call.
-
-    Builds a FLAMO model with :func:`dss_to_flamo`, then runs :func:`flamo_to_pr`
-    on it. For an existing FLAMO model use :func:`flamo_to_pr` directly.
-
-    ``dtype`` defaults to ``torch.float64``: pole refinement and conjugate
-    pairing need double precision; float32 stalls at ~1e-7 accuracy.
-    """
-    if dtype is None:
-        dtype = torch.float64
-    delays_arr = np.asarray(delays, dtype=int).ravel()
-    model = dss_to_flamo(
-        A=np.asarray(A, dtype=np.float64),
-        B=np.asarray(B, dtype=np.float64),
-        C=np.asarray(C, dtype=np.float64),
-        D=np.asarray(D, dtype=np.float64),
-        m=delays_arr,
-        Fs=float(Fs),
-        nfft=int(nfft),
-        device=device,
-        shell=False,
-        dtype=dtype,
-    )
-
-    return flamo_to_pr(
-        model,
-        deflation_type=deflation_type,
-        reject_unstable_poles=reject_unstable_poles,
-        quality_threshold=quality_threshold,
-        maximum_iterations=maximum_iterations,
-        refinement_tol=refinement_tol,
-        verbose=verbose,
-    )
