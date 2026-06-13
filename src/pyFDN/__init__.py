@@ -18,6 +18,7 @@ __all__ = [
     "absorption_to_rt",
     "edc",
     "first_order_absorption",
+    "first_order_shelving_eq",
     "one_pole_absorption",
     "rt_to_gain_per_sample",
     "rt_to_slope",
@@ -27,6 +28,11 @@ __all__ = [
     "matrix_delay_approximation",
     "mgrpdelay",
     "ms_to_smp",
+    "flamo_delay_feedback_matrix",
+    "swap_flamo_recursion_paths",
+    "flamo_time_response",
+    "flamo_process",
+    "load_audio",
     # matrix generators
     "allpass_in_fdn",
     "anderson_matrix",
@@ -36,8 +42,10 @@ __all__ = [
     "construct_velvet_feedback_matrix",
     "degree_one_lossless",
     "fdn_matrix_gallery",
+    "fdn_build_gallery",
     "fdn_system_gallery",
     "filter_matrix_gallery",
+    "FDNBuild",
     "FDNSystem",
     "householder_matrix",
     "is_almost_zero",
@@ -112,6 +120,7 @@ __all__ = [
     "plot_db_per_sample",
     "plot_edc",
     "plot_fdn_parameter",
+    "plot_FDN_build",
     "plot_impulse_response",
     "plot_impulse_response_matrix",
     "plot_matrix",
@@ -125,6 +134,8 @@ __all__ = [
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
     "plot_flamo_graph",
+    "flamo_model_to_fdn_parameters",
+    "FlamoFDNParameters",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -163,6 +174,7 @@ from .auxiliary.acoustics import (
     estimate_initial_level_bands,
     estimate_rt_bands,
     first_order_absorption,
+    first_order_shelving_eq,
     one_pole_absorption,
     rt_to_gain_per_sample,
     rt_to_slope,
@@ -177,10 +189,20 @@ from .auxiliary.allpass import (
     poletti_allpass,
     series_allpass,
 )
+from .auxiliary.audio import load_audio
 
 # delay utilities
-from .auxiliary.delay import matrix_delay_approximation, mgrpdelay, ms_to_smp
+from .auxiliary.delay import (
+    flamo_delay_feedback_matrix,
+    matrix_delay_approximation,
+    mgrpdelay,
+    ms_to_smp,
+    swap_flamo_recursion_paths,
+)
+from .auxiliary.flamo import flamo_process, flamo_time_response
 from .auxiliary.flamo_graph import (
+    FlamoFDNParameters,
+    flamo_model_to_fdn_parameters,
     flamo_model_to_nodes,
     flamo_nodes_flat,
     plot_flamo_graph,
@@ -215,6 +237,7 @@ from .auxiliary.plot import (
     downsampled_scatter,
     plot_db_per_sample,
     plot_edc,
+    plot_FDN_build,
     plot_fdn_parameter,
     plot_impulse_response,
     plot_impulse_response_matrix,
@@ -287,7 +310,9 @@ from .generate.construct_paraunitary_from_elementals import (
 from .generate.construct_velvet_feedback_matrix import construct_velvet_feedback_matrix
 from .generate.degree_one_lossless import degree_one_lossless
 from .generate.fdn_matrix_gallery import (
+    FDNBuild,
     FDNSystem,
+    fdn_build_gallery,
     fdn_matrix_gallery,
     fdn_system_gallery,
     filter_matrix_gallery,

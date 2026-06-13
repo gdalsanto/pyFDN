@@ -1,4 +1,4 @@
-"""Acoustics and RT60 related functions."""
+"""Acoustics and RT related functions."""
 
 from __future__ import annotations
 
@@ -218,10 +218,10 @@ def estimate_rt_bands(
     filter_order: int = 8,
     decay_db: float = 30.0,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Estimate RT60 in octave bands via Butterworth bandpass filtering.
+    """Estimate RT in octave bands via Butterworth bandpass filtering.
 
     Filters the impulse response into octave bands using
-    ``pyroomacoustics.bandpass_filterbank``, then estimates RT60 per band
+    ``pyroomacoustics.bandpass_filterbank``, then estimates RT per band
     using ``pyroomacoustics.measure_rt60`` (extrapolated from ``decay_db``).
 
     Default bands: 63, 125, 250, 500, 1000, 2000, 4000, 8000 Hz (``start=-4, n=8``).
@@ -242,12 +242,13 @@ def estimate_rt_bands(
     filter_order : int
         Butterworth filter order (default 8).
     decay_db : float
-        Decay range in dB used for the linear fit (default 30, i.e. RT30→RT60).
+        Decay range in dB used for the linear fit. The default 30 dB fit is
+        extrapolated to a 60 dB reverberation time.
 
     Returns
     -------
     rt : (n_bands,) ndarray
-        Estimated RT60 in seconds per band.
+        Estimated RT in seconds per band.
     f_centre : (n_bands,) ndarray
         Centre frequencies in Hz corresponding to each RT value.
     """
@@ -299,7 +300,7 @@ def estimate_initial_level_bands(
     ir : array-like, 1-D
         Impulse response, starting at the onset.
     rt : array-like
-        RT60 in seconds per band, as returned by :func:`estimate_rt_bands`
+        RT in seconds per band, as returned by :func:`estimate_rt_bands`
         with the same band parameters.
     fs : float
         Sampling rate in Hz.
@@ -417,6 +418,24 @@ def first_order_absorption(
 
     h_dc = db_to_lin(delays_arr * rt_to_slope(rt_dc, fs))
     h_ny = db_to_lin(delays_arr * rt_to_slope(rt_ny, fs))
+    return _first_order_shelf(h_dc, h_ny, fs, crossover_frequency)
+
+
+def _first_order_shelf(
+    h_dc: np.ndarray,
+    h_ny: np.ndarray,
+    fs: float,
+    crossover_frequency: float | None = None,
+) -> np.ndarray:
+    """First-order shelving SOS bank from target linear gains at DC and Nyquist.
+
+    Shared core of :func:`first_order_absorption` and
+    :func:`first_order_shelving_eq`. ``h_dc`` and ``h_ny`` are linear-magnitude
+    gains (one per channel); returns a one-section per-channel SOS bank of shape
+    ``(1, 6, N)``.
+    """
+    h_dc = np.asarray(h_dc, dtype=float)
+    h_ny = np.asarray(h_ny, dtype=float)
 
     if crossover_frequency is None:
         crossover_frequency = fs / 8.0
@@ -431,12 +450,51 @@ def first_order_absorption(
     a0 = t / sqrt_k + 1.0
     a1 = t / sqrt_k - 1.0
 
-    sos = np.zeros((1, 6, delays_arr.size))
+    sos = np.zeros((1, 6, h_dc.size))
     sos[0, 0, :] = b0 / a0
     sos[0, 1, :] = b1 / a0
     sos[0, 3, :] = 1.0
     sos[0, 4, :] = a1 / a0
     return sos
+
+
+def first_order_shelving_eq(
+    db_dc: ArrayLike,
+    db_nyquist: ArrayLike,
+    fs: float,
+    crossover_frequency: float | None = None,
+) -> np.ndarray:
+    """Design first-order shelving EQ filters from gains in dB at DC and Nyquist.
+
+    Unlike :func:`first_order_absorption` (whose gains are derived from a
+    reverberation time and a delay length), the shelf endpoints are specified
+    directly as decibel gains. Useful as a per-output tone correction (post EQ).
+
+    Parameters
+    ----------
+    db_dc : array-like
+        Gain in dB at DC, scalar or one value per channel.
+    db_nyquist : array-like
+        Gain in dB at Nyquist, scalar or one value per channel. Broadcast
+        against ``db_dc`` to a common number of channels.
+    fs : float
+        Sampling rate in Hz.
+    crossover_frequency : float, optional
+        Shelf crossover frequency in Hz. Defaults to fs/8; clamped to fs/5.
+
+    Returns
+    -------
+    np.ndarray
+        One-section per-channel SOS bank of shape ``(1, 6, N)`` (canonical SOS
+        bank layout); section rows are ``[b0, b1, b2, a0, a1, a2]``.
+    """
+    db_dc_arr, db_ny_arr = np.broadcast_arrays(
+        np.asarray(db_dc, dtype=float).ravel(),
+        np.asarray(db_nyquist, dtype=float).ravel(),
+    )
+    return _first_order_shelf(
+        db_to_lin(db_dc_arr), db_to_lin(db_ny_arr), fs, crossover_frequency
+    )
 
 
 def sos_gain_per_sample_curves(

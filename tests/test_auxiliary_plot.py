@@ -1,6 +1,7 @@
 """Tests for plotting helpers."""
 
 import functools
+from typing import Any
 
 import numpy as np
 import pytest
@@ -10,6 +11,8 @@ from pyFDN.auxiliary.plot import (
     downsample_minmax,
     downsampled_scatter,
     plot_edc,
+    plot_FDN_build,
+    plot_fdn_parameter,
     plot_matrix,
     plot_matrix_grid,
 )
@@ -115,6 +118,90 @@ def test_plot_edc_dynamic_range_none_leaves_axis_auto():
 def test_plot_edc_rejects_mismatched_labels():
     with pytest.raises(ValueError, match="one entry per"):
         plot_edc(np.zeros(10), labels=["a", "b"])
+
+
+def test_plot_FDN_build_forwards_build_parameters(monkeypatch):
+    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+
+    build = FDNBuild(
+        A=np.eye(2),
+        B=np.ones((2, 1)),
+        C=np.ones((1, 2)),
+        D=np.zeros((1, 1)),
+        delays=np.array([11, 13]),
+        fs=48000.0,
+        filters=np.ones((1, 6, 2)),
+        post_eq=np.ones((1, 6, 1)),
+    )
+    captured: dict[str, Any] = {}
+
+    def fake_plot(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return "figure"
+
+    monkeypatch.setattr("pyFDN.auxiliary.plot.plot_fdn_parameter", fake_plot)
+
+    result = plot_FDN_build(build, nfft=1024, title="FDN")
+
+    assert result == "figure"
+    forwarded = captured["args"]
+    assert forwarded[0] is build.delays
+    assert forwarded[1] is build.A
+    assert forwarded[2] is build.B
+    assert forwarded[3] is build.C
+    assert forwarded[4] is build.D
+    assert captured["kwargs"]["attenuation_sos"] is build.filters
+    assert build.post_eq is not None
+    # The full (possibly multichannel) post EQ bank is forwarded unchanged.
+    assert captured["kwargs"]["post_eq_sos"] is build.post_eq
+    assert captured["kwargs"]["fs"] == build.fs
+    assert captured["kwargs"]["nfft"] == 1024
+    assert captured["kwargs"]["title"] == "FDN"
+
+
+def test_plot_FDN_build_renders_multichannel_post_eq():
+    import pyFDN
+
+    build = pyFDN.fdn_build_gallery(
+        4,
+        num_outputs=3,
+        rt=2.0,
+        rt_nyquist=0.5,
+        post_eq_db_dc=[0.0, -3.0, -6.0],
+        post_eq_db_nyquist=-6.0,
+        rng=0,
+    )
+    fig = pyFDN.plot_FDN_build(build)
+
+    eq_traces = [t for t in fig.data if t.name and t.name.startswith("out ")]
+    assert len(eq_traces) == 3
+
+
+def test_plot_fdn_parameter_labels_quantities_on_y_axes():
+    identity_sos = np.array([[[1.0], [0.0], [0.0], [1.0], [0.0], [0.0]]])
+    attenuation_sos = np.repeat(identity_sos, 2, axis=2)
+
+    fig = plot_fdn_parameter(
+        delays=[11, 13],
+        A=np.eye(2),
+        b=np.ones((2, 1)),
+        c=np.ones((1, 2)),
+        d=np.zeros((1, 1)),
+        attenuation_sos=attenuation_sos,
+        post_eq_sos=identity_sos[:, :, 0],
+        fs=48000.0,
+    )
+
+    yaxis_titles = [axis.title.text for axis in fig.select_yaxes()]
+    assert "Delays [samples]" in yaxis_titles
+    assert "Attenuation [dB/sample]" in yaxis_titles
+    assert "Post EQ [dB]" in yaxis_titles
+
+    subplot_titles = [annotation.text for annotation in fig.layout.annotations]
+    assert "delays [samples]" not in subplot_titles
+    assert "attenuation [dB/sample]" not in subplot_titles
+    assert "post EQ [dB]" not in subplot_titles
 
 
 def test_plot_matrix_block_boundaries_draws_dividing_lines():
