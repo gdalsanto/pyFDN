@@ -19,6 +19,10 @@ pyFDN
     :target: https://github.com/artificial-audio/pyFDN/actions/workflows/ci.yml
     :alt: Test coverage
 
+`Documentation <https://artificial-audio.github.io/pyFDN/>`_ |
+`Examples <https://artificial-audio.github.io/pyFDN/examples_gallery.html>`_ |
+`Report a bug <https://github.com/artificial-audio/pyFDN/issues>`_
+
 
 Overview
 --------
@@ -31,7 +35,7 @@ Highlights
 
 * Matrix polynomial helpers for evaluating, differentiating, and convolving FIR/IIR blocks.
 * Loop analysis utilities including pole boundary estimation and curve bounding checks.
-* Acoustic absorption design tools that translate RT60 targets into one-pole loop filters.
+* Acoustic absorption design tools that translate RT targets into one-pole loop filters.
 * Echo density (Abel & Huang 2006) for analysing reverberation and mixing time.
 * Random orthogonal matrix generation to prototype energy-preserving feedback networks.
 
@@ -65,7 +69,7 @@ All main functions are accessible directly from the top-level ``pyFDN`` namespac
     # energy-preserving feedback matrix
     feedback = pyFDN.random_orthogonal(len(delays))
 
-    # one-pole absorption filters targeting rt60 of 1.2s at dc and 0.9s at nyquist
+    # one-pole absorption filters targeting RT of 1.2 s at DC and 0.9 s at Nyquist
     absorption = pyFDN.one_pole_absorption(1.2, 0.9, delays, fs)
 
     # convert delay state-space to standard state-space (A_ss, b, c, d)
