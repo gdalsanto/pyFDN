@@ -118,7 +118,7 @@ def test_absorption_geq_shape():
     rt = np.array([1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.6, 0.7, 0.8, 0.9])
     delays = np.array([1000.0, 1300.0, 1700.0])
     sos = absorption_geq(rt, delays, 48000.0)
-    assert sos.shape == (3, 11, 6)
+    assert sos.shape == (11, 6, 3)
 
 
 def test_absorption_geq_normalised():
@@ -126,4 +126,4 @@ def test_absorption_geq_normalised():
     rt = np.ones(10) * 0.5
     delays = np.array([800.0, 1200.0])
     sos = absorption_geq(rt, delays, 48000.0)
-    np.testing.assert_allclose(sos[:, :, 3], np.ones((2, 11)), atol=1e-10)
+    np.testing.assert_allclose(sos[:, 3, :], np.ones((11, 2)), atol=1e-10)

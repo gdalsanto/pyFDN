@@ -32,9 +32,9 @@ def absorption_geq(
         fs: Sampling frequency in Hz.
 
     Returns:
-        SOS array of shape ``(num_delays, num_bands, 6)`` where
-        ``num_bands = 11`` (flat + low-shelf + 8 bandpass + high-shelf).
-        All sections are normalised so that ``a[0] = 1``.
+        Per-channel SOS bank of shape ``(num_bands, 6, num_delays)`` (the
+        canonical SOS bank layout) where ``num_bands = 11`` (flat + low-shelf
+        + 8 bandpass + high-shelf). All sections are normalised so ``a[0] = 1``.
     """
     rt = np.asarray(rt, dtype=float).ravel()
     delays = np.asarray(delays, dtype=float).ravel()
@@ -45,10 +45,10 @@ def absorption_geq(
     prototype_sos, _ = design_geq(target_g * delays[0], fs=fs)
     num_bands = prototype_sos.shape[0]
 
-    sos_out = np.zeros((num_delays, num_bands, 6))
+    sos_out = np.zeros((num_bands, 6, num_delays))
     for i, delay in enumerate(delays):
         opt_sos, _ = design_geq(target_g * delay, fs=fs)
         opt_sos = opt_sos / opt_sos[:, 3:4]  # normalise a0 = 1
-        sos_out[i, :, :] = opt_sos
+        sos_out[:, :, i] = opt_sos
 
     return sos_out

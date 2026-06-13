@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -180,7 +180,7 @@ def _(
         delays,
         fs,
         nfft=nfft,
-        sos_filter=sos_absorption.transpose(1, 2, 0),
+        sos_filter=sos_absorption,
         shell=True,
     )
     ir_unequalized = np.asarray(_model.get_time_response().squeeze())[:rir_len]
@@ -239,14 +239,14 @@ def _(
         delays,
         fs,
         nfft=nfft,
-        sos_filter=sos_absorption.transpose(1, 2, 0),
+        sos_filter=sos_absorption,
         output_filter=equalization_sos[:, :, np.newaxis],
         shell=True,
     )
     ir_fdn = np.asarray(model_eq.get_time_response().squeeze())[:rir_len]
 
     print(f"GEQ target (dB): {target_level_db.round(1)}")
-    return ir_fdn, model_eq
+    return equalization_sos, ir_fdn, model_eq
 
 
 @app.cell(hide_code=True)
@@ -258,8 +258,29 @@ def _(mo):
 
 
 @app.cell
-def _(model_eq, pyFDN):
+def _(
+    delays,
+    direct_gain,
+    equalization_sos,
+    feedback_matrix,
+    fs,
+    input_gain,
+    model_eq,
+    output_gain,
+    pyFDN,
+    sos_absorption,
+):
     pyFDN.plot_flamo_graph(model_eq)
+    pyFDN.plot_fdn_parameter(
+        delays,
+        feedback_matrix,
+        input_gain,
+        output_gain,
+        direct_gain,
+        attenuation_sos=sos_absorption,
+        post_eq_sos=equalization_sos,
+        fs=fs,
+    )
     return
 
 
@@ -281,15 +302,13 @@ def _(mo):
 
 @app.cell
 def _(fs, pyFDN, rir):
-    pyFDN.plot_spectrogram(rir, fs, title="Target RIR", clim=(-140, None)).show()
+    pyFDN.plot_spectrogram(rir, fs, title="Target RIR").show()
     return
 
 
 @app.cell
 def _(fs, ir_fdn, pyFDN):
-    pyFDN.plot_spectrogram(
-        ir_fdn, fs, title="FDN impulse response", clim=(-140, None)
-    ).show()
+    pyFDN.plot_spectrogram(ir_fdn, fs, title="FDN impulse response").show()
     return
 
 

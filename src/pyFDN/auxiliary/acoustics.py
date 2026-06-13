@@ -6,7 +6,7 @@ import warnings
 
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.signal import firwin2, freqz
+from scipy.signal import firwin2, sosfreqz
 from scipy.special import erfc
 
 from pyFDN.auxiliary.utils import db_to_lin, hertz_to_unit, lin_to_db
@@ -348,7 +348,8 @@ def one_pole_absorption(
 ) -> np.ndarray:
     """Design one-pole absorption filters according to specified reverb time.
 
-    Returns SOS format: shape (6, N) with [b0, b1, b2, a0, a1, a2] per channel.
+    Returns a one-section per-channel SOS bank of shape ``(1, 6, N)`` (the
+    canonical SOS bank layout; section rows are ``[b0, b1, b2, a0, a1, a2]``).
     """
     delays_arr = np.asarray(delays, dtype=float)
 
@@ -366,32 +367,97 @@ def one_pole_absorption(
     b0 = (1.0 - a1) * h_ny
 
     num_filters = h_dc.size
-    sos = np.zeros((6, num_filters))
-    sos[0, :] = b0  # b0
-    sos[3, :] = 1.0  # a0
-    sos[4, :] = a1  # a1
+    sos = np.zeros((1, 6, num_filters))
+    sos[0, 0, :] = b0  # b0
+    sos[0, 3, :] = 1.0  # a0
+    sos[0, 4, :] = a1  # a1
 
     return sos
 
 
-def sos_gain_per_sample_curves(
-    sos_6n: np.ndarray,
+def first_order_absorption(
+    rt_dc: float,
+    rt_ny: float,
     delays: ArrayLike,
-    nfft: int = 512,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Magnitude response (gain per sample vs angle) for SOS filters in (6, N) format.
+    fs: float,
+    crossover_frequency: float | None = None,
+) -> np.ndarray:
+    """Design first-order shelving absorption filters according to specified reverb time.
 
-    Evaluates :math:`|H(e^{j\\omega})|` at nfft angles from 0 to :math:`2\\pi` for each
-    channel, then scales by delay length so that the result is gain per sample: for
-    channel j with delay m_j, the curve is :math:`|H|^{1/m_j}`, so that after m_j
-    samples the effective gain is :math:`|H|`. Useful for plotting absorption/gain
-    curves (e.g. on a pole plot).
+    Each delay line gets a first-order shelving filter whose gain matches the
+    target decay (rt_dc at DC, rt_ny at Nyquist) for its delay length, with the
+    shelf transition at crossover_frequency.
+
+    Reference: Jot, J. M., "Proportional parametric equalizers - Application to
+    digital reverberation and environmental audio processing", AES 2015.
 
     Parameters
     ----------
-    sos_6n : (6, N) array
-        SOS coefficients with rows [b0, b1, b2, a0, a1, a2] per column (channel).
-        Same format as :func:`one_pole_absorption` returns.
+    rt_dc : float
+        Reverberation time in seconds at DC.
+    rt_ny : float
+        Reverberation time in seconds at Nyquist.
+    delays : array-like
+        Delay lengths in samples, one per channel.
+    fs : float
+        Sampling rate in Hz.
+    crossover_frequency : float, optional
+        Shelf crossover frequency in Hz. Defaults to fs/8, the midpoint of the
+        warped (bilinear) frequency axis. Values above fs/5 are clamped to fs/5
+        since a too high crossover leads to an unstable filter (fs/4 is the limit).
+
+    Returns
+    -------
+    np.ndarray
+        One-section per-channel SOS bank of shape ``(1, 6, N)`` (the canonical
+        SOS bank layout); section rows are ``[b0, b1, b2, a0, a1, a2]``
+        (b2 = a2 = 0 for these first-order filters).
+    """
+    delays_arr = np.asarray(delays, dtype=float)
+
+    h_dc = db_to_lin(delays_arr * rt_to_slope(rt_dc, fs))
+    h_ny = db_to_lin(delays_arr * rt_to_slope(rt_ny, fs))
+
+    if crossover_frequency is None:
+        crossover_frequency = fs / 8.0
+    crossover_frequency = min(crossover_frequency, fs / 5.0)
+    omega = crossover_frequency / fs * 2.0 * np.pi
+
+    t = np.tan(omega)
+    sqrt_k = np.sqrt(h_dc / h_ny)
+
+    b0 = (t * sqrt_k + 1.0) * h_ny
+    b1 = (t * sqrt_k - 1.0) * h_ny
+    a0 = t / sqrt_k + 1.0
+    a1 = t / sqrt_k - 1.0
+
+    sos = np.zeros((1, 6, delays_arr.size))
+    sos[0, 0, :] = b0 / a0
+    sos[0, 1, :] = b1 / a0
+    sos[0, 3, :] = 1.0
+    sos[0, 4, :] = a1 / a0
+    return sos
+
+
+def sos_gain_per_sample_curves(
+    sos: np.ndarray,
+    delays: ArrayLike,
+    nfft: int = 512,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Magnitude response (gain per sample vs angle) for a per-channel SOS bank.
+
+    Evaluates :math:`|H(e^{j\\omega})|` at ``nfft`` angles from 0 to :math:`\\pi`
+    (Nyquist) for each channel's SOS cascade, then scales by delay length so that
+    the result is gain per sample: for channel j with delay m_j, the curve is
+    :math:`|H|^{1/m_j}`, so that after m_j samples the effective gain is
+    :math:`|H|`. Useful for plotting absorption/gain curves (e.g. on a pole plot).
+
+    Parameters
+    ----------
+    sos : (n_sections, 6, N) array
+        Per-channel SOS bank; section rows are ``[b0, b1, b2, a0, a1, a2]``. Same
+        format as :func:`one_pole_absorption` / :func:`first_order_absorption`
+        return.
     delays : (N,) array-like
         Delay lengths in samples, one per channel. Used to scale gain to per-sample.
     nfft : int
@@ -400,24 +466,22 @@ def sos_gain_per_sample_curves(
     Returns
     -------
     angles : (nfft,) array
-        Angles in rad/sample, 0 to 2*pi.
+        Angles in rad/sample, 0 to pi.
     magnitude : (nfft, N) array
         Gain per sample (linear), i.e. :math:`|H(e^{j\\omega})|^{1/m}` per channel.
     """
-    sos_6n = np.asarray(sos_6n, dtype=np.float64)
+    sos = np.asarray(sos, dtype=np.float64)
     delays_arr = np.asarray(delays, dtype=np.float64).ravel()
-    if sos_6n.shape[0] != 6:
-        raise ValueError("sos_6n must have shape (6, N)")
-    N = sos_6n.shape[1]
+    if sos.ndim != 3 or sos.shape[1] != 6:
+        raise ValueError("sos must have shape (n_sections, 6, N)")
+    N = sos.shape[2]
     if delays_arr.shape[0] != N:
-        raise ValueError("delays must have length N (number of channels in sos_6n)")
+        raise ValueError("delays must have length N (number of channels in sos)")
     if np.any(delays_arr < 1):
         raise ValueError("delays must be >= 1")
     magnitude = np.zeros((nfft, N), dtype=np.float64)
+    angles = np.zeros(nfft, dtype=np.float64)
     for ch in range(N):
-        b = sos_6n[0:3, ch]
-        a = sos_6n[3:6, ch]
-        angles, h = freqz(b, a, worN=nfft)
-        mag = np.abs(h)
-        magnitude[:, ch] = np.power(mag, 1.0 / delays_arr[ch])
+        angles, h = sosfreqz(sos[:, :, ch], worN=nfft)
+        magnitude[:, ch] = np.power(np.abs(h), 1.0 / delays_arr[ch])
     return angles, magnitude

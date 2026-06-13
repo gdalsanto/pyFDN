@@ -114,7 +114,7 @@ def _(delays, fs, go, np, num_delays, pyFDN, target_rt):
     fig_mag = go.Figure()
     for _i in range(num_delays):
         _, _H_bands, _W_bands = pyFDN.probe_sos(
-            sos_absorption[_i], np.array([]), fft_len=2**14, fs=fs
+            sos_absorption[..., _i], np.array([]), fft_len=2**14, fs=fs
         )
         _mag_db = pyFDN.lin_to_db(np.abs(np.prod(_H_bands, axis=1)))
         fig_mag.add_trace(
@@ -190,7 +190,7 @@ def _(
         delays,
         fs,
         nfft=2**17,
-        sos_filter=sos_absorption.transpose(1, 2, 0),  # (n_sections, 6, N)
+        sos_filter=sos_absorption,  # canonical (n_sections, 6, N) bank
         shell=True,
         dtype=torch.float64,
     )
@@ -217,35 +217,14 @@ def _(mo):
 
 
 @app.cell
-def _(go, ir_flamo, ir_td, np, pyFDN):
-    fig_ir = go.Figure()
+def _(ir_flamo, ir_td, np, pyFDN):
     t_axis = np.arange(len(ir_td))
-    fig_ir.add_trace(
-        go.Scatter(
-            x=t_axis,
-            y=pyFDN.mulaw_encode(ir_td),
-            mode="lines",
-            name="process_fdn (time domain)",
-            line={"width": 1.0},
-        )
-    )
-    fig_ir.add_trace(
-        go.Scatter(
-            x=t_axis,
-            y=pyFDN.mulaw_encode(ir_flamo),
-            mode="lines",
-            name="FLAMO (frequency domain)",
-            line={"width": 1.0, "dash": "dash"},
-        )
-    )
-    fig_ir.update_layout(
+    pyFDN.plot_impulse_response(
+        ir_td,
+        ir_flamo,
+        labels=["process_fdn (time domain)", "FLAMO (frequency domain)"],
         title="Impulse response: process_fdn vs FLAMO",
-        xaxis={"title": "Time (samples)"},
-        yaxis={"title": "Amplitude (mu-law)"},
-        template="plotly_white",
-        height=400,
     )
-    fig_ir.show()
     return (t_axis,)
 
 

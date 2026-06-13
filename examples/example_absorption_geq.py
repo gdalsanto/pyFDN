@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.6"
+__generated_with = "0.23.9"
 app = marimo.App()
 
 
@@ -73,17 +73,7 @@ def _(np, pyFDN):
 
     print(f"Delays: {delays}")
     print(f"Target RT: {target_rt}")
-    return (
-        B_in,
-        C_out,
-        D_dir,
-        delays,
-        feedback_matrix,
-        fs,
-        num_delays,
-        rir_len,
-        target_rt,
-    )
+    return B_in, C_out, D_dir, delays, feedback_matrix, fs, rir_len, target_rt
 
 
 @app.cell(hide_code=True)
@@ -103,7 +93,7 @@ def _(delays, fs, pyFDN, target_rt):
     # The outer two are the shelf bounds; strip them to match the 10 GEQ bands
     sos_absorption = pyFDN.absorption_geq(target_rt, delays, fs)
     print(f"Absorption SOS shape: {sos_absorption.shape}")
-    # shape: (num_delays, 11, 6)
+    # shape: (11, 6, num_delays)  -> (n_sections, 6, N)
     return (sos_absorption,)
 
 
@@ -120,41 +110,14 @@ def _(mo):
 
 
 @app.cell
-def _(delays, fs, go, np, num_delays, pyFDN, sos_absorption):
-    fft_len = 2**14
-
-    ## TODO: replace by a fdn summary plot
-
-    fig_mag = go.Figure()
-    for i in range(num_delays):
-        _, H_bands, W_bands = pyFDN.probe_sos(
-            sos_absorption[i], np.array([]), fft_len=fft_len, fs=fs
-        )
-        mag_db = pyFDN.lin_to_db(np.abs(np.prod(H_bands, axis=1)))
-        mag_db_per_sample = mag_db / delays[i]
-
-        fig_mag.add_trace(
-            go.Scatter(
-                x=W_bands[:, 0],
-                y=mag_db_per_sample,
-                mode="lines",
-                name=f"delay={delays[i]}",
-                line={"width": 1.2},
-            )
-        )
-
-    fig_mag.update_layout(
+def _(delays, fs, pyFDN, sos_absorption):
+    pyFDN.plot_db_per_sample(
+        sos_absorption,
+        delays,
+        fs=fs,
+        nfft=2**14,
         title="Per-delay absorption filter magnitude (one application)",
-        xaxis={
-            "title": "Frequency (Hz)",
-            "type": "log",
-            "range": [np.log10(50), np.log10(fs / 2)],
-        },
-        yaxis={"title": "Magnitude (dB/sample)"},
-        template="plotly_white",
-        height=420,
     )
-    fig_mag.show()
     return
 
 
@@ -182,9 +145,6 @@ def _(
     rir_len,
     sos_absorption,
 ):
-    # reshape (N, n_sections, 6) → (n_sections, 6, N) for dss_to_flamo
-    sos_loop = sos_absorption.transpose(1, 2, 0)
-
     nfft = int(2 ** np.ceil(np.log2(rir_len)))
     model = pyFDN.dss_to_flamo(
         feedback_matrix,
@@ -194,7 +154,7 @@ def _(
         delays,
         fs,
         nfft=nfft,
-        sos_filter=sos_loop,
+        sos_filter=sos_absorption,  # canonical (n_sections, 6, N) bank
         shell=True,
     )
     rir = np.asarray(model.get_time_response().squeeze())[:rir_len]
@@ -228,7 +188,7 @@ def _(mo):
 @app.cell
 def _(fs, pyFDN, rir):
     pyFDN.plot_spectrogram(
-        rir, fs, title="FDN impulse response — time-frequency energy", clim=(-140, None)
+        rir, fs, title="FDN impulse response — time-frequency energy"
     ).show()
     return
 
