@@ -16,6 +16,8 @@ Getting Started
 
    * - `process_fdn — Pure DSS Simulation <_static/marimo/notebooks/example_process_fdn.html>`_
      - Demonstrates ``pyFDN.process_fdn`` for time-domain simulation of a feedback delay network with static matrices. A dry audio signal is run through the FDN to produce reverberation.
+   * - `Train a colorless FDN (minimal) <_static/marimo/notebooks/example_train_colorless_minimal.html>`_
+     - The smallest end-to-end training example, in the four explicit steps of ``pyFDN``'s training API:
    * - `Vanilla FDN (FLAMO) <_static/marimo/notebooks/example_vanilla_FDN.html>`_
      - Build a vanilla FDN with ``pyFDN.dss_to_flamo``, optionally alter delays and feedforward (e.g. diagonal gain, no absorption), plot IRs, and run a dry signal through the model.
 
@@ -94,6 +96,8 @@ FDN Design & Analysis
 
    * - `Colorless FDN <_static/marimo/notebooks/example_colorless_FDN.html>`_
      - FDN optimized for reduced metallic ringing (perceptually colorless reverberation). Original method published in "Differentiable Feedback Delay Network for Colorless Reverberation," G Dal Santo, K Prawda, SJ Schlecht, V Välimäki, 26th International Conference on Digital Audio Effects (DAFx23), 244-251.
+   * - `Colorless FDN, trained in-notebook (DAFx23) <_static/marimo/notebooks/example_train_colorless_dafx23.html>`_
+     - The companion to Colorless FDN, which loads pre-optimized parameters from ``.mat`` files. Here we run the optimization ourselves with ``pyFDN``'s four-step training API, following "Differentiable Feedback Delay Network for Colorless Reverberation", Dal Santo, Prawda, Schlecht, Välimäki, DAFx23 (and its "tiny colorless FDN" follow-up):
    * - `Decorrelation in feedback delay networks <_static/marimo/notebooks/example_decorrelation.html>`_
      - Analyses the decorrelation properties of an FDN with a velvet-noise scattering feedback matrix.
    * - `Denser Reverberation with Delay Feedback Matrix <_static/marimo/notebooks/example_delay_matrix_density.html>`_

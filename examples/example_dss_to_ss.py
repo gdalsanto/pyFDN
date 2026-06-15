@@ -35,7 +35,7 @@ def _():
     import dataclasses
 
     import numpy as np
-    from scipy.signal import dimpulse, dlti, ss2tf
+    from scipy.signal import dimpulse, dlti
 
     import pyFDN
 

@@ -8,6 +8,7 @@ values assigned.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import numpy as np
@@ -360,6 +361,102 @@ def sos_filter_module(
     return filt
 
 
+def _matrix_preimage(values: np.ndarray, matrix_type: str) -> np.ndarray:
+    """Pre-image ``param`` so a flamo ``Matrix.map(param)`` realizes ``values``.
+
+    * ``"random"`` -- identity map, so the pre-image is ``values`` itself.
+    * ``"orthogonal"`` -- map is ``matrix_exp(skew_matrix(param))``, which spans
+      SO(N). The pre-image is the real matrix logarithm (a skew-symmetric matrix
+      that ``skew_matrix`` reproduces). If ``values`` has ``det < 0`` it is not
+      in SO(N); the last column is sign-flipped to the nearest SO(N) matrix and a
+      warning is emitted.
+    """
+    if matrix_type == "random":
+        return values
+    if matrix_type == "orthogonal":
+        from scipy.linalg import logm
+
+        a = np.asarray(values, dtype=np.float64)
+        if np.linalg.det(a) < 0:
+            warnings.warn(
+                "orthogonal feedback matrix has det<0 (not in SO(N)); flipping "
+                "the last column to the nearest SO(N) matrix for the trainable "
+                "orthogonal parametrization",
+                stacklevel=3,
+            )
+            a = a.copy()
+            a[:, -1] *= -1.0
+        return np.real(logm(a))
+    raise ValueError(
+        f"matrix_type must be 'orthogonal' or 'random', got {matrix_type!r}"
+    )
+
+
+def matrix_module(
+    values: np.ndarray,
+    nfft: int,
+    *,
+    matrix_type: str = "orthogonal",
+    device: Any = None,
+    dtype: Any = None,
+    alias_decay_db: float = 0,
+    requires_grad: bool = False,
+):
+    """
+    Build a FLAMO ``Matrix`` initialized to ``values`` under a parametrization.
+
+    Unlike :func:`gain_module` (a plain value container), this preserves the
+    flamo ``map`` that constrains the trainable matrix: ``"orthogonal"`` keeps it
+    on the SO(N) manifold during optimization, ``"random"`` is unconstrained.
+
+    Parameters
+    ----------
+    values : np.ndarray
+        Square ``(N, N)`` initial feedback matrix.
+    nfft : int
+        FFT size for the FLAMO module.
+    matrix_type : str
+        ``"orthogonal"`` or ``"random"``.
+    device : torch device or None
+        Device; default is cuda if available else cpu.
+    dtype : torch.dtype or None
+        Module dtype; defaults to float32.
+    alias_decay_db : float
+        FLAMO alias decay in dB.
+    requires_grad : bool
+        Whether the matrix is trainable.
+
+    Returns
+    -------
+    flamo.processor.dsp.Matrix
+        Matrix whose realized value (``map(param)``) equals ``values`` (within
+        the parametrization; an SO(N) projection may apply for orthogonal).
+    """
+    if not _HAS_FLAMO:
+        raise ImportError("matrix_module requires flamo (pip install flamo)")
+    import torch
+
+    values = np.asarray(values, dtype=np.float64)
+    if values.ndim != 2 or values.shape[0] != values.shape[1]:
+        raise ValueError("matrix values must be square (N, N)")
+    n = values.shape[0]
+    dev = _get_device(device)
+    torch_dtype = torch.float32 if dtype is None else dtype
+
+    matrix = dsp.Matrix(
+        size=(n, n),
+        nfft=nfft,
+        matrix_type=matrix_type,
+        requires_grad=requires_grad,
+        alias_decay_db=alias_decay_db,
+        device=dev,
+        dtype=torch_dtype,
+    )
+    preimage = _matrix_preimage(values, matrix_type)
+    matrix.assign_value(torch.as_tensor(preimage, dtype=torch_dtype, device=dev))
+    return matrix
+
+
 def assemble_fdn_core(
     *,
     input_gain: Any,
@@ -376,7 +473,7 @@ def assemble_fdn_core(
 
     Single source of truth for the FDN signal flow, shared by the render path
     (:func:`pyFDN.dss_to_flamo`) and the training builder
-    (:func:`pyFDN.train.build_trainable_fdn`). All arguments are already-built
+    (:func:`pyFDN.train.trainable_from_build`). All arguments are already-built
     FLAMO ``dsp``/``system`` modules; this only composes them, so leaf names and
     topology stay identical across both callers (and match the names
     :func:`pyFDN.flamo_model_to_fdn_parameters` looks for).

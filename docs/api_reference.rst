@@ -215,6 +215,29 @@ FDN Processing
    pyFDN.process_fdn
    pyFDN.flamo_process
 
+Training
+--------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.build_fdn
+   pyFDN.trainable_from_build
+   pyFDN.with_decay
+   pyFDN.Trainable
+   pyFDN.make_objective
+   pyFDN.Objective
+   pyFDN.train_fdn
+   pyFDN.TrainLog
+   pyFDN.extract_build
+   pyFDN.spectral_flatness
+   pyFDN.flatness_from_magnitude
+   pyFDN.octave_colouration
+   pyFDN.edc_l1
+   pyFDN.mr_stft_distance
+   pyFDN.magnitude_response
+
 Plotting
 --------
 

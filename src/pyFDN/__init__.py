@@ -117,6 +117,22 @@ __all__ = [
     "pr_to_impz",
     # fdn processing
     "process_fdn",
+    # training
+    "build_fdn",
+    "trainable_from_build",
+    "with_decay",
+    "Trainable",
+    "make_objective",
+    "Objective",
+    "train_fdn",
+    "TrainLog",
+    "extract_build",
+    "spectral_flatness",
+    "flatness_from_magnitude",
+    "octave_colouration",
+    "edc_l1",
+    "mr_stft_distance",
+    "magnitude_response",
     # plotting
     "animate",
     "plot_db_per_sample",
@@ -343,6 +359,25 @@ from .graphicEQ import (
 
 # fdn processing
 from .process import process_fdn
+
+# training (torch/flamo are imported lazily inside these, so this stays torch-free)
+from .train import (
+    Objective,
+    Trainable,
+    TrainLog,
+    build_fdn,
+    edc_l1,
+    extract_build,
+    flatness_from_magnitude,
+    magnitude_response,
+    make_objective,
+    mr_stft_distance,
+    octave_colouration,
+    spectral_flatness,
+    train_fdn,
+    trainable_from_build,
+    with_decay,
+)
 
 # state-space translators
 from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo

@@ -16,7 +16,6 @@ import torch
 
 from pyFDN.auxiliary.poles import reduce_conjugate_pairs
 
-
 # ───────────────────────────────────────────────────────────────────────────
 # Small infrastructure helpers
 # ───────────────────────────────────────────────────────────────────────────
