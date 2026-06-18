@@ -63,6 +63,46 @@ def flamo_time_response(
     return np.asarray(response)
 
 
+def flamo_freq_response(
+    model,
+    fs: int = 48000,
+    identity: bool = False,
+) -> np.ndarray:
+    """Return a FLAMO model's (complex) frequency response as a NumPy array.
+
+    The NumPy-facing counterpart of FLAMO's ``model.get_freq_response()`` and the
+    frequency-domain sibling of :func:`flamo_time_response`. It detaches the
+    returned tensor from any autograd graph, transfers it to CPU memory, and
+    preserves its shape and (complex) dtype. Take ``np.abs(...)`` for the
+    magnitude response, ``np.angle(...)`` for the phase.
+
+    ``get_freq_response`` evaluates over ``nfft`` DFT bins by temporarily swapping
+    the model's input/output layers to FFT and restoring them before returning,
+    so this is side-effect-free regardless of the model's current output layer.
+
+    Parameters
+    ----------
+    model
+        FLAMO model exposing ``get_freq_response`` (e.g. a ``Shell``).
+    fs : int
+        Sampling frequency passed to FLAMO.
+    identity : bool
+        Whether to request FLAMO's input-free identity response.
+
+    Returns
+    -------
+    np.ndarray
+        Complex frequency response with the same shape and numeric dtype as
+        FLAMO's tensor.
+    """
+    response = model.get_freq_response(fs=fs, identity=identity)
+    if hasattr(response, "detach"):
+        response = response.detach()
+    if hasattr(response, "cpu"):
+        response = response.cpu()
+    return np.asarray(response)
+
+
 def flamo_process(
     model,
     signal: np.ndarray,
