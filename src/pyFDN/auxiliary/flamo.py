@@ -516,7 +516,7 @@ def assemble_fdn_core(
     (:func:`pyFDN.train.trainable_from_build`). All arguments are already-built
     FLAMO ``dsp``/``system`` modules; this only composes them, so leaf names and
     topology stay identical across both callers (and match the names
-    :func:`pyFDN.flamo_model_to_fdn_parameters` looks for).
+    :func:`pyFDN.extract_build` looks for).
 
     Signal flow::
 

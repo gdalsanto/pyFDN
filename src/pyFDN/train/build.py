@@ -1,4 +1,4 @@
-"""Step 1 of training: build a trainable flamo FDN model from a config.
+"""Build a trainable flamo FDN model from a config.
 
 ``build_fdn`` turns a small config (delays/N, decay, what is trainable) into a
 flamo ``Shell`` -- a real model you can render, inspect (:func:`pyFDN.flamo_time_response`,

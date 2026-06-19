@@ -77,9 +77,9 @@ def train_fdn(
         ``"colorless"``, ``"match_magnitude"``, ``"match_spectrogram"`` or
         ``"match_mel_spectrogram"``.
     target : np.ndarray, optional
-        Reference the mode fits to -- a one-sided ``|H|`` for ``match_magnitude``,
-        an impulse response for the spectrogram modes. Unused for ``colorless``;
-        required otherwise.
+        Reference impulse response the mode fits to -- a time-domain IR for every
+        matching mode (``match_magnitude`` converts it to one-sided ``|H|``
+        internally). Unused for ``colorless``; required otherwise.
     criteria : list of (criterion, alpha, requires_model), optional
         Override the default loss list (primary loss + sparsity) with your own
         flamo criteria.

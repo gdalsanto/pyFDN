@@ -93,7 +93,6 @@ def sample_delay_lengths(
     distribution: str = "uniform",
     coprime: bool = False,
     sort: bool = False,
-    sigma: float | None = None,
     rng: np.random.Generator | int | None = None,
 ) -> np.ndarray:
     """Generate ``N`` delay-line lengths in samples.
@@ -136,8 +135,6 @@ def sample_delay_lengths(
     low, high = delay_range
     if low < 1 or high <= low:
         raise ValueError("delay_range must satisfy 1 <= low < high")
-    if sigma is not None and sigma <= 0:
-        raise ValueError("sigma must be positive")
 
     generator = _as_generator(rng)
     targets = _sample(N, low, high, distribution, generator)

@@ -125,7 +125,6 @@ __all__ = [
     "Trainable",
     "train_fdn",
     "TrainLog",
-    "extract_build",
     "spectral_flatness",
     "flatness_from_magnitude",
     "octave_colouration",
@@ -151,8 +150,7 @@ __all__ = [
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
     "plot_flamo_graph",
-    "flamo_model_to_fdn_parameters",
-    "FlamoFDNParameters",
+    "extract_build",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -218,8 +216,7 @@ from .auxiliary.delay import (
 )
 from .auxiliary.flamo import flamo_freq_response, flamo_process, flamo_time_response
 from .auxiliary.flamo_graph import (
-    FlamoFDNParameters,
-    flamo_model_to_fdn_parameters,
+    extract_build,
     flamo_model_to_nodes,
     flamo_nodes_flat,
     plot_flamo_graph,
@@ -365,7 +362,6 @@ from .train import (
     TrainLog,
     build_fdn,
     edc_l1,
-    extract_build,
     flatness_from_magnitude,
     magnitude_response,
     mr_stft_distance,

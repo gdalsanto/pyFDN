@@ -5,8 +5,9 @@
 2. **train** the model toward a *mode* (:func:`train_fdn`) -- ``colorless``,
    ``match_magnitude``, ``match_spectrogram`` or ``match_mel_spectrogram``,
    with optional ``target`` data.
-3. **extract** an :class:`~pyFDN.FDNBuild` / params / metadata
-   (:func:`extract_build`, :class:`TrainLog`).
+3. **extract** an :class:`~pyFDN.FDNBuild` back out
+   (:func:`pyFDN.extract_build`), plus metadata
+   (:class:`TrainLog`).
 
 The dataclasses and numpy metrics here import without torch; the builder, engine
 and criteria import torch/flamo lazily, so ``import pyFDN`` stays torch-free.
@@ -16,7 +17,6 @@ from __future__ import annotations
 
 from .build import MatrixParam, Trainable, build_fdn, trainable_from_build, with_decay
 from .engine import TrainLog, train_fdn
-from .extract import extract_build
 from .metrics import (
     edc_l1,
     flatness_from_magnitude,
@@ -38,8 +38,6 @@ __all__ = [
     "train_fdn",
     "Objective",
     "TrainLog",
-    # 3. extract
-    "extract_build",
     # metrics
     "spectral_flatness",
     "flatness_from_magnitude",

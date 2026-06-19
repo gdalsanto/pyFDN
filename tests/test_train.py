@@ -11,7 +11,6 @@ from pyFDN.generate.fdn_matrix_gallery import FDNBuild  # noqa: E402
 from pyFDN.train import (  # noqa: E402
     Trainable,
     build_fdn,
-    extract_build,
     flatness_from_magnitude,
     train_fdn,
     trainable_from_build,
@@ -50,14 +49,14 @@ def test_build_fdn_default_is_so_n_without_warning():
     with warnings.catch_warnings():
         warnings.simplefilter("error")  # default draw must already be in SO(N)
         model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
-    b = extract_build(model, fs=48000.0)
+    b = pyFDN.extract_build(model)
     np.testing.assert_allclose(b.A.T @ b.A, np.eye(4), atol=1e-4)
     assert np.linalg.det(b.A) > 0
 
 
 def test_extract_roundtrip_with_direct_always_present():
     model = build_fdn(N=4, rt=None, nfft=2**11, device="cpu", rng=3)
-    b = extract_build(model, fs=48000.0)
+    b = pyFDN.extract_build(model)
     assert isinstance(b, FDNBuild)
     np.testing.assert_allclose(b.A.T @ b.A, np.eye(4), atol=1e-4)
     assert b.B.shape == (4, 1) and b.C.shape == (1, 4)
@@ -71,13 +70,13 @@ def test_build_rt_sets_absorption_and_renders():
     model = build_fdn(N=6, rt=2.0, nfft=2**12, device="cpu", rng=1)
     ir = np.asarray(pyFDN.flamo_time_response(model, fs=48000)).reshape(-1)
     assert np.all(np.isfinite(ir))
-    b = extract_build(model, fs=48000.0)
+    b = pyFDN.extract_build(model)
     assert b.filters is not None and b.filters.shape[1] == 6
 
 
 def test_extracted_build_renders_through_build_to_flamo():
     model = build_fdn(N=4, rt=None, nfft=2**11, device="cpu", rng=5)
-    b = extract_build(model, fs=48000.0)
+    b = pyFDN.extract_build(model)
     ir = pyFDN.flamo_time_response(
         pyFDN.build_to_flamo(b, nfft=2**12, device="cpu"), fs=48000
     )
@@ -105,7 +104,7 @@ def test_det_negative_orthogonal_warns_and_projects():
         build.A[:, -1] *= -1.0  # force det = -1 (not in SO(N))
     with pytest.warns(UserWarning, match="SO"):
         model = trainable_from_build(build, nfft=2**10, device="cpu")
-    out = extract_build(model, fs=48000.0)
+    out = pyFDN.extract_build(model)
     np.testing.assert_allclose(out.A.T @ out.A, np.eye(4), atol=1e-4)
     assert np.linalg.det(out.A) > 0
 
@@ -117,17 +116,17 @@ def test_colorless_improves_and_preserves_structure():
     nfft = 2**10
     model = build_fdn(N=4, rt=None, nfft=nfft, device="cpu", rng=0)
     init_twin = trainable_from_build(
-        extract_build(model, fs=48000.0), nfft=nfft, output="magnitude", device="cpu"
+        pyFDN.extract_build(model), nfft=nfft, output="magnitude", device="cpu"
     )
     init = flatness_from_magnitude(_magnitude(init_twin, nfft))
-    delays0 = extract_build(model, fs=48000.0).delays
+    delays0 = pyFDN.extract_build(model).delays
 
     log = train_fdn(model, "colorless", max_epochs=15, rng=0, **_FAST)
 
     assert log.train_loss[-1] < log.train_loss[0]
     # the model now emits |H| (output-domain swap) -> flatter than init
     assert flatness_from_magnitude(_magnitude(model, nfft)) > init
-    out = extract_build(model, fs=48000.0)
+    out = pyFDN.extract_build(model)
     np.testing.assert_allclose(out.A.T @ out.A, np.eye(4), atol=1e-4)
     np.testing.assert_array_equal(out.delays, delays0)  # delays frozen
     assert "_ColorlessSparsity" in log.loss_log and "mse_loss" in log.loss_log
@@ -167,7 +166,7 @@ def test_match_spectrogram_runs_and_scores():
     out_ir = np.asarray(
         pyFDN.flamo_time_response(
             pyFDN.build_to_flamo(
-                extract_build(fresh, fs=48000.0), nfft=nfft, device="cpu"
+                pyFDN.extract_build(fresh), nfft=nfft, device="cpu"
             ),
             fs=48000,
         )
@@ -185,8 +184,8 @@ def test_match_mode_requires_target():
 
 
 def test_with_decay_realizes_rt():
-    build = extract_build(
-        build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3), fs=48000.0
+    build = pyFDN.extract_build(
+        build_fdn(N=6, rt=None, nfft=2**12, device="cpu", rng=3)
     )
     build = with_decay(build, 0.3)
     assert build.filters is not None and build.filters.shape == (1, 6, 6)

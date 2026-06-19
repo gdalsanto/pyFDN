@@ -8,24 +8,12 @@ with the feedback path drawn so the loop is visible (e.g. fB below fF).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-
-@dataclass(frozen=True)
-class FlamoFDNParameters:
-    """FDN values extracted from named modules in a FLAMO graph."""
-
-    delays: np.ndarray
-    A: np.ndarray
-    B: np.ndarray
-    C: np.ndarray
-    D: np.ndarray
-    attenuation_sos: np.ndarray | None
-    post_eq_sos: np.ndarray | None
-    fs: float | None
+if TYPE_CHECKING:
+    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
 
 
 # Traversal uses type(module).__name__ and getattr; no need to import flamo here.
@@ -309,21 +297,23 @@ def feedback_matrix_module(model: Any) -> Any:
     with a direct path). The module returned is the one on the recursion's
     feedback branch; apply ``module.map(module.param)`` to read the realized
     matrix **in-graph** -- e.g. inside a training loss, where the detaching
-    extraction path :func:`flamo_model_to_fdn_parameters` would break gradients.
+    extraction path :func:`extract_build` would break gradients.
     """
     root = flamo_model_to_nodes(model)
     leaves = [node for node in flamo_nodes_flat(root) if node["type"] == "Leaf"]
     return _feedback_leaf_module(leaves)
 
 
-def flamo_model_to_fdn_parameters(model: Any) -> FlamoFDNParameters:
-    """Extract plottable FDN parameters from a named FLAMO model graph.
+def extract_build(model: Any) -> FDNBuild:
+    """Extract a complete :class:`~pyFDN.FDNBuild` from a named FLAMO model graph.
 
     The graph must contain leaves named ``input_gain`` and ``output_gain``, plus
     either ``mixing_matrix`` or the standard recursion feedback leaf ``fB``.
     The delay can be named ``delay`` or be the graph's only delay module.
-    Optional attenuation, output-filter, and direct-path leaves are included
-    when present.
+    Optional attenuation (``filters``), output-filter (``post_eq``), and
+    direct-path leaves are included when present. The sample rate is read from
+    the delay module and is required: a graph that does not expose ``fs`` is
+    malformed and raises :class:`ValueError`.
     """
     root = flamo_model_to_nodes(model)
     leaves = [node for node in flamo_nodes_flat(root) if node["type"] == "Leaf"]
@@ -394,16 +384,22 @@ def flamo_model_to_fdn_parameters(model: Any) -> FlamoFDNParameters:
             post_eq_sos = np.asarray(post_eq_value, dtype=float)
 
     fs_value = getattr(delay_module, "fs", None)
-    fs = float(fs_value) if fs_value is not None else None
-    return FlamoFDNParameters(
-        delays=delays,
+    if fs_value is None:
+        raise ValueError(
+            "FLAMO delay module exposes no sample rate; cannot extract fs"
+        )
+
+    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+
+    return FDNBuild(
         A=A,
         B=B,
         C=C,
         D=D,
-        attenuation_sos=attenuation_sos,
-        post_eq_sos=post_eq_sos,
-        fs=fs,
+        delays=delays,
+        fs=float(fs_value),
+        filters=attenuation_sos,
+        post_eq=post_eq_sos,
     )
 
 

@@ -29,7 +29,8 @@ def _(mo):
     2. `pyFDN.train_fdn(model, "colorless")` -- optimize the feedback matrix and
        gains for a flat magnitude (magnitude MSE + a feedback-matrix sparsity
        penalty), in place.
-    3. `pyFDN.extract_build` -- read both the initial and optimized FDNs back out.
+    3. `pyFDN.extract_build` -- read both the initial and
+       optimized FDNs back out.
 
     Delays stay fixed. We then add homogeneous decay so the result is audible.
     Flatness is measured on the magnitude response at the **training** FFT bins --
@@ -55,14 +56,14 @@ def _(np, pyFDN):
     fs = 48000
     nfft = 2**11
 
-    # 1. build a small "tiny colorless" lossless skeleton: 8 coprime delays.
+    # 1. build a small "tiny colorless" lossless skeleton.
     delays = pyFDN.sample_delay_lengths(
         8, (800, 3200), distribution="uniform", coprime=False, rng=0
     )
     model = pyFDN.build_fdn(
         delays=delays, rt=None, nfft=nfft, output="magnitude", device="cpu", rng=0
     )
-    init_build = pyFDN.extract_build(model, fs=fs)  # random init, before training
+    init_build = pyFDN.extract_build(model)  # random init, before training
     mag_init = np.abs(pyFDN.flamo_freq_response(model, fs=fs).squeeze())
 
     # 2. train in place for a flat ("colorless") magnitude; then extract.
@@ -77,7 +78,7 @@ def _(np, pyFDN):
         rng=1,
     )
     mag_opt = np.abs(pyFDN.flamo_freq_response(model, fs=fs).squeeze())
-    opt_build = pyFDN.extract_build(model, fs=fs)
+    opt_build = pyFDN.extract_build(model)
 
     print(
         f"spectral flatness  init {pyFDN.flatness_from_magnitude(mag_init):.4f}"

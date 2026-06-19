@@ -229,7 +229,6 @@ Training
    pyFDN.Trainable
    pyFDN.train_fdn
    pyFDN.TrainLog
-   pyFDN.extract_build
    pyFDN.spectral_flatness
    pyFDN.flatness_from_magnitude
    pyFDN.octave_colouration
@@ -269,5 +268,4 @@ FLAMO Graph
    pyFDN.plot_flamo_graph
    pyFDN.flamo_model_to_nodes
    pyFDN.flamo_nodes_flat
-   pyFDN.flamo_model_to_fdn_parameters
-   pyFDN.FlamoFDNParameters
+   pyFDN.extract_build

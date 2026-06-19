@@ -2,14 +2,16 @@
 optional target data) to a flamo dataset, loss criteria, and the model output
 domain to measure in.
 
-The mode alone fixes the loss, the output domain, and what ``target`` data it
-needs:
+The mode alone fixes the loss and the output domain. Every matching mode takes
+its ``target`` as a single time-domain impulse response; ``match_magnitude``
+converts it to one-sided ``|H|`` (``|rfft|``) internally, so the user never has
+to pre-transform the reference.
 
 ==========================  ====================================  ============
 mode                        loss                                  target
 ==========================  ====================================  ============
 ``"colorless"``             magnitude MSE vs a flat response      none
-``"match_magnitude"``       magnitude MSE vs ``|H|``              ``|H|``
+``"match_magnitude"``       magnitude MSE vs ``|H|``              impulse resp.
 ``"match_spectrogram"``     multi-resolution STFT (``mss``)       impulse resp.
 ``"match_mel_spectrogram"`` mel multi-resolution STFT             impulse resp.
 ==========================  ====================================  ============
@@ -39,14 +41,18 @@ Objective = Literal[
 # (criterion, alpha, requires_model) tuples for flamo's Trainer.register_criterion.
 Criterion = tuple[Any, float, bool]
 
-# mode -> (target_kind, output_domain).
-#   target_kind: "flat" (no data), "magnitude" (|H| data), "time" (impulse resp.)
-_MODES: dict[str, tuple[str, str]] = {
-    "colorless": ("flat", "magnitude"),
-    "match_magnitude": ("magnitude", "magnitude"),
-    "match_spectrogram": ("time", "time"),
-    "match_mel_spectrogram": ("time", "time"),
+# mode -> output domain the model is measured in ("time" or "magnitude"). Every
+# mode but "colorless" fits a time-domain impulse-response target, converted to
+# this domain inside _dataset (a magnitude mode takes |rfft| of the response).
+_MODES: dict[str, str] = {
+    "colorless": "magnitude",
+    "match_magnitude": "magnitude",
+    "match_spectrogram": "time",
+    "match_mel_spectrogram": "time",
 }
+
+# "colorless" fits a synthetic flat target and needs no user data.
+_NEEDS_TARGET = frozenset(_MODES) - {"colorless"}
 
 
 def output_domain(mode: str) -> str:
@@ -55,7 +61,7 @@ def output_domain(mode: str) -> str:
         raise ValueError(
             f"unknown training mode {mode!r}; choose from {sorted(_MODES)}"
         )
-    return _MODES[mode][1]
+    return _MODES[mode]
 
 
 def colorless_sparsity_loss() -> Any:
@@ -116,10 +122,13 @@ def build_objective(
         raise ValueError(
             f"unknown training mode {mode!r}; choose from {sorted(_MODES)}"
         )
-    target_kind, domain = _MODES[mode]
-    if target_kind != "flat" and target is None:
+    domain = _MODES[mode]
+    needs_target = mode in _NEEDS_TARGET
+    if needs_target and target is None:
         raise ValueError(f"mode {mode!r} requires target=")
-    dataset = _dataset(target_kind, target, nfft, n_in, n_out, device, dtype, expand)
+    dataset = _dataset(
+        domain, target, nfft, n_in, n_out, device, dtype, expand, flat=not needs_target
+    )
     if criteria is not None:
         return dataset, criteria, domain
 
@@ -132,7 +141,7 @@ def build_objective(
 
 
 def _dataset(
-    target_kind: str,
+    domain: str,
     target: Any,
     nfft: int,
     n_in: int,
@@ -140,10 +149,12 @@ def _dataset(
     device: Any,
     dtype: Any,
     expand: int,
+    *,
+    flat: bool,
 ) -> Any:
     import torch
 
-    if target_kind == "flat":
+    if flat:
         from flamo.optimize.dataset import DatasetColorless
 
         return DatasetColorless(
@@ -159,18 +170,21 @@ def _dataset(
     impulse = torch.zeros((1, nfft, n_in), device=device, dtype=dtype)
     impulse[:, 0, :] = 1.0
 
-    # Shape target to (1, rows, n_out): rows = its own length for a magnitude
-    # target, or nfft (zero-padded/truncated) for a time target; a single-channel
-    # target is broadcast across outputs.
+    # The target is always a time-domain impulse response. Shape it to
+    # (nfft, n_out) -- zero-padded/truncated to the model FFT length, a
+    # single-channel response broadcast across outputs.
     arr = np.asarray(target, dtype=np.float64)
     if arr.ndim == 1:
         arr = arr[:, None]
     if arr.shape[1] != n_out:
         arr = np.repeat(arr[:, :1], n_out, axis=1)
-    rows = arr.shape[0] if target_kind == "magnitude" else nfft
-    buf = np.zeros((rows, n_out))
-    length = min(arr.shape[0], rows)
-    buf[:length, :] = arr[:length, :]
+    ir = np.zeros((nfft, n_out))
+    length = min(arr.shape[0], nfft)
+    ir[:length, :] = arr[:length, :]
+
+    # Convert to the model's output domain: one-sided |H| for the magnitude
+    # modes (matching flamo's norm="backward" rfft), the time response otherwise.
+    buf = np.abs(np.fft.rfft(ir, n=nfft, axis=0)) if domain == "magnitude" else ir
 
     tgt = torch.as_tensor(buf[None], device=device, dtype=dtype)
     return Dataset(input=impulse, target=tgt, expand=expand, device=device, dtype=dtype)

@@ -22,8 +22,7 @@ from .flamo import (
     wrap_fdn_shell,
 )
 from .flamo_graph import (
-    FlamoFDNParameters,
-    flamo_model_to_fdn_parameters,
+    extract_build,
     flamo_model_to_nodes,
     flamo_nodes_flat,
     plot_flamo_graph,
@@ -51,9 +50,8 @@ __all__ = [
     "is_allpass",
     "is_paraunitary",
     "flamo_model_to_nodes",
-    "flamo_model_to_fdn_parameters",
+    "extract_build",
     "flamo_nodes_flat",
-    "FlamoFDNParameters",
     "plot_flamo_graph",
     "reduce_conjugate_pairs",
 ]
