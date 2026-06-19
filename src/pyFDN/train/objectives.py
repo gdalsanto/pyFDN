@@ -123,7 +123,9 @@ def build_objective(
     if criteria is not None:
         return dataset, criteria, domain
 
-    crit: list[Criterion] = [(_primary_loss(mode, nfft, mss_nfft, fs, device), 1.0, False)]
+    crit: list[Criterion] = [
+        (_primary_loss(mode, nfft, mss_nfft, fs, device), 1.0, False)
+    ]
     if sparsity_alpha > 0:
         crit.append((colorless_sparsity_loss(), float(sparsity_alpha), True))
     return dataset, crit, domain

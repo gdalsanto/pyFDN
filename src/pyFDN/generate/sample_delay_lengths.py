@@ -69,7 +69,9 @@ def _nearest_coprime(targets: np.ndarray, low_clip: int = 2) -> np.ndarray:
         target = max(int(round(targets[idx])), low_clip)
         offset = 0
         while True:
-            candidates = (target,) if offset == 0 else (target + offset, target - offset)
+            candidates = (
+                (target,) if offset == 0 else (target + offset, target - offset)
+            )
             for candidate in candidates:
                 if candidate < low_clip or candidate in chosen:
                     continue

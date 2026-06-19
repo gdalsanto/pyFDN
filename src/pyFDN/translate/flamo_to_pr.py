@@ -810,9 +810,7 @@ def flamo_to_pr(
             raise ValueError(f"num_poles must be a positive integer, got {num_poles}.")
         n_poles = int(num_poles)
         if verbose:
-            print(
-                f"Overriding detected pole count: num_poles={n_poles}"
-            )
+            print(f"Overriding detected pole count: num_poles={n_poles}")
 
     # Seed equi-spaced on the unit circle in the w = 1/z domain. With IIR filters
     # in the loop the poles spread inward (off the unit circle) and plain
@@ -876,9 +874,7 @@ def flamo_to_pr(
         sym_tol = max(float(quality_threshold) * 1000.0, 1e-9)
         poles_np = _conjugate_symmetrize(poles_np, tol=sym_tol)
 
-    poles, is_conjugate, non_paired = reduce_conjugate_pairs(
-        poles_np, verbose=verbose
-    )
+    poles, is_conjugate, non_paired = reduce_conjugate_pairs(poles_np, verbose=verbose)
     meta_data["nonPairedPoles"] = non_paired
 
     residues, direct, undriven, eigenvectors = _dss_to_res_flamo(

@@ -443,7 +443,9 @@ def test_delay_lengths_coprime_are_pairwise_coprime(distribution):
 
 
 def test_delay_lengths_sort_is_ascending():
-    delays = sample_delay_lengths(16, (400, 4000), distribution="geometric", sort=True, rng=1)
+    delays = sample_delay_lengths(
+        16, (400, 4000), distribution="geometric", sort=True, rng=1
+    )
     np.testing.assert_array_equal(delays, np.sort(delays))
 
 

@@ -94,7 +94,7 @@ FDN Design & Analysis
 
    * - `Colorless FDN <_static/marimo/notebooks/example_colorless_FDN.html>`_
      - FDN optimized for reduced metallic ringing (perceptually colorless reverberation). Original method published in "Differentiable Feedback Delay Network for Colorless Reverberation," G Dal Santo, K Prawda, SJ Schlecht, V Välimäki, 26th International Conference on Digital Audio Effects (DAFx23), 244-251.
-   * - `Colorless FDN, trained in-notebook (DAFx23) <_static/marimo/notebooks/example_train_colorless_FDN.html>`_
+   * - `Colorless FDN, trained in-notebook <_static/marimo/notebooks/example_train_colorless_FDN.html>`_
      - The companion to Colorless FDN, which loads pre-optimized parameters from ``.mat`` files. Here we run the optimization ourselves with ``pyFDN``'s training API, following "Differentiable Feedback Delay Network for Colorless Reverberation", Dal Santo, Prawda, Schlecht, Välimäki, DAFx23 (and its "tiny colorless FDN" follow-up):
    * - `Decorrelation in feedback delay networks <_static/marimo/notebooks/example_decorrelation.html>`_
      - Analyses the decorrelation properties of an FDN with a velvet-noise scattering feedback matrix.

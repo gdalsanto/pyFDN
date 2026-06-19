@@ -44,7 +44,6 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    import torch
 
     import pyFDN
 
@@ -195,7 +194,9 @@ def _(delays, fs, init_build, mo, np, opt_build, pyFDN):
             ),
             mo.vstack(
                 [
-                    mo.Html("<b>With homogeneous decay</b>").style({"font-size": "1.2em"}),
+                    mo.Html("<b>With homogeneous decay</b>").style(
+                        {"font-size": "1.2em"}
+                    ),
                     _clip("Random init", init_decay),
                     _clip("Colorless", opt_decay),
                 ],
