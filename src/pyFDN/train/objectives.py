@@ -1,206 +1,191 @@
-"""Step 2 of training: define what to optimize (the objective).
+"""Objective setup for :func:`pyFDN.train_fdn`: map a training *mode* (plus
+optional target data) to a flamo dataset, loss criteria, and the model output
+domain to measure in.
 
-An :class:`Objective` is small, frozen data describing a training run -- a
-*mode* (colorless / match_ir / match_magnitude / decay), the target data, and
-the loss criteria. :func:`make_objective` is the factory; the engine
-(:func:`pyFDN.train_fdn`) consumes the ``(dataset, criteria, output_domain)``
-that :meth:`Objective.build` produces.
+The mode alone fixes the loss, the output domain, and what ``target`` data it
+needs:
 
-Trainability is **not** part of the objective -- it is a property of the model
-(see :class:`pyFDN.Trainable` / :func:`pyFDN.build_fdn`). flamo and torch are
-imported lazily inside :meth:`Objective.build`, so this module imports without
-torch.
+==========================  ====================================  ============
+mode                        loss                                  target
+==========================  ====================================  ============
+``"colorless"``             magnitude MSE vs a flat response      none
+``"match_magnitude"``       magnitude MSE vs ``|H|``              ``|H|``
+``"match_spectrogram"``     multi-resolution STFT (``mss``)       impulse resp.
+``"match_mel_spectrogram"`` mel multi-resolution STFT             impulse resp.
+==========================  ====================================  ============
+
+Every mode also adds a feedback-matrix sparsity penalty
+(:func:`colorless_sparsity_loss`, weight ``sparsity_alpha``, default 0.2; 0
+disables it) that biases the mixing matrix toward dense, colorless mixing -- it
+only bites when the feedback matrix is trainable.
+
+flamo/torch are imported lazily inside :func:`build_objective` and
+:func:`colorless_sparsity_loss`, so this module imports without torch.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Literal
 
 import numpy as np
 
-ObjectiveMode = Literal["colorless", "match_ir", "match_magnitude"]
+Objective = Literal[
+    "colorless",
+    "match_magnitude",
+    "match_spectrogram",
+    "match_mel_spectrogram",
+]
 
-# (criterion, alpha, requires_model) as flamo's Trainer.register_criterion wants;
-# used both for the defaults and for a user-supplied criteria override.
+# (criterion, alpha, requires_model) tuples for flamo's Trainer.register_criterion.
 Criterion = tuple[Any, float, bool]
 
+# mode -> (target_kind, output_domain).
+#   target_kind: "flat" (no data), "magnitude" (|H| data), "time" (impulse resp.)
+_MODES: dict[str, tuple[str, str]] = {
+    "colorless": ("flat", "magnitude"),
+    "match_magnitude": ("magnitude", "magnitude"),
+    "match_spectrogram": ("time", "time"),
+    "match_mel_spectrogram": ("time", "time"),
+}
 
-@dataclass(frozen=True)
-class Objective:
-    """What a training run optimizes (step 2).
 
-    Exactly one ``target`` payload is used per :attr:`mode`:
+def output_domain(mode: str) -> str:
+    """The model output layer a mode measures in (``"time"`` or ``"magnitude"``)."""
+    if mode not in _MODES:
+        raise ValueError(
+            f"unknown training mode {mode!r}; choose from {sorted(_MODES)}"
+        )
+    return _MODES[mode][1]
 
-    * ``"colorless"`` -- flatten the magnitude response (no target).
-    * ``"match_ir"`` -- match a time-domain impulse response (``target`` = IR).
-    * ``"match_magnitude"`` -- match a one-sided spectrum (``target`` = ``|H|``).
 
-    (Decay/RT is not an objective: it is a build property -- see
-    :func:`pyFDN.build_fdn` ``rt=`` and :func:`pyFDN.with_decay`.)
+def colorless_sparsity_loss() -> Any:
+    """A flamo-compatible sparsity penalty on the FDN feedback matrix.
 
-    Parameters
-    ----------
-    mode : str
-        One of :data:`ObjectiveMode`.
-    target : np.ndarray, float, or None
-        Target payload for the mode (see above).
-    criteria : list of (criterion, alpha, requires_model), optional
-        Override the default loss list with your own flamo criteria.
-    sparsity_alpha, mag_alpha : float
-        Default-loss weights (colorless: sparsity vs magnitude MSE).
-    mss_nfft : tuple of int
-        Multi-resolution STFT window sizes for ``match_ir``.
-    fs : float
-        Sampling rate in Hz.
+    Same role and formula as flamo's ``sparsity_loss`` (the colorless penalty of
+    *Optimizing Tiny Colorless FDNs*, Dal Santo et al.), but it locates the
+    feedback matrix through pyFDN's graph walk
+    (:func:`pyFDN.auxiliary.flamo_graph.feedback_matrix_module`), which resolves
+    it for both a plain ``Series`` core and a ``Parallel`` core (the FDN summed
+    with an always-present direct path). flamo's own ``sparsity_loss`` hard-codes
+    attribute paths that assume a ``.mixing_matrix`` on the Parallel branch, so
+    it raises once the direct path is always present.
+
+    ``A = map(param)`` is computed **in-graph** so gradients flow. The returned
+    ``nn.Module`` has the ``(y_pred, y_target, model)`` signature flamo's
+    ``Trainer`` uses for ``requires_model=True`` criteria.
     """
+    import torch.nn as nn
 
-    mode: ObjectiveMode
-    target: Any = None
-    criteria: list[Criterion] | None = None
-    sparsity_alpha: float = 1.0
-    mag_alpha: float = 1.0
-    mss_nfft: tuple[int, ...] = (256, 512, 1024)
-    fs: float = 48000.0
+    from pyFDN.auxiliary.flamo_graph import feedback_matrix_module
 
-    def __post_init__(self) -> None:
-        if self.mode not in ("colorless", "match_ir", "match_magnitude"):
-            raise ValueError(f"unknown objective mode {self.mode!r}")
-        if self.mode in ("match_ir", "match_magnitude") and self.target is None:
-            raise ValueError(f"Objective(mode={self.mode!r}) requires target=")
+    class _ColorlessSparsity(nn.Module):
+        def forward(self, y_pred: Any, y_target: Any, model: Any) -> Any:
+            module = feedback_matrix_module(model)
+            a = module.map(module.param)
+            n = a.shape[-1]
+            root_n = float(np.sqrt(n))
+            # 0 when |A| is maximally dense (good mixing), 1 when fully sparse.
+            return -(a.abs().sum() - n * root_n) / (n * (root_n - 1.0))
 
-    @property
-    def output_domain(self) -> str:
-        """The model output layer this objective measures in."""
-        return "magnitude" if self.mode in ("colorless", "match_magnitude") else "time"
+    return _ColorlessSparsity()
 
-    def build(
-        self,
-        *,
-        nfft: int,
-        n_in: int,
-        n_out: int,
-        device: Any,
-        dtype: Any,
-        expand: int,
-    ) -> tuple[Any, list[Criterion], str]:
-        """Return ``(dataset, criteria, output_domain)`` for this objective.
 
-        flamo datasets/losses are imported here so the module stays torch-free.
-        A user-supplied :attr:`criteria` replaces the default loss list.
-        """
-        dataset = self._dataset(
-            nfft=nfft, n_in=n_in, n_out=n_out, device=device, dtype=dtype, expand=expand
+def build_objective(
+    mode: str,
+    *,
+    target: Any,
+    criteria: list[Criterion] | None,
+    sparsity_alpha: float,
+    mss_nfft: tuple[int, ...],
+    fs: float,
+    nfft: int,
+    n_in: int,
+    n_out: int,
+    device: Any,
+    dtype: Any,
+    expand: int,
+) -> tuple[Any, list[Criterion], str]:
+    """Return ``(dataset, criteria, output_domain)`` for a training ``mode``.
+
+    Maps the mode to its flamo dataset (with ``target`` shaped appropriately)
+    and the full criteria list -- the mode's primary loss plus the sparsity
+    regularizer -- unless a caller-supplied ``criteria`` override replaces it.
+    flamo is imported here so the module stays torch-free.
+    """
+    if mode not in _MODES:
+        raise ValueError(
+            f"unknown training mode {mode!r}; choose from {sorted(_MODES)}"
         )
-        criteria = (
-            self.criteria
-            if self.criteria is not None
-            else self._default_criteria(nfft=nfft, device=device)
-        )
-        return dataset, criteria, self.output_domain
+    target_kind, domain = _MODES[mode]
+    if target_kind != "flat" and target is None:
+        raise ValueError(f"mode {mode!r} requires target=")
+    dataset = _dataset(target_kind, target, nfft, n_in, n_out, device, dtype, expand)
+    if criteria is not None:
+        return dataset, criteria, domain
 
-    # -- internals ---------------------------------------------------------
+    crit: list[Criterion] = [(_primary_loss(mode, nfft, mss_nfft, fs, device), 1.0, False)]
+    if sparsity_alpha > 0:
+        crit.append((colorless_sparsity_loss(), float(sparsity_alpha), True))
+    return dataset, crit, domain
 
-    def _dataset(
-        self,
-        *,
-        nfft: int,
-        n_in: int,
-        n_out: int,
-        device: Any,
-        dtype: Any,
-        expand: int,
-    ) -> Any:
-        import torch
 
-        if self.mode == "colorless":
-            from flamo.optimize.dataset import DatasetColorless
+def _dataset(
+    target_kind: str,
+    target: Any,
+    nfft: int,
+    n_in: int,
+    n_out: int,
+    device: Any,
+    dtype: Any,
+    expand: int,
+) -> Any:
+    import torch
 
-            return DatasetColorless(
-                input_shape=(1, nfft, n_in),
-                target_shape=(1, nfft // 2 + 1, n_out),
-                expand=expand,
-                device=device,
-                dtype=dtype,
-            )
+    if target_kind == "flat":
+        from flamo.optimize.dataset import DatasetColorless
 
-        from flamo.optimize.dataset import Dataset
-
-        impulse = torch.zeros((1, nfft, n_in), device=device, dtype=dtype)
-        impulse[:, 0, :] = 1.0
-        target = self._target_tensor(nfft=nfft, n_out=n_out, device=device, dtype=dtype)
-        return Dataset(
-            input=impulse, target=target, expand=expand, device=device, dtype=dtype
+        return DatasetColorless(
+            input_shape=(1, nfft, n_in),
+            target_shape=(1, nfft // 2 + 1, n_out),
+            expand=expand,
+            device=device,
+            dtype=dtype,
         )
 
-    def _target_tensor(self, *, nfft: int, n_out: int, device: Any, dtype: Any) -> Any:
-        import torch
+    from flamo.optimize.dataset import Dataset
 
-        if self.mode == "match_magnitude":
-            arr = np.asarray(self.target, dtype=np.float64)
-            if arr.ndim == 1:
-                arr = arr[:, None]
-            return torch.as_tensor(arr[None], device=device, dtype=dtype)
+    impulse = torch.zeros((1, nfft, n_in), device=device, dtype=dtype)
+    impulse[:, 0, :] = 1.0
 
-        ir = np.asarray(self.target, dtype=np.float64)
-        if ir.ndim == 1:
-            ir = ir[:, None]
-        buf = np.zeros((nfft, n_out))
-        length = min(ir.shape[0], nfft)
-        if ir.shape[1] == n_out:
-            buf[:length, :] = ir[:length, :]
-        else:  # broadcast a single-channel target across outputs
-            buf[:length, :] = ir[:length, :1]
-        return torch.as_tensor(buf[None], device=device, dtype=dtype)
+    # Shape target to (1, rows, n_out): rows = its own length for a magnitude
+    # target, or nfft (zero-padded/truncated) for a time target; a single-channel
+    # target is broadcast across outputs.
+    arr = np.asarray(target, dtype=np.float64)
+    if arr.ndim == 1:
+        arr = arr[:, None]
+    if arr.shape[1] != n_out:
+        arr = np.repeat(arr[:, :1], n_out, axis=1)
+    rows = arr.shape[0] if target_kind == "magnitude" else nfft
+    buf = np.zeros((rows, n_out))
+    length = min(arr.shape[0], rows)
+    buf[:length, :] = arr[:length, :]
 
-    def _default_criteria(self, *, nfft: int, device: Any) -> list[Criterion]:
-        if self.mode == "colorless":
-            from flamo.optimize.loss import mse_loss
+    tgt = torch.as_tensor(buf[None], device=device, dtype=dtype)
+    return Dataset(input=impulse, target=tgt, expand=expand, device=device, dtype=dtype)
 
-            from .criteria import colorless_sparsity_loss
 
-            return [
-                (mse_loss(nfft=nfft, device=device), float(self.mag_alpha), False),
-                (colorless_sparsity_loss(), float(self.sparsity_alpha), True),
-            ]
-        if self.mode == "match_magnitude":
-            from flamo.optimize.loss import mse_loss
+def _primary_loss(
+    mode: str, nfft: int, mss_nfft: tuple[int, ...], fs: float, device: Any
+) -> Any:
+    if mode in ("colorless", "match_magnitude"):
+        from flamo.optimize.loss import mse_loss
 
-            return [(mse_loss(nfft=nfft, device=device), 1.0, False)]
-        # match_ir
+        return mse_loss(nfft=nfft, device=device)
+    elif mode == "match_spectrogram":
         from flamo.optimize.loss import mss_loss
 
-        criterion = mss_loss(
-            nfft=list(self.mss_nfft), sample_rate=int(self.fs), device=device
-        )
-        return [(criterion, 1.0, False)]
+        return mss_loss(nfft=list(mss_nfft), sample_rate=int(fs), device=device)
+    elif mode == "match_mel_spectrogram":
+        from flamo.optimize.loss import mel_mss_loss  # match_mel_spectrogram
 
-
-def make_objective(
-    mode: ObjectiveMode,
-    *,
-    target: Any = None,
-    criteria: list[Criterion] | None = None,
-    sparsity_alpha: float = 1.0,
-    mag_alpha: float = 1.0,
-    mss_nfft: tuple[int, ...] = (256, 512, 1024),
-    fs: float = 48000.0,
-) -> Objective:
-    """Construct an :class:`Objective` for ``mode`` (step 2 of training).
-
-    Examples
-    --------
-    ``make_objective("colorless", sparsity_alpha=1.0)``,
-    ``make_objective("match_ir", target=ir, mss_nfft=(256, 512))``,
-    ``make_objective("match_magnitude", target=mag)``. Pass ``criteria=`` to
-    override the default loss list with your own flamo criteria.
-    """
-    return Objective(
-        mode=mode,
-        target=target,
-        criteria=criteria,
-        sparsity_alpha=sparsity_alpha,
-        mag_alpha=mag_alpha,
-        mss_nfft=tuple(mss_nfft),
-        fs=fs,
-    )
+        return mel_mss_loss(nfft=list(mss_nfft), sample_rate=int(fs), device=device)

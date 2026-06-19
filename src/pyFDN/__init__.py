@@ -31,6 +31,7 @@ __all__ = [
     "flamo_delay_feedback_matrix",
     "swap_flamo_recursion_paths",
     "flamo_time_response",
+    "flamo_freq_response",
     "flamo_process",
     "load_audio",
     # matrix generators
@@ -122,8 +123,6 @@ __all__ = [
     "trainable_from_build",
     "with_decay",
     "Trainable",
-    "make_objective",
-    "Objective",
     "train_fdn",
     "TrainLog",
     "extract_build",
@@ -217,7 +216,7 @@ from .auxiliary.delay import (
     ms_to_smp,
     swap_flamo_recursion_paths,
 )
-from .auxiliary.flamo import flamo_process, flamo_time_response
+from .auxiliary.flamo import flamo_freq_response, flamo_process, flamo_time_response
 from .auxiliary.flamo_graph import (
     FlamoFDNParameters,
     flamo_model_to_fdn_parameters,
@@ -362,7 +361,6 @@ from .process import process_fdn
 
 # training (torch/flamo are imported lazily inside these, so this stays torch-free)
 from .train import (
-    Objective,
     Trainable,
     TrainLog,
     build_fdn,
@@ -370,7 +368,6 @@ from .train import (
     extract_build,
     flatness_from_magnitude,
     magnitude_response,
-    make_objective,
     mr_stft_distance,
     octave_colouration,
     spectral_flatness,

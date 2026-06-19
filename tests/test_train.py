@@ -1,4 +1,4 @@
-"""Tests for the four-step pyFDN.train API (require torch + flamo)."""
+"""Tests for the three-step pyFDN.train API (require torch + flamo)."""
 
 import numpy as np
 import pytest
@@ -13,7 +13,6 @@ from pyFDN.train import (  # noqa: E402
     build_fdn,
     extract_build,
     flatness_from_magnitude,
-    make_objective,
     train_fdn,
     trainable_from_build,
     with_decay,
@@ -123,7 +122,7 @@ def test_colorless_improves_and_preserves_structure():
     init = flatness_from_magnitude(_magnitude(init_twin, nfft))
     delays0 = extract_build(model, fs=48000.0).delays
 
-    log = train_fdn(model, make_objective("colorless"), max_epochs=15, rng=0, **_FAST)
+    log = train_fdn(model, "colorless", max_epochs=15, rng=0, **_FAST)
 
     assert log.train_loss[-1] < log.train_loss[0]
     # the model now emits |H| (output-domain swap) -> flatter than init
@@ -138,9 +137,7 @@ def test_colorless_improves_and_preserves_structure():
 def test_train_is_reproducible():
     def run():
         model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=2)
-        return train_fdn(
-            model, make_objective("colorless"), max_epochs=8, rng=0, **_FAST
-        )
+        return train_fdn(model, "colorless", max_epochs=8, rng=0, **_FAST)
 
     np.testing.assert_allclose(run().train_loss, run().train_loss, rtol=1e-6)
 
@@ -148,12 +145,10 @@ def test_train_is_reproducible():
 def test_train_rejects_oversized_batch():
     model = build_fdn(N=4, rt=None, nfft=2**9, device="cpu", rng=0)
     with pytest.raises(ValueError, match="batch_size"):
-        train_fdn(
-            model, make_objective("colorless"), expand=16, batch_size=64, device="cpu"
-        )
+        train_fdn(model, "colorless", expand=16, batch_size=64, device="cpu")
 
 
-def test_match_ir_runs_and_scores():
+def test_match_spectrogram_runs_and_scores():
     nfft = 2**11
     target = build_fdn(N=4, rt=0.05, nfft=nfft, device="cpu", rng=7)
     target_ir = np.asarray(pyFDN.flamo_time_response(target, fs=48000)).reshape(-1)
@@ -161,7 +156,9 @@ def test_match_ir_runs_and_scores():
 
     log = train_fdn(
         fresh,
-        make_objective("match_ir", target=target_ir, mss_nfft=(256, 512)),
+        "match_spectrogram",
+        target=target_ir,
+        mss_nfft=(256, 512),
         max_epochs=4,
         rng=0,
         **_FAST,
@@ -176,6 +173,12 @@ def test_match_ir_runs_and_scores():
         )
     ).reshape(-1)
     assert np.isfinite(pyFDN.mr_stft_distance(out_ir, target_ir))
+
+
+def test_match_mode_requires_target():
+    model = build_fdn(N=4, rt=None, nfft=2**10, device="cpu", rng=0)
+    with pytest.raises(ValueError, match="requires target"):
+        train_fdn(model, "match_spectrogram", **_FAST)
 
 
 # --- analytic decay (the exact RT path) ------------------------------------

@@ -182,7 +182,7 @@ def trainable_from_build(
     :func:`build_fdn` constructs an ``FDNBuild`` from its config and delegates
     here. The direct path is always present (from ``build.D``, or zeros), so the
     core is a ``Parallel`` -- colorless training therefore uses pyFDN's own
-    sparsity loss (:func:`pyFDN.train.criteria.colorless_sparsity_loss`).
+    sparsity loss (:func:`pyFDN.train.objectives.colorless_sparsity_loss`).
 
     Parameters
     ----------

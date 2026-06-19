@@ -12,11 +12,11 @@ from pyFDN.train import (
     TrainLog,
     edc_l1,
     magnitude_response,
-    make_objective,
     mr_stft_distance,
     octave_colouration,
     spectral_flatness,
 )
+from pyFDN.train.objectives import output_domain
 
 
 def _impulse(n=2048):
@@ -112,25 +112,17 @@ def test_trainable_defaults():
     assert not t.direct
 
 
-def test_objective_requires_target_per_mode():
-    with pytest.raises(ValueError, match="match_ir"):
-        make_objective("match_ir")
-    with pytest.raises(ValueError, match="match_magnitude"):
-        make_objective("match_magnitude")
-    # decay is not an objective (it is a build property): unknown mode
-    with pytest.raises(ValueError, match="unknown objective mode"):
-        make_objective("decay", target=0.3)
-    # colorless needs no target
-    assert make_objective("colorless").mode == "colorless"
+def test_output_domain_per_mode():
+    assert output_domain("colorless") == "magnitude"
+    assert output_domain("match_magnitude") == "magnitude"
+    assert output_domain("match_spectrogram") == "time"
+    assert output_domain("match_mel_spectrogram") == "time"
 
 
-def test_objective_output_domain():
-    assert make_objective("colorless").output_domain == "magnitude"
-    assert (
-        make_objective("match_magnitude", target=np.ones(5)).output_domain
-        == "magnitude"
-    )
-    assert make_objective("match_ir", target=np.zeros(8)).output_domain == "time"
+def test_output_domain_rejects_unknown_mode():
+    # decay is not a training mode -- it is a build property (rt= / with_decay)
+    with pytest.raises(ValueError, match="unknown training mode"):
+        output_domain("decay")
 
 
 def test_trainlog_defaults():

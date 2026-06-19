@@ -133,6 +133,7 @@ Delay Utilities
    pyFDN.mgrpdelay
    pyFDN.ms_to_smp
    pyFDN.flamo_time_response
+   pyFDN.flamo_freq_response
 
 Polynomial & Matrix Maths
 --------------------------
@@ -226,8 +227,6 @@ Training
    pyFDN.trainable_from_build
    pyFDN.with_decay
    pyFDN.Trainable
-   pyFDN.make_objective
-   pyFDN.Objective
    pyFDN.train_fdn
    pyFDN.TrainLog
    pyFDN.extract_build

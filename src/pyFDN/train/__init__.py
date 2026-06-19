@@ -1,10 +1,11 @@
-"""Training pipeline for FDNs -- an explicit four-step API over flamo.
+"""Training pipeline for FDNs -- an explicit three-step API over flamo.
 
 1. **build** a trainable flamo model from a config (:func:`build_fdn`, or
    :func:`trainable_from_build` from an existing :class:`~pyFDN.FDNBuild`).
-2. **define** an objective from a mode + criteria + data (:func:`make_objective`).
-3. **train** the model toward the objective (:func:`train_fdn`).
-4. **extract** an :class:`~pyFDN.FDNBuild` / params / metadata
+2. **train** the model toward a *mode* (:func:`train_fdn`) -- ``colorless``,
+   ``match_magnitude``, ``match_spectrogram`` or ``match_mel_spectrogram``,
+   with optional ``target`` data.
+3. **extract** an :class:`~pyFDN.FDNBuild` / params / metadata
    (:func:`extract_build`, :class:`TrainLog`).
 
 The dataclasses and numpy metrics here import without torch; the builder, engine
@@ -24,7 +25,7 @@ from .metrics import (
     octave_colouration,
     spectral_flatness,
 )
-from .objectives import Objective, ObjectiveMode, make_objective
+from .objectives import Objective
 
 __all__ = [
     # 1. build
@@ -33,14 +34,11 @@ __all__ = [
     "with_decay",
     "Trainable",
     "MatrixParam",
-    # 2. objective
-    "make_objective",
-    "Objective",
-    "ObjectiveMode",
-    # 3. train
+    # 2. train
     "train_fdn",
+    "Objective",
     "TrainLog",
-    # 4. extract
+    # 3. extract
     "extract_build",
     # metrics
     "spectral_flatness",

@@ -10,11 +10,16 @@ from .allpass import (
 )
 from .audio import load_audio
 from .flamo import (
+    assemble_fdn_core,
     delay_module,
+    fir_matrix_module,
+    flamo_freq_response,
     flamo_process,
     flamo_time_response,
     gain_module,
+    matrix_module,
     sos_filter_module,
+    wrap_fdn_shell,
 )
 from .flamo_graph import (
     FlamoFDNParameters,
@@ -30,8 +35,13 @@ __all__ = [
     "skew",
     "gain_module",
     "delay_module",
+    "fir_matrix_module",
     "sos_filter_module",
+    "matrix_module",
+    "assemble_fdn_core",
+    "wrap_fdn_shell",
     "flamo_time_response",
+    "flamo_freq_response",
     "flamo_process",
     "load_audio",
     "poletti_allpass",
