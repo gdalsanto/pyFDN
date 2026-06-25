@@ -6,7 +6,7 @@ import pytest
 import pyFDN
 
 
-def test_flamo_model_to_fdn_parameters_from_dss_model():
+def test_extract_build_from_dss_model():
     pytest.importorskip("flamo")
 
     A = np.array([[0.0, 0.5], [-0.5, 0.0]])
@@ -32,13 +32,13 @@ def test_flamo_model_to_fdn_parameters_from_dss_model():
         sos_filter=attenuation,
         output_filter=post_eq,
     )
-    parameters = pyFDN.flamo_model_to_fdn_parameters(model)
+    parameters = pyFDN.extract_build(model)
 
     np.testing.assert_array_equal(parameters.delays, delays)
     np.testing.assert_allclose(parameters.A, A)
     np.testing.assert_allclose(parameters.B, B)
     np.testing.assert_allclose(parameters.C, C)
     np.testing.assert_allclose(parameters.D, D)
-    np.testing.assert_allclose(parameters.attenuation_sos, attenuation)
-    np.testing.assert_allclose(parameters.post_eq_sos, post_eq)
+    np.testing.assert_allclose(parameters.filters, attenuation)
+    np.testing.assert_allclose(parameters.post_eq, post_eq)
     assert parameters.fs == 48_000

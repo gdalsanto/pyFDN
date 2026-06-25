@@ -8,6 +8,9 @@ values assigned.
 
 from __future__ import annotations
 
+import warnings
+from typing import Any
+
 import numpy as np
 
 try:
@@ -53,6 +56,46 @@ def flamo_time_response(
         Time response with the same shape and numeric dtype as FLAMO's tensor.
     """
     response = model.get_time_response(fs=fs, identity=identity)
+    if hasattr(response, "detach"):
+        response = response.detach()
+    if hasattr(response, "cpu"):
+        response = response.cpu()
+    return np.asarray(response)
+
+
+def flamo_freq_response(
+    model,
+    fs: int = 48000,
+    identity: bool = False,
+) -> np.ndarray:
+    """Return a FLAMO model's (complex) frequency response as a NumPy array.
+
+    The NumPy-facing counterpart of FLAMO's ``model.get_freq_response()`` and the
+    frequency-domain sibling of :func:`flamo_time_response`. It detaches the
+    returned tensor from any autograd graph, transfers it to CPU memory, and
+    preserves its shape and (complex) dtype. Take ``np.abs(...)`` for the
+    magnitude response, ``np.angle(...)`` for the phase.
+
+    ``get_freq_response`` evaluates over ``nfft`` DFT bins by temporarily swapping
+    the model's input/output layers to FFT and restoring them before returning,
+    so this is side-effect-free regardless of the model's current output layer.
+
+    Parameters
+    ----------
+    model
+        FLAMO model exposing ``get_freq_response`` (e.g. a ``Shell``).
+    fs : int
+        Sampling frequency passed to FLAMO.
+    identity : bool
+        Whether to request FLAMO's input-free identity response.
+
+    Returns
+    -------
+    np.ndarray
+        Complex frequency response with the same shape and numeric dtype as
+        FLAMO's tensor.
+    """
+    response = model.get_freq_response(fs=fs, identity=identity)
     if hasattr(response, "detach"):
         response = response.detach()
     if hasattr(response, "cpu"):
@@ -356,3 +399,250 @@ def sos_filter_module(
     )
     filt.assign_value(torch.as_tensor(sos_pad, dtype=torch_dtype, device=dev))
     return filt
+
+
+def _matrix_preimage(values: np.ndarray, matrix_type: str) -> np.ndarray:
+    """Pre-image ``param`` so a flamo ``Matrix.map(param)`` realizes ``values``.
+
+    * ``"random"`` -- identity map, so the pre-image is ``values`` itself.
+    * ``"orthogonal"`` -- map is ``matrix_exp(skew_matrix(param))``, which spans
+      SO(N). The pre-image is the real matrix logarithm (a skew-symmetric matrix
+      that ``skew_matrix`` reproduces). If ``values`` has ``det < 0`` it is not
+      in SO(N); the last column is sign-flipped to the nearest SO(N) matrix and a
+      warning is emitted.
+    """
+    if matrix_type == "random":
+        return values
+    if matrix_type == "orthogonal":
+        from scipy.linalg import logm
+
+        a = np.asarray(values, dtype=np.float64)
+        if np.linalg.det(a) < 0:
+            warnings.warn(
+                "orthogonal feedback matrix has det<0 (not in SO(N)); flipping "
+                "the last column to the nearest SO(N) matrix for the trainable "
+                "orthogonal parametrization",
+                stacklevel=3,
+            )
+            a = a.copy()
+            a[:, -1] *= -1.0
+        return np.real(logm(a))
+    raise ValueError(
+        f"matrix_type must be 'orthogonal' or 'random', got {matrix_type!r}"
+    )
+
+
+def matrix_module(
+    values: np.ndarray,
+    nfft: int,
+    *,
+    matrix_type: str = "orthogonal",
+    device: Any = None,
+    dtype: Any = None,
+    alias_decay_db: float = 0,
+    requires_grad: bool = False,
+):
+    """
+    Build a FLAMO ``Matrix`` initialized to ``values`` under a parametrization.
+
+    Unlike :func:`gain_module` (a plain value container), this preserves the
+    flamo ``map`` that constrains the trainable matrix: ``"orthogonal"`` keeps it
+    on the SO(N) manifold during optimization, ``"random"`` is unconstrained.
+
+    Parameters
+    ----------
+    values : np.ndarray
+        Square ``(N, N)`` initial feedback matrix.
+    nfft : int
+        FFT size for the FLAMO module.
+    matrix_type : str
+        ``"orthogonal"`` or ``"random"``.
+    device : torch device or None
+        Device; default is cuda if available else cpu.
+    dtype : torch.dtype or None
+        Module dtype; defaults to float32.
+    alias_decay_db : float
+        FLAMO alias decay in dB.
+    requires_grad : bool
+        Whether the matrix is trainable.
+
+    Returns
+    -------
+    flamo.processor.dsp.Matrix
+        Matrix whose realized value (``map(param)``) equals ``values`` (within
+        the parametrization; an SO(N) projection may apply for orthogonal).
+    """
+    if not _HAS_FLAMO:
+        raise ImportError("matrix_module requires flamo (pip install flamo)")
+    import torch
+
+    values = np.asarray(values, dtype=np.float64)
+    if values.ndim != 2 or values.shape[0] != values.shape[1]:
+        raise ValueError("matrix values must be square (N, N)")
+    n = values.shape[0]
+    dev = _get_device(device)
+    torch_dtype = torch.float32 if dtype is None else dtype
+
+    matrix = dsp.Matrix(
+        size=(n, n),
+        nfft=nfft,
+        matrix_type=matrix_type,
+        requires_grad=requires_grad,
+        alias_decay_db=alias_decay_db,
+        device=dev,
+        dtype=torch_dtype,
+    )
+    preimage = _matrix_preimage(values, matrix_type)
+    matrix.assign_value(torch.as_tensor(preimage, dtype=torch_dtype, device=dev))
+    return matrix
+
+
+def assemble_fdn_core(
+    *,
+    input_gain: Any,
+    feedback: Any,
+    delays: Any,
+    output_gain: Any,
+    direct: Any = None,
+    loop_filter: Any = None,
+    output_filter: Any = None,
+    post_delay_module: Any = None,
+) -> Any:
+    """
+    Wire pre-built FLAMO modules into an FDN core (no FFT/iFFT wrapping).
+
+    Single source of truth for the FDN signal flow, shared by the render path
+    (:func:`pyFDN.dss_to_flamo`) and the training builder
+    (:func:`pyFDN.train.trainable_from_build`). All arguments are already-built
+    FLAMO ``dsp``/``system`` modules; this only composes them, so leaf names and
+    topology stay identical across both callers (and match the names
+    :func:`pyFDN.extract_build` looks for).
+
+    Signal flow::
+
+        input_gain -> [recursion: delay -> (loop_filter) -> (post_delay_module); fB = feedback]
+                   -> output_gain -> (output_filter)
+
+    with the direct path ``direct`` summed in parallel when provided.
+
+    Parameters
+    ----------
+    input_gain, output_gain : FLAMO modules
+        Input gain ``B`` (named ``input_gain``) and output gain ``C`` (named
+        ``output_gain``).
+    feedback : FLAMO module
+        Feedback matrix placed on the recursion feedback branch (``fB``); a
+        plain ``Gain``/``Filter`` (render) or a parametrized ``Matrix``
+        (training).
+    delays : FLAMO module
+        Delay module on the recursion forward branch (named ``delay``).
+    direct : FLAMO module or None
+        Direct path ``D``. When ``None`` the core is the plain feedforward
+        ``Series`` (no ``Parallel`` wrapper) -- this keeps ``core.feedback_loop``
+        reachable for losses such as ``sparsity_loss``. When provided the core
+        is ``Parallel(brA=fdn_branch, brB=direct)``.
+    loop_filter : FLAMO module or None
+        Optional in-loop filter after the delays (named ``filter``).
+    output_filter : FLAMO module or None
+        Optional per-output filter after the output gain (named
+        ``output_filter``).
+    post_delay_module : FLAMO module or None
+        Optional module appended after the delay in the recursion.
+
+    Returns
+    -------
+    core : flamo.processor.system.Series or Parallel
+        The FDN core, ready for :func:`wrap_fdn_shell`.
+    """
+    if not _HAS_FLAMO:
+        raise ImportError("assemble_fdn_core requires flamo (pip install flamo)")
+    from collections import OrderedDict
+
+    from flamo.processor import system
+
+    if loop_filter is not None:
+        delay_chain = system.Series(
+            OrderedDict({"delay": delays, "filter": loop_filter})
+        )
+    else:
+        delay_chain = delays
+
+    if post_delay_module is not None:
+        delay_chain = system.Series(
+            OrderedDict({"delay": delay_chain, "post_delay_module": post_delay_module})
+        )
+
+    feedback_loop = system.Recursion(fF=delay_chain, fB=feedback)
+    fdn_modules = OrderedDict(
+        {
+            "input_gain": input_gain,
+            "feedback_loop": feedback_loop,
+            "output_gain": output_gain,
+        }
+    )
+    if output_filter is not None:
+        fdn_modules["output_filter"] = output_filter
+    fdn_branch = system.Series(fdn_modules)
+
+    if direct is not None:
+        return system.Parallel(brA=fdn_branch, brB=direct, sum_output=True)
+    return fdn_branch
+
+
+def output_layer(output: str, nfft: int, dtype: Any = None) -> Any:
+    """Build the FLAMO output layer for an output domain.
+
+    ``"time"`` -> ``iFFT`` (time response); ``"magnitude"`` -> ``|.|`` of the
+    frequency response. The single source of truth for the ``output``-string ->
+    layer mapping, shared by :func:`wrap_fdn_shell` (build time) and the training
+    output-domain swap (:func:`pyFDN.train_fdn`) so the two cannot disagree.
+    """
+    if not _HAS_FLAMO:
+        raise ImportError("output_layer requires flamo (pip install flamo)")
+    import torch
+
+    torch_dtype = torch.float32 if dtype is None else dtype
+    if output == "time":
+        return dsp.iFFT(nfft, dtype=torch_dtype)
+    if output == "magnitude":
+        return dsp.Transform(transform=torch.abs, dtype=torch_dtype)
+    raise ValueError(f"output must be 'time' or 'magnitude', got {output!r}")
+
+
+def wrap_fdn_shell(
+    core: Any, *, nfft: int, dtype: Any = None, output: str = "time"
+) -> Any:
+    """
+    Wrap an FDN core in a FLAMO ``Shell`` with an FFT input layer.
+
+    Parameters
+    ----------
+    core : FLAMO module
+        FDN core, e.g. from :func:`assemble_fdn_core`.
+    nfft : int
+        FFT size.
+    dtype : torch.dtype or None
+        Dtype for the FFT/iFFT layers; defaults to float32.
+    output : str
+        Output-domain layer:
+
+        * ``"time"`` -- ``iFFT`` time response (the render default, matching
+          :func:`pyFDN.dss_to_flamo`).
+        * ``"magnitude"`` -- ``|.|`` of the frequency response, for
+          magnitude-domain losses (e.g. colorless training).
+
+    Returns
+    -------
+    flamo.processor.system.Shell
+    """
+    if not _HAS_FLAMO:
+        raise ImportError("wrap_fdn_shell requires flamo (pip install flamo)")
+    import torch
+    from flamo.processor import dsp, system
+
+    torch_dtype = torch.float32 if dtype is None else dtype
+    return system.Shell(
+        core=core,
+        input_layer=dsp.FFT(nfft, dtype=torch_dtype),
+        output_layer=output_layer(output, nfft, torch_dtype),
+    )

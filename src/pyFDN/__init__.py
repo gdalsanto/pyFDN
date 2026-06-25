@@ -31,6 +31,7 @@ __all__ = [
     "flamo_delay_feedback_matrix",
     "swap_flamo_recursion_paths",
     "flamo_time_response",
+    "flamo_freq_response",
     "flamo_process",
     "load_audio",
     # matrix generators
@@ -54,6 +55,7 @@ __all__ = [
     "random_matrix_shift",
     "random_orthogonal",
     "rotation_matrix_from_angles",
+    "sample_delay_lengths",
     "schroeder_reverberator",
     "shift_matrix",
     "shift_matrix_distribute",
@@ -101,6 +103,7 @@ __all__ = [
     "pole_boundaries",
     "skew",
     # state-space translators
+    "build_to_flamo",
     "dss_to_flamo",
     "dss_to_impz",
     "dss_to_pr",
@@ -115,6 +118,13 @@ __all__ = [
     "pr_to_impz",
     # fdn processing
     "process_fdn",
+    # training
+    "build_fdn",
+    "trainable_from_build",
+    "with_decay",
+    "Trainable",
+    "train_fdn",
+    "TrainLog",
     # plotting
     "animate",
     "plot_db_per_sample",
@@ -134,8 +144,7 @@ __all__ = [
     "flamo_model_to_nodes",
     "flamo_nodes_flat",
     "plot_flamo_graph",
-    "flamo_model_to_fdn_parameters",
-    "FlamoFDNParameters",
+    "extract_build",
     # SDN (scattering delay network)
     "SDN",
     # allpass FDN
@@ -199,10 +208,9 @@ from .auxiliary.delay import (
     ms_to_smp,
     swap_flamo_recursion_paths,
 )
-from .auxiliary.flamo import flamo_process, flamo_time_response
+from .auxiliary.flamo import flamo_freq_response, flamo_process, flamo_time_response
 from .auxiliary.flamo_graph import (
-    FlamoFDNParameters,
-    flamo_model_to_fdn_parameters,
+    extract_build,
     flamo_model_to_nodes,
     flamo_nodes_flat,
     plot_flamo_graph,
@@ -325,6 +333,7 @@ from .generate.random_matrix_shift import random_matrix_shift
 
 # matrix generators
 from .generate.random_orthogonal import random_orthogonal
+from .generate.sample_delay_lengths import sample_delay_lengths
 from .generate.schroeder_reverberator import schroeder_reverberator
 from .generate.SDN import SDN
 from .generate.shift_matrix import shift_matrix
@@ -341,8 +350,18 @@ from .graphicEQ import (
 # fdn processing
 from .process import process_fdn
 
+# training (torch/flamo are imported lazily inside these)
+from .train import (
+    Trainable,
+    TrainLog,
+    build_fdn,
+    train_fdn,
+    trainable_from_build,
+    with_decay,
+)
+
 # state-space translators
-from .translate.dss_to_flamo import dss_to_flamo
+from .translate.dss_to_flamo import build_to_flamo, dss_to_flamo
 from .translate.dss_to_impz import dss_to_impz
 from .translate.dss_to_pr import dss_to_pr
 from .translate.dss_to_ss import dss_to_ss

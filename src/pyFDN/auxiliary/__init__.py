@@ -10,15 +10,20 @@ from .allpass import (
 )
 from .audio import load_audio
 from .flamo import (
+    assemble_fdn_core,
     delay_module,
+    fir_matrix_module,
+    flamo_freq_response,
     flamo_process,
     flamo_time_response,
     gain_module,
+    matrix_module,
+    output_layer,
     sos_filter_module,
+    wrap_fdn_shell,
 )
 from .flamo_graph import (
-    FlamoFDNParameters,
-    flamo_model_to_fdn_parameters,
+    extract_build,
     flamo_model_to_nodes,
     flamo_nodes_flat,
     plot_flamo_graph,
@@ -30,8 +35,14 @@ __all__ = [
     "skew",
     "gain_module",
     "delay_module",
+    "fir_matrix_module",
     "sos_filter_module",
+    "matrix_module",
+    "assemble_fdn_core",
+    "wrap_fdn_shell",
+    "output_layer",
     "flamo_time_response",
+    "flamo_freq_response",
     "flamo_process",
     "load_audio",
     "poletti_allpass",
@@ -41,9 +52,8 @@ __all__ = [
     "is_allpass",
     "is_paraunitary",
     "flamo_model_to_nodes",
-    "flamo_model_to_fdn_parameters",
+    "extract_build",
     "flamo_nodes_flat",
-    "FlamoFDNParameters",
     "plot_flamo_graph",
     "reduce_conjugate_pairs",
 ]

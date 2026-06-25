@@ -44,6 +44,7 @@ Matrix Generators
    pyFDN.fdn_system_gallery
    pyFDN.filter_matrix_gallery
    pyFDN.fdn_build_gallery
+   pyFDN.sample_delay_lengths
    pyFDN.FDNSystem
    pyFDN.FDNBuild
 
@@ -132,6 +133,7 @@ Delay Utilities
    pyFDN.mgrpdelay
    pyFDN.ms_to_smp
    pyFDN.flamo_time_response
+   pyFDN.flamo_freq_response
 
 Polynomial & Matrix Maths
 --------------------------
@@ -195,6 +197,7 @@ State-Space Translators
    pyFDN.dss_to_tf
    pyFDN.dss_to_pr
    pyFDN.dss_to_flamo
+   pyFDN.build_to_flamo
    pyFDN.flamo_to_pr
    pyFDN.flamo_decompose_for_pr
    pyFDN.flamo_extract_pr_decomposition
@@ -212,6 +215,20 @@ FDN Processing
 
    pyFDN.process_fdn
    pyFDN.flamo_process
+
+Training
+--------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   pyFDN.build_fdn
+   pyFDN.trainable_from_build
+   pyFDN.with_decay
+   pyFDN.Trainable
+   pyFDN.train_fdn
+   pyFDN.TrainLog
 
 Plotting
 --------
@@ -245,5 +262,4 @@ FLAMO Graph
    pyFDN.plot_flamo_graph
    pyFDN.flamo_model_to_nodes
    pyFDN.flamo_nodes_flat
-   pyFDN.flamo_model_to_fdn_parameters
-   pyFDN.FlamoFDNParameters
+   pyFDN.extract_build

@@ -7,15 +7,17 @@ Optionally place an allpass (or other) filter behind the delays in the loop.
 
 from __future__ import annotations
 
-from collections import OrderedDict
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from pyFDN.auxiliary.flamo import delay_module, gain_module
 
+if TYPE_CHECKING:
+    from pyFDN.generate.fdn_matrix_gallery import FDNBuild
+
 try:
-    from flamo.processor import dsp, system
+    import flamo.processor  # noqa: F401
 
     _HAS_FLAMO = True
 except ImportError:
@@ -92,7 +94,12 @@ def dss_to_flamo(
 
     import torch
 
-    from pyFDN.auxiliary.flamo import fir_matrix_module, sos_filter_module
+    from pyFDN.auxiliary.flamo import (
+        assemble_fdn_core,
+        fir_matrix_module,
+        sos_filter_module,
+        wrap_fdn_shell,
+    )
 
     A = np.asarray(A, dtype=np.float64)
     B = np.asarray(B, dtype=np.float64)
@@ -116,40 +123,93 @@ def dss_to_flamo(
     gain_B = gain_module(B, nfft, device=device, dtype=dtype)
     gain_C = gain_module(C, nfft, device=device, dtype=dtype)
     gain_D = gain_module(D, nfft, device=device, dtype=dtype)
-
-    if sos_filter is not None:
-        filter_module = sos_filter_module(sos_filter, nfft, device=device, dtype=dtype)
-        delay_chain = system.Series(
-            OrderedDict({"delay": delays, "filter": filter_module})
-        )
-    else:
-        delay_chain = delays
-
-    if post_delay_module is not None:
-        delay_chain = system.Series(
-            OrderedDict({"delay": delay_chain, "post_delay_module": post_delay_module})
-        )
-
-    feedback_loop = system.Recursion(fF=delay_chain, fB=gain_A)
-    fdn_modules = OrderedDict(
-        {
-            "input_gain": gain_B,
-            "feedback_loop": feedback_loop,
-            "output_gain": gain_C,
-        }
+    loop_filter = (
+        sos_filter_module(sos_filter, nfft, device=device, dtype=dtype)
+        if sos_filter is not None
+        else None
     )
-    if output_filter is not None:
-        fdn_modules["output_filter"] = sos_filter_module(
-            output_filter, nfft, device=device, dtype=dtype
-        )
-    fdn_branch = system.Series(fdn_modules)
-    core = system.Parallel(brA=fdn_branch, brB=gain_D, sum_output=True)
+    out_filter = (
+        sos_filter_module(output_filter, nfft, device=device, dtype=dtype)
+        if output_filter is not None
+        else None
+    )
+
+    # Wiring is delegated to the shared assembler so the render path here and the
+    # training builder (pyFDN.train) stay byte-for-byte identical in topology.
+    core = assemble_fdn_core(
+        input_gain=gain_B,
+        feedback=gain_A,
+        delays=delays,
+        output_gain=gain_C,
+        direct=gain_D,
+        loop_filter=loop_filter,
+        output_filter=out_filter,
+        post_delay_module=post_delay_module,
+    )
 
     if shell:
-        torch_dtype = torch.float32 if dtype is None else dtype
-        return system.Shell(
-            core=core,
-            input_layer=dsp.FFT(nfft, dtype=torch_dtype),
-            output_layer=dsp.iFFT(nfft, dtype=torch_dtype),
-        )
+        return wrap_fdn_shell(core, nfft=nfft, dtype=dtype)
     return core
+
+
+def build_to_flamo(
+    build: FDNBuild,
+    nfft: int = 2**16,
+    device: Any = None,
+    *,
+    shell: bool = True,
+    dtype: Any = None,
+    post_delay_module: Any = None,
+) -> Any:
+    """
+    Build a FLAMO model from a complete :class:`FDNBuild` config.
+
+    Thin wrapper over :func:`dss_to_flamo` that unpacks an
+    :class:`~pyFDN.generate.fdn_matrix_gallery.FDNBuild` (as returned by
+    :func:`pyFDN.fdn_build_gallery`) into its state-space arguments, mapping the
+    in-loop absorption ``build.filters`` to ``sos_filter`` and the per-output
+    ``build.post_eq`` to ``output_filter``.
+
+    Parameters
+    ----------
+    build : FDNBuild
+        Complete FDN parameters (``A``, ``B``, ``C``, ``D``, ``delays``,
+        ``fs``, optional ``filters`` and ``post_eq``), e.g. from
+        :func:`pyFDN.fdn_build_gallery`.
+    nfft : int
+        FFT size for FLAMO (default 2**16).
+    device : torch device or None
+        Device; default is cuda if available else cpu.
+    shell : bool
+        If True (default), wrap the core in a Shell with FFT/iFFT. Use
+        :func:`pyFDN.flamo_time_response` to obtain a NumPy impulse response.
+        If False, return only the core.
+    dtype : torch.dtype or None
+        Optional dtype for FLAMO delay/gain/filter modules (e.g., torch.float64).
+        If None, wrapper defaults are used.
+    post_delay_module : FLAMO module or None
+        Optional module to append after the delay in the recursion (e.g. a
+        Schroeder allpass core). Must have input/output size N. Loop becomes:
+        delay -> post_delay_module -> A.
+
+    Returns
+    -------
+    model : flamo.processor.system.Shell or core
+        If shell=True, a FLAMO Shell. Use :func:`pyFDN.flamo_time_response` for
+        a NumPy impulse response. If shell=False, the core module.
+    """
+    return dss_to_flamo(
+        build.A,
+        build.B,
+        build.C,
+        build.D,
+        build.delays,
+        build.fs,
+        nfft=nfft,
+        device=device,
+        shell=shell,
+        dtype=dtype,
+        sos_filter=build.filters,
+        output_filter=build.post_eq,
+        post_delay_module=post_delay_module,
+    )
