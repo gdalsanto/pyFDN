@@ -3,8 +3,11 @@ optional target data) to the ``(input, target)`` tensor pair, loss criteria, and
 the model output domain to measure in.
 
 The mode alone fixes the loss and the output domain. The matching modes take
-their ``target`` as a single time-domain impulse response and compare it in the
-time domain, so the user never has to pre-transform the reference.
+their ``target`` as a time-domain impulse response and compare it in the time
+domain, so the user never has to pre-transform the reference. A 3-D target
+(``(n_samples, n_out, n_in)``) fits the full MIMO transfer matrix: each input is
+excited on its own batch row, so the model's batched output is ``H[out, in]``
+and the loss compares it per input-output path.
 
 ==========================  ====================================  ============
 mode                        loss                                  target
@@ -176,18 +179,46 @@ def _input_target(
     *,
     flat: bool,
 ) -> tuple[Any, Any]:
-    """The fixed ``(input, target)`` tensors a mode fits, each batch dim 1."""
+    """The fixed ``(input, target)`` tensors a mode fits.
+
+    Single-impulse excitation (batch 1) for SISO/SIMO; for a MIMO target (a 3-D
+    ``(n_samples, n_out, n_in)`` IR matrix) the inputs are
+    excited one-per-batch-row so the model's batched output is the full transfer
+    matrix ``H[out, in]`` and the loss compares it per input-output path.
+    """
     import torch
 
-    # A unit impulse drives the model -- identical for every mode.
-    impulse = torch.zeros((1, nfft, n_in), device=device, dtype=dtype)
-    impulse[:, 0, :] = 1.0
-
     if flat:
+        # colorless: one impulse on all inputs, flat single-channel target.
+        impulse = torch.zeros((1, nfft, n_in), device=device, dtype=dtype)
+        impulse[:, 0, :] = 1.0
         tgt = torch.ones((1, nfft // 2 + 1, 1), device=device, dtype=dtype)
         return impulse, tgt
 
     arr = np.asarray(target, dtype=np.float64)
+
+    if arr.ndim == 3:
+        # MIMO: target is the full IR matrix (n_samples, n_out, n_in). Excite each
+        # input on its own batch row (identity at t=0) so the model's batched
+        # output (n_in, nfft, n_out) is the transfer matrix H[out, in].
+        if arr.shape[1:] != (n_out, n_in):
+            raise ValueError(
+                f"MIMO target must have shape (n_samples, n_out={n_out}, "
+                f"n_in={n_in}); got {arr.shape}"
+            )
+        impulse = torch.zeros((n_in, nfft, n_in), device=device, dtype=dtype)
+        for i in range(n_in):
+            impulse[i, 0, i] = 1.0
+        ir = np.zeros((n_in, nfft, n_out))
+        length = min(arr.shape[0], nfft)
+        # arr[t, j, i] -> tgt[i, t, j]: input on the batch axis, output as channel.
+        ir[:, :length, :] = np.transpose(arr[:length], (2, 0, 1))
+        return impulse, torch.as_tensor(ir, device=device, dtype=dtype)
+
+    # SISO / SIMO: one impulse on all inputs (batch 1), target one column per
+    # output; a mono target is broadcast across the outputs.
+    impulse = torch.zeros((1, nfft, n_in), device=device, dtype=dtype)
+    impulse[:, 0, :] = 1.0
     if arr.ndim == 1:
         arr = arr[:, None]
     if arr.shape[1] != n_out:

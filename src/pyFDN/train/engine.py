@@ -81,7 +81,10 @@ def train_fdn(
         channels add nothing the magnitude loss can use.
     target : np.ndarray, optional
         Reference impulse response the matching modes fit to -- a time-domain IR.
-        Unused for ``colorless``; required otherwise.
+        Shape ``(n_samples,)`` or ``(n_samples, n_out)`` for SISO/SIMO; a 3-D
+        ``(n_samples, n_out, n_in)`` IR matrix fits the full MIMO transfer matrix
+        (each input excited on its own batch row). Unused for ``colorless``;
+        required otherwise.
     criteria : list of (criterion, alpha, requires_model), optional
         Override the default loss list (primary loss + sparsity) with your own
         flamo criteria.

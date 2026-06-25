@@ -174,6 +174,60 @@ def test_match_mode_requires_target():
         train_fdn(model, "match_spectrogram", **_FAST)
 
 
+def _mimo_ir(model, nfft, n_in, n_out):
+    """Full MIMO IR matrix (n_samples, n_out, n_in) from a time-output model.
+
+    Each input is excited on its own batch row, so model(x)[i, :, j] is the IR
+    from input i to output j; transpose to the (n_samples, n_out, n_in) layout
+    train_fdn expects.
+    """
+    import torch
+
+    x = torch.zeros((n_in, nfft, n_in))
+    for i in range(n_in):
+        x[i, 0, i] = 1.0
+    with torch.no_grad():
+        out = np.asarray(model(x).detach())  # (n_in, nfft, n_out) = [i, t, j]
+    return np.transpose(out, (1, 2, 0))  # -> (nfft, n_out, n_in) = [t, j, i]
+
+
+def test_match_spectrogram_mimo_target():
+    nfft, N, n_in, n_out = 2**11, 4, 2, 2
+    rng = np.random.default_rng(0)
+    ref = build_fdn(
+        N=N, rt=0.05, nfft=nfft,
+        input_gain=rng.standard_normal((N, n_in)),
+        output_gain=rng.standard_normal((n_out, N)),
+        device="cpu", rng=0,
+    )
+    target = _mimo_ir(ref, nfft, n_in, n_out)
+    assert target.shape == (nfft, n_out, n_in)
+
+    fresh = build_fdn(
+        N=N, rt=0.05, nfft=nfft,
+        input_gain=rng.standard_normal((N, n_in)),
+        output_gain=rng.standard_normal((n_out, N)),
+        device="cpu", rng=9,
+    )
+    log = train_fdn(
+        fresh, "match_spectrogram", target=target,
+        mss_nfft=(256, 512), max_steps=20, rng=0, **_FAST,
+    )
+    assert np.isfinite(log.train_loss[-1])
+    assert log.train_loss[-1] <= log.train_loss[0]
+
+
+def test_mimo_target_wrong_shape_raises():
+    model = build_fdn(
+        N=4, rt=None, nfft=2**10,
+        input_gain=np.ones((4, 2)), output_gain=np.ones((2, 4)),
+        device="cpu", rng=0,
+    )
+    bad = np.zeros((128, 3, 2))  # n_out=3 != model's 2
+    with pytest.raises(ValueError, match="MIMO target must have shape"):
+        train_fdn(model, "match_spectrogram", target=bad, max_steps=2, **_FAST)
+
+
 # --- analytic decay (the exact RT path) ------------------------------------
 
 
