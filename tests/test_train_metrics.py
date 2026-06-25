@@ -128,4 +128,4 @@ def test_output_domain_rejects_unknown_mode():
 def test_trainlog_defaults():
     log = TrainLog()
     assert log.train_loss == [] and log.loss_log == {}
-    assert log.epochs_run == 0 and log.stopped_early is False
+    assert log.steps_run == 0 and log.stopped_early is False

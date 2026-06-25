@@ -36,7 +36,7 @@ def _(mo):
     Flatness is measured on the magnitude response at the **training** FFT bins --
     the right colorless measure for a lossless FDN, whose time response never
     decays. Training is kept short so the example runs in a few seconds.
-          
+
     - pyFDN training pipeline: Jeremy B. Bai, 2026-06-19
     """)
     return
@@ -54,14 +54,14 @@ def _():
 @app.cell
 def _(np, pyFDN):
     fs = 48000
-    nfft = 2**11
+    nfft = 2**12
 
     # 1. build a small "tiny colorless" lossless skeleton.
     delays = pyFDN.sample_delay_lengths(
-        8, (800, 3200), distribution="uniform", coprime=False, rng=0
+        8, (800, 3200), distribution="geometric", coprime=True, rng=1
     )
     model = pyFDN.build_fdn(
-        delays=delays, rt=None, nfft=nfft, output="magnitude", device="cpu", rng=0
+        delays=delays, rt=None, nfft=nfft, output="magnitude", device="cpu", rng=1
     )
     init_build = pyFDN.extract_build(model)  # random init, before training
     mag_init = np.abs(pyFDN.flamo_freq_response(model, fs=fs).squeeze())
@@ -70,9 +70,8 @@ def _(np, pyFDN):
     log = pyFDN.train_fdn(
         model,
         "colorless",
-        max_epochs=200,
-        expand=10,
-        batch_size=1,
+        optimizer="lbfgs",
+        max_steps=2000,
         lr=1e-3,
         device="cpu",
         rng=1,
@@ -84,7 +83,7 @@ def _(np, pyFDN):
         f"spectral flatness  init {pyFDN.flatness_from_magnitude(mag_init):.4f}"
         f"   colorless {pyFDN.flatness_from_magnitude(mag_opt):.4f}"
     )
-    return delays, fs, init_build, log, mag_init, mag_opt, nfft, opt_build
+    return fs, init_build, log, mag_init, mag_opt, nfft, opt_build
 
 
 @app.cell(hide_code=True)
@@ -134,45 +133,50 @@ def _(mo):
     mo.md(r"""
     ## Listen: random init vs colorless
 
-    Two renderings of each FDN (`pyFDN.dss_to_impz`, peak-normalized so the A/B
-    compares *timbre*, not level):
+    Two renderings of each FDN, built end to end through the render API
+    (`pyFDN.with_decay` -> `pyFDN.build_to_flamo` -> `pyFDN.flamo_time_response`),
+    peak-normalized so the A/B compares *timbre*, not level:
 
-    * **Lossless (no decay)** -- the trained FDN as-is. Its poles sit on the unit
-      circle, so it rings without decaying and you hear the colour directly: the
-      random init is tonal/metallic (sharp modal resonances), the colorless one
-      is noise-like (flat spectrum).
-    * **With decay** -- homogeneous $T_{60}$ folded into the feedback matrix via
-      $\Gamma = \mathrm{diag}(g^{m})$, giving an audible reverb tail.
+    * **Long tail (hear the colour)** -- a very long reverberation time, so the FDN
+      rings with almost no decay and you hear its colour directly: the random init
+      is tonal/metallic (sharp modal resonances), the colorless one is noise-like
+      (flat spectrum). A *truly* lossless FDN (poles on the unit circle) can't be
+      rendered by the FFT-based `flamo_time_response` without time-aliasing the
+      colour away, so we use a long finite RT instead.
+    * **Reverb tail** -- a short homogeneous $T_{60}$, giving an audible decay.
     """)
     return
 
 
 @app.cell
-def _(delays, fs, init_build, mo, np, opt_build, pyFDN):
-    rt = 2.0
-    g = pyFDN.db_to_lin(pyFDN.rt_to_slope(rt, fs))
-    gamma = np.diag(g ** delays.astype(float))
+def _(fs, init_build, np, opt_build, pyFDN):
+    # A long "ring" RT keeps the colour audible with little decay; a short RT gives
+    # an audible reverb tail.
+    rt_ring, rt_rev = 60.0, 2.0
+    n_samples = int(2.0 * fs)
 
-    def render(build, feedback, n_samples):
-        ir = pyFDN.dss_to_impz(
-            n_samples, delays, feedback, build.B, build.C, build.D
-        ).squeeze()
+    def render(build, rt):
+        """build -> FLAMO model with decay -> peak-normalized NumPy IR."""
+        model = pyFDN.build_to_flamo(
+            pyFDN.with_decay(build, rt), nfft=n_samples, device="cpu"
+        )
+        ir = pyFDN.flamo_time_response(model, fs=fs).squeeze()
         # peak-normalize so the A/B compares timbre at matched level, not loudness.
         return np.asarray(ir) / (np.max(np.abs(ir)) + 1e-12)
 
-    # Lossless (non-decaying): the trained FDN as-is rings without decay, so you
-    # hear the colour directly. A short fade-out avoids the click from truncating
-    # a non-decaying signal.
-    noise_len = int(2.0 * fs)
-    _fade = np.ones(noise_len)
+    _fade = np.ones(n_samples)
     _fade[-2048:] = np.linspace(1.0, 0.0, 2048)
-    init_noise = render(init_build, init_build.A, noise_len) * _fade
-    opt_noise = render(opt_build, opt_build.A, noise_len) * _fade
+    init_noise = render(init_build, rt_ring) * _fade
+    opt_noise = render(opt_build, rt_ring) * _fade
 
-    # Decaying reverb: homogeneous T60 folded into the feedback matrix (A @ Gamma).
-    ir_len = int(2.0 * fs)
-    init_decay = render(init_build, init_build.A @ gamma, ir_len)
-    opt_decay = render(opt_build, opt_build.A @ gamma, ir_len)
+    # Reverb: a short homogeneous T60 gives an audible decaying tail.
+    init_decay = render(init_build, rt_rev)
+    opt_decay = render(opt_build, rt_rev)
+    return init_decay, init_noise, opt_decay, opt_noise
+
+
+@app.cell
+def _(fs, init_decay, init_noise, mo, opt_decay, opt_noise, pyFDN):
 
     def _clip(label, sig):
         return mo.vstack(
@@ -187,7 +191,9 @@ def _(delays, fs, init_build, mo, np, opt_build, pyFDN):
         [
             mo.vstack(
                 [
-                    mo.Html("<b>Lossless (no decay)</b>").style({"font-size": "1.2em"}),
+                    mo.Html("<b>Long tail (hear the colour)</b>").style(
+                        {"font-size": "1.2em"}
+                    ),
                     _clip("Random init", init_noise),
                     _clip("Colorless", opt_noise),
                 ],
@@ -195,9 +201,7 @@ def _(delays, fs, init_build, mo, np, opt_build, pyFDN):
             ),
             mo.vstack(
                 [
-                    mo.Html("<b>With homogeneous decay</b>").style(
-                        {"font-size": "1.2em"}
-                    ),
+                    mo.Html("<b>Reverb tail</b>").style({"font-size": "1.2em"}),
                     _clip("Random init", init_decay),
                     _clip("Colorless", opt_decay),
                 ],

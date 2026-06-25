@@ -1,6 +1,6 @@
 """Objective setup for :func:`pyFDN.train_fdn`: map a training *mode* (plus
-optional target data) to a flamo dataset, loss criteria, and the model output
-domain to measure in.
+optional target data) to the ``(input, target)`` tensor pair, loss criteria, and
+the model output domain to measure in.
 
 The mode alone fixes the loss and the output domain. Every matching mode takes
 its ``target`` as a single time-domain impulse response; ``match_magnitude``
@@ -21,8 +21,14 @@ Every mode also adds a feedback-matrix sparsity penalty
 disables it) that biases the mixing matrix toward dense, colorless mixing -- it
 only bites when the feedback matrix is trainable.
 
-flamo/torch are imported lazily inside :func:`build_objective` and
-:func:`colorless_sparsity_loss`, so this module imports without torch.
+A single fixed ``(input, target)`` pair fully specifies the fit -- one LTI system
+is a pure optimization problem, with no held-out data -- so this builds raw
+tensors for :class:`pyFDN.train._trainer.EagerTrainer` rather than a flamo
+``Dataset``.
+
+flamo/torch are imported lazily inside :func:`build_objective`,
+:func:`_input_target` and :func:`colorless_sparsity_loss`, so this module
+imports without torch.
 """
 
 from __future__ import annotations
@@ -38,12 +44,12 @@ Objective = Literal[
     "match_mel_spectrogram",
 ]
 
-# (criterion, alpha, requires_model) tuples for flamo's Trainer.register_criterion.
+# (criterion, alpha, requires_model) tuples for the trainer's register_criterion.
 Criterion = tuple[Any, float, bool]
 
 # mode -> output domain the model is measured in ("time" or "magnitude"). Every
 # mode but "colorless" fits a time-domain impulse-response target, converted to
-# this domain inside _dataset (a magnitude mode takes |rfft| of the response).
+# this domain inside _input_target (a magnitude mode takes |rfft| of the target).
 _MODES: dict[str, str] = {
     "colorless": "magnitude",
     "match_magnitude": "magnitude",
@@ -115,14 +121,13 @@ def build_objective(
     n_out: int,
     device: Any,
     dtype: Any,
-    expand: int,
-) -> tuple[Any, list[Criterion], str]:
-    """Return ``(dataset, criteria, output_domain)`` for a training ``mode``.
+) -> tuple[Any, Any, list[Criterion], str]:
+    """Return ``(input, target, criteria, output_domain)`` for a training ``mode``.
 
-    Maps the mode to its flamo dataset (with ``target`` shaped appropriately)
-    and the full criteria list -- the mode's primary loss plus the sparsity
-    regularizer -- unless a caller-supplied ``criteria`` override replaces it.
-    flamo is imported here so the module stays torch-free.
+    Maps the mode to the ``(input, target)`` tensor pair (with ``target`` shaped
+    appropriately) and the full criteria list -- the mode's primary loss plus the
+    sparsity regularizer -- unless a caller-supplied ``criteria`` override
+    replaces it. flamo/torch are imported here so the module stays torch-free.
     """
     if mode not in _MODES:
         raise ValueError(
@@ -132,21 +137,21 @@ def build_objective(
     needs_target = mode in _NEEDS_TARGET
     if needs_target and target is None:
         raise ValueError(f"mode {mode!r} requires target=")
-    dataset = _dataset(
-        domain, target, nfft, n_in, n_out, device, dtype, expand, flat=not needs_target
+    inp, tgt = _input_target(
+        domain, target, nfft, n_in, n_out, device, dtype, flat=not needs_target
     )
     if criteria is not None:
-        return dataset, criteria, domain
+        return inp, tgt, criteria, domain
 
     crit: list[Criterion] = [
         (_primary_loss(mode, nfft, mss_nfft, fs, device), 1.0, False)
     ]
     if sparsity_alpha > 0:
         crit.append((colorless_sparsity_loss(), float(sparsity_alpha), True))
-    return dataset, crit, domain
+    return inp, tgt, crit, domain
 
 
-def _dataset(
+def _input_target(
     domain: str,
     target: Any,
     nfft: int,
@@ -154,27 +159,20 @@ def _dataset(
     n_out: int,
     device: Any,
     dtype: Any,
-    expand: int,
     *,
     flat: bool,
-) -> Any:
+) -> tuple[Any, Any]:
+    """The fixed ``(input, target)`` tensors a mode fits, each batch dim 1."""
     import torch
 
-    if flat:
-        from flamo.optimize.dataset import DatasetColorless
-
-        return DatasetColorless(
-            input_shape=(1, nfft, n_in),
-            target_shape=(1, nfft // 2 + 1, n_out),
-            expand=expand,
-            device=device,
-            dtype=dtype,
-        )
-
-    from flamo.optimize.dataset import Dataset
-
+    # A unit impulse drives the model -- identical for every mode.
     impulse = torch.zeros((1, nfft, n_in), device=device, dtype=dtype)
     impulse[:, 0, :] = 1.0
+
+    if flat:
+        # colorless: a flat one-sided magnitude target (|H| == 1 at every bin).
+        tgt = torch.ones((1, nfft // 2 + 1, n_out), device=device, dtype=dtype)
+        return impulse, tgt
 
     # The target is always a time-domain impulse response. Shape it to
     # (nfft, n_out) -- zero-padded/truncated to the model FFT length, a
@@ -192,8 +190,7 @@ def _dataset(
     # modes (matching flamo's norm="backward" rfft), the time response otherwise.
     buf = np.abs(np.fft.rfft(ir, n=nfft, axis=0)) if domain == "magnitude" else ir
 
-    tgt = torch.as_tensor(buf[None], device=device, dtype=dtype)
-    return Dataset(input=impulse, target=tgt, expand=expand, device=device, dtype=dtype)
+    return impulse, torch.as_tensor(buf[None], device=device, dtype=dtype)
 
 
 def _primary_loss(

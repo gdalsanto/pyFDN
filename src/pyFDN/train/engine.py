@@ -1,11 +1,14 @@
 """Train an FDN toward a target.
 
-:func:`train_fdn` runs flamo's ``Trainer`` on a model from
-:func:`pyFDN.build_fdn` (or :func:`pyFDN.trainable_from_build`) toward a training
-*mode* (``colorless`` / ``match_magnitude`` / ``match_spectrogram`` /
-``match_mel_spectrogram``), **in place**, and returns a :class:`TrainLog`.
-Extraction (:func:`pyFDN.extract_build`) and scoring (the metrics) are separate,
-explicit steps so the user keeps full control.
+:func:`train_fdn` fits a model from :func:`pyFDN.build_fdn` (or
+:func:`pyFDN.trainable_from_build`) toward a training *mode* (``colorless`` /
+``match_magnitude`` / ``match_spectrogram`` / ``match_mel_spectrogram``),
+**in place**, and returns a :class:`TrainLog`. Fitting one FDN is a pure
+optimization on a single ``(input, target)`` pair, so it runs
+:class:`pyFDN.train._trainer.EagerTrainer` (a direct gradient loop) rather than a
+``Dataset``/``DataLoader`` epoch stack. Extraction
+(:func:`pyFDN.extract_build`) and scoring (the metrics) are separate, explicit
+steps so the user keeps full control.
 """
 
 from __future__ import annotations
@@ -23,20 +26,19 @@ class TrainLog:
 
     Attributes
     ----------
-    train_loss, valid_loss : list of float
-        Per-epoch total loss on the train / validation split.
+    train_loss : list of float
+        Total loss at each optimization step.
     loss_log : dict of str to list of float
-        Per-criterion loss history, when flamo records it.
-    epochs_run : int
-        Epochs actually run (< ``max_epochs`` if early stopping triggered).
+        Per-criterion loss history, keyed by criterion class name.
+    steps_run : int
+        Gradient steps actually run (< ``max_steps`` if a plateau stopped it).
     stopped_early : bool
-        Whether training stopped before ``max_epochs``.
+        Whether optimization stopped before ``max_steps``.
     """
 
     train_loss: list[float] = field(default_factory=list)
-    valid_loss: list[float] = field(default_factory=list)
     loss_log: dict[str, list[float]] = field(default_factory=dict)
-    epochs_run: int = 0
+    steps_run: int = 0
     stopped_early: bool = False
 
 
@@ -48,11 +50,11 @@ def train_fdn(
     criteria: list[Criterion] | None = None,
     sparsity_alpha: float = 0.2,
     mss_nfft: tuple[int, ...] = (256, 512, 1024),
-    max_epochs: int = 500,
+    max_steps: int = 2000,
     lr: float = 1e-3,
-    batch_size: int = 200,
-    expand: int = 1000,
+    optimizer: str = "adam",
     patience: int = 10,
+    tol: float = 1e-6,
     device: Any = None,
     dtype: Any = None,
     rng: int | None = None,
@@ -62,9 +64,10 @@ def train_fdn(
     """Train ``model`` for ``mode`` (in place) and return a TrainLog.
 
     The ``mode`` fixes the loss and the model output domain (see
-    :mod:`pyFDN.train.objectives`); this builds the dataset, sets the output
-    layer to match, and runs flamo's ``Trainer``. The model is mutated in place;
-    read the result back with :func:`pyFDN.extract_build`.
+    :mod:`pyFDN.train.objectives`); this builds the ``(input, target)`` pair, sets
+    the output layer to match, and runs :class:`~pyFDN.train._trainer.EagerTrainer`
+    directly on it. The model is mutated in place; read the result back with
+    :func:`pyFDN.extract_build`.
 
     Parameters
     ----------
@@ -86,7 +89,13 @@ def train_fdn(
         (default 0.2; 0 disables it; only works when the feedback is trainable).
     mss_nfft : tuple of int
         Multi-resolution STFT window sizes for the spectrogram modes.
-    max_epochs, lr, batch_size, expand, patience : optimization settings.
+    max_steps, lr, patience : optimization settings (max gradient steps, learning
+        rate, plateau patience in steps).
+    optimizer : str
+        ``"adam"`` (default) or ``"lbfgs"``; L-BFGS suits the deterministic match
+        modes, Adam suits all of them.
+    tol : float
+        Relative-improvement threshold for the plateau early stop (default 1e-6).
     device, dtype : optional
         Torch device / dtype (default cpu / float32).
     rng : int or None
@@ -106,8 +115,8 @@ def train_fdn(
     spectrogram modes it emits a time response.
     """
     import torch
-    from flamo.optimize.dataset import load_dataset
-    from flamo.optimize.trainer import Trainer
+
+    from ._trainer import EagerTrainer
 
     dev = "cpu" if device is None else device
     torch_dtype = torch.float32 if dtype is None else dtype
@@ -115,21 +124,10 @@ def train_fdn(
     if rng is not None:
         torch.manual_seed(int(rng))
 
-    # flamo's load_dataset uses an 80/20 split and drops partial batches, so both
-    # splits need a full batch -- fail clearly rather than as a deep ZeroDivisionError.
-    train_size = int(expand * 0.8)
-    valid_size = expand - train_size
-    if min(train_size, valid_size) < batch_size:
-        raise ValueError(
-            f"batch_size ({batch_size}) too large for expand ({expand}): the 80/20 "
-            f"split yields train={train_size}, valid={valid_size} and flamo drops "
-            "partial batches. Increase expand (>= 5*batch_size) or lower batch_size."
-        )
-
     nfft = int(model.get_inputLayer().nfft)
     n_in, n_out, fs = _model_info(model)
 
-    dataset, criteria, output_domain = build_objective(
+    inp, tgt, criteria, output_domain = build_objective(
         mode,
         target=target,
         criteria=criteria,
@@ -141,39 +139,38 @@ def train_fdn(
         n_out=n_out,
         device=dev,
         dtype=torch_dtype,
-        expand=expand,
     )
     _set_output_domain(model, output_domain, nfft, torch_dtype)
 
-    train_loader, valid_loader = load_dataset(
-        dataset, batch_size=batch_size, device=dev
-    )
-    # flamo's Trainer asserts train_dir exists when logging; create it if needed.
-    if log and train_dir is not None:
+    # Checkpoint only when logging to a directory; EagerTrainer asserts it exists.
+    save_checkpoints = log and train_dir is not None
+    if save_checkpoints:
         os.makedirs(train_dir, exist_ok=True)
-    trainer = Trainer(
+    trainer = EagerTrainer(
         model,
-        max_epochs=max_epochs,
+        max_steps=max_steps,
         lr=lr,
+        optimizer=optimizer,
         patience=patience,
+        tol=tol,
         device=dev,
-        train_dir=train_dir,
         log=log,
+        train_dir=train_dir,
+        save_checkpoints=save_checkpoints,
     )
     for criterion, alpha, requires_model in criteria:
         trainer.register_criterion(criterion, alpha, requires_model)
-    trainer.train(train_loader, valid_loader)
+    history = trainer.optimize(inp, tgt)
 
-    epochs_run = len(trainer.train_loss)
+    train_loss = [float(x) for x in history.get("total", [])]
+    steps_run = len(train_loss)
     return TrainLog(
-        train_loss=[float(x) for x in trainer.train_loss],
-        valid_loss=[float(x) for x in trainer.valid_loss],
+        train_loss=train_loss,
         loss_log={
-            k: [float(x) for x in v]
-            for k, v in getattr(trainer, "train_loss_log", {}).items()
+            k: [float(x) for x in v] for k, v in history.items() if k != "total"
         },
-        epochs_run=epochs_run,
-        stopped_early=epochs_run < max_epochs,
+        steps_run=steps_run,
+        stopped_early=steps_run < max_steps,
     )
 
 
