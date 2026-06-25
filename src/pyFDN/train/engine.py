@@ -14,8 +14,6 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-import numpy as np
-
 from .objectives import Criterion, Objective, build_objective
 
 
@@ -57,7 +55,7 @@ def train_fdn(
     patience: int = 10,
     device: Any = None,
     dtype: Any = None,
-    rng: np.random.Generator | int | None = None,
+    rng: int | None = None,
     log: bool = False,
     train_dir: str | None = None,
 ) -> TrainLog:
@@ -91,8 +89,10 @@ def train_fdn(
     max_epochs, lr, batch_size, expand, patience : optimization settings.
     device, dtype : optional
         Torch device / dtype (default cpu / float32).
-    rng : np.random.Generator, int, or None
-        Seeds ``torch.manual_seed`` for reproducible training.
+    rng : int or None
+        Integer seed for ``torch.manual_seed``; ``None`` leaves torch's global
+        RNG untouched. Training only seeds torch (its RNG is independent of
+        NumPy's), so this is a plain int rather than a NumPy generator.
     log : bool
         If True, flamo logs/checkpoints to ``train_dir`` (created if missing).
         Default False keeps training side-effect-free.
@@ -112,9 +112,8 @@ def train_fdn(
     dev = "cpu" if device is None else device
     torch_dtype = torch.float32 if dtype is None else dtype
 
-    seed = _resolve_seed(rng)
-    if seed is not None:
-        torch.manual_seed(seed)
+    if rng is not None:
+        torch.manual_seed(int(rng))
 
     # flamo's load_dataset uses an 80/20 split and drops partial batches, so both
     # splits need a full batch -- fail clearly rather than as a deep ZeroDivisionError.
@@ -176,14 +175,6 @@ def train_fdn(
         epochs_run=epochs_run,
         stopped_early=epochs_run < max_epochs,
     )
-
-
-def _resolve_seed(rng: np.random.Generator | int | None) -> int | None:
-    if rng is None:
-        return None
-    if isinstance(rng, (int, np.integer)):
-        return int(rng)
-    return int(rng.integers(0, 2**31 - 1))
 
 
 def _model_info(model: Any) -> tuple[int, int, float]:
