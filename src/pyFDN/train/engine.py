@@ -45,7 +45,6 @@ def train_fdn(
     sparsity_alpha: float = 0.2,
     mss_nfft: tuple[int, ...] = (256, 512, 1024),
     max_steps: int = 2000,
-    min_steps: int = 50,
     lr: float = 1e-3,
     optimizer: str = "adam",
     patience: int = 10,
@@ -78,8 +77,6 @@ def train_fdn(
     mss_nfft : tuple of int
         STFT window sizes for the spectrogram modes.
     max_steps, lr, patience : max gradient steps, learning rate, plateau patience.
-    min_steps : int
-        Steps to run before early stopping is allowed (default 50).
     optimizer : str
         ``"adam"`` (default) or ``"lbfgs"``.
     tol : float
@@ -135,7 +132,6 @@ def train_fdn(
         lr=lr,
         optimizer=optimizer,
         patience=patience,
-        min_steps=min_steps,
         tol=tol,
         device=dev,
         log=log,
