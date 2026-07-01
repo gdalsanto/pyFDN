@@ -77,7 +77,7 @@ docs = [
 
 [project.urls]
 bugs = "https://github.com/artificial-audio/pyFDN/issues"
-changelog = "https://github.com/artificial-audio/pyFDN/blob/main/changelog.md"
+changelog = "https://github.com/artificial-audio/pyFDN/releases"
 homepage = "https://github.com/artificial-audio/pyFDN"
 
 [tool.setuptools]
