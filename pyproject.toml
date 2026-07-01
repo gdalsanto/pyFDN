@@ -89,6 +89,31 @@ where = ["src"]
 [tool.setuptools.package-data]
 "*" = ["*.*"]
 
+# Bump My Version
+# ---------------
+# Keeps the two version strings (this file and src/pyFDN/__init__.py) in sync
+# and tags the release as v{new_version}, which .github/workflows/release.yml
+# triggers on. Usage: bump-my-version bump {major|minor|patch}
+
+[tool.bumpversion]
+current_version = "0.1.0"
+allow_dirty = false
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+tag = true
+tag_name = "v{new_version}"
+tag_message = "Release v{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "src/pyFDN/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
+
 # Pytest
 # ------
 
