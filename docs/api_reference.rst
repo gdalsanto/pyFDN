@@ -195,7 +195,7 @@ State-Space Translators
 
    pyFDN.dss_to_ss
    pyFDN.dss_to_impz
-   pyFDN.build_impulse_response
+   pyFDN.build_to_impz
    pyFDN.dss_to_tf
    pyFDN.dss_to_pr
    pyFDN.dss_to_flamo
